@@ -12,7 +12,7 @@ MM Storyboard Studio converts a short idea into three creative concepts, a compl
 - Edit and regenerate one scene without rebuilding the whole project.
 - Run automated pre-generation checks for missing text policy, vague cross-scene references, opening/final frames, prompt labels, audio direction, and clip duration.
 - Copy a single prompt or all prompts and export Markdown, JSON, or a plain-text Google Flow prompt pack with voiceover, captions, and editing notes separated.
-- Save and reopen projects in the current browser.
+- Save and reopen projects in the current browser.\n- Generate an exact-count storyboard contact-sheet prompt for visual planning.\n- Optionally render individual scenes or a full batch through a user-configured ComfyUI API workflow.\n- Preview ComfyUI image/video outputs and merge returned video clips in-browser with FFmpeg.wasm.
 
 ## Run locally
 
@@ -24,7 +24,7 @@ Requirements: Node.js 20 or later and a Gemini API key with access to the config
 4. Open Settings and add your Gemini API key.
 5. Enter a topic, choose a visual style, and press Generate 3 concepts.
 6. Select a concept and choose Build this storyboard.
-7. Copy each scene prompt into Google Flow, generate clips there, and edit Burmese captions and any true website screen recording into the final video.
+7. Use **Copy contact-sheet prompt** to prepare a visual reference sheet, then copy each scene prompt into Google Flow.\n8. Export **Flow .txt** for a complete prompt pack, including each scene's voiceover, captions, and editing notes.\n9. Optionally expand **Generate images or videos with ComfyUI**, load your own API-format workflow, map its prompt node, and generate one scene or the full batch. Use the merge action when two or more video outputs are available.\n10. Edit Burmese captions and any real LearnTypeMM screen recordings into the finished tutorial.
 
 To create a production build, run npm run build. To preview the build, run npm run preview.
 
@@ -51,7 +51,7 @@ This is an independent implementation. It does not copy code from either inspira
 - AI Storyboard Generator: https://github.com/dseditor/AI-storyboard-generator
 - Google Flow Scripting Skill: https://github.com/agbelemi/google-flow-scripting-skill
 
-The Flow scripting project is MIT licensed. This repository contains its own implementation and only adopts general workflow ideas such as self-contained scene prompts, explicit production profiles, reference consistency, and pre-generation review.
+The Flow scripting project is MIT licensed. The storyboard project documents MIT in its README but does not currently expose a LICENSE file on its default branch, so this repository does not copy its source code or workflow JSON assets. The ComfyUI panel, contact-sheet builder, validation rules, and UI are independently implemented, using public workflow ideas and API conventions with attribution.
 
 ## License
 
