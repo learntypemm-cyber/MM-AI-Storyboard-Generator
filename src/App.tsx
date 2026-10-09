@@ -440,7 +440,6 @@ function App() {
                   <Field label="Audio policy"><input className="input" value={form.audioPolicy} onChange={(event) => updateForm("audioPolicy", event.target.value)} /></Field>
                   <Field label="Text policy"><input className="input" value={form.textPolicy} onChange={(event) => updateForm("textPolicy", event.target.value)} /></Field>
                 </div>
-                <ComfyUIStudio scenes={storyboard.scenes} storyboard={storyboard} />
             {compatibility && <div className="compatibility-note"><AlertCircle size={16} /><span>{compatibility}</span></div>}
                 <Field label="Reference notes" hint="Describe brand rules, real UI, people, clothing, locations, or anything the AI must not invent."><textarea className="input" value={form.referenceNotes} onChange={(event) => updateForm("referenceNotes", event.target.value)} rows={3} /></Field>
                 <div className="upload-box">
@@ -498,6 +497,7 @@ function App() {
               <button className="secondary-button" onClick={() => void copyText(buildContactSheetPrompt(form, storyboard), "Storyboard contact sheet prompt")}><Copy size={15} /> {copied === "Storyboard contact sheet prompt" ? "Copied" : "Copy contact-sheet prompt"}</button>
             </div>
             {storyboard.productionNotes.length > 0 && <div className="production-notes"><Lightbulb size={16} /><div><strong>Production notes</strong>{storyboard.productionNotes.map((note, index) => <p key={index}>{note}</p>)}</div></div>}
+            <ComfyUIStudio scenes={storyboard.scenes} storyboard={storyboard} />
             {compatibility && <div className="compatibility-note"><AlertCircle size={16} /><span>{compatibility}</span></div>}
             <div className="audit-panel">
               <div className="audit-heading"><div><strong><CheckCircle2 size={16} /> Pre-generation check</strong><span>Quick automated checks before you spend Flow credits.</span></div><span className={auditCount === 0 && allAudits.every((item) => item.ok) ? "audit-status pass" : "audit-status warn"}>{auditCount === 0 && allAudits.every((item) => item.ok) ? "LOOKS GOOD" : auditCount + " SCENE FLAGS"}</span></div>
