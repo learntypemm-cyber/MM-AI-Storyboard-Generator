@@ -12,7 +12,10 @@ MM Storyboard Studio converts a short idea into three creative concepts, a compl
 - Edit and regenerate one scene without rebuilding the whole project.
 - Run automated pre-generation checks for missing text policy, vague cross-scene references, opening/final frames, prompt labels, audio direction, and clip duration.
 - Copy a single prompt or all prompts and export Markdown, JSON, or a plain-text Google Flow prompt pack with voiceover, captions, and editing notes separated.
-- Save and reopen projects in the current browser.\n- Generate an exact-count storyboard contact-sheet prompt for visual planning.\n- Optionally render individual scenes or a full batch through a user-configured ComfyUI API workflow.\n- Preview ComfyUI image/video outputs and merge returned video clips in-browser with FFmpeg.wasm.
+- Save and reopen projects in the current browser.
+- Generate an exact-count storyboard contact-sheet prompt for visual planning.
+- Optionally render individual scenes or a full batch through a user-configured ComfyUI API workflow.
+- Preview ComfyUI image/video outputs and merge returned video clips in-browser with FFmpeg.wasm.
 
 ## Run locally
 
@@ -24,7 +27,10 @@ Requirements: Node.js 20 or later and a Gemini API key with access to the config
 4. Open Settings and add your Gemini API key.
 5. Enter a topic, choose a visual style, and press Generate 3 concepts.
 6. Select a concept and choose Build this storyboard.
-7. Use **Copy contact-sheet prompt** to prepare a visual reference sheet, then copy each scene prompt into Google Flow.\n8. Export **Flow .txt** for a complete prompt pack, including each scene's voiceover, captions, and editing notes.\n9. Optionally expand **Generate images or videos with ComfyUI**, load your own API-format workflow, map its prompt node, and generate one scene or the full batch. Use the merge action when two or more video outputs are available.\n10. Edit Burmese captions and any real LearnTypeMM screen recordings into the finished tutorial.
+7. Use **Copy contact-sheet prompt** to prepare a visual reference sheet, then copy each scene prompt into Google Flow.
+8. Export **Flow .txt** for a complete prompt pack, including each scene's voiceover, captions, and editing notes.
+9. Optionally expand **Generate images or videos with ComfyUI**, load your own API-format workflow, map its prompt node, and generate one scene or the full batch. Use the merge action when two or more video outputs are available.
+10. Edit Burmese captions and any real LearnTypeMM screen recordings into the finished tutorial.
 
 To create a production build, run npm run build. To preview the build, run npm run preview.
 
@@ -33,6 +39,20 @@ To create a production build, run npm run build. To preview the build, run npm r
 The app calls the Gemini generateContent REST API directly from the browser using the API key entered by the user. The key is stored in this browser's localStorage, not committed to this repository. This is suitable for personal/local use, but localStorage is not a secrets vault. Do not publish a shared deployment with a private server key in the frontend. For a public deployment, add an authenticated backend route with quotas, abuse protection, and server-side secret storage.
 
 Uploaded reference images are included only in Gemini requests for the current session. The app deliberately omits reference image data from saved projects to avoid filling browser storage. Saved projects and the API key remain in the current browser; clearing site data removes them.
+
+## Optional ComfyUI generation
+
+This project can queue a user-supplied ComfyUI API-format workflow for one storyboard scene or every scene in sequence. It can collect image/video outputs from ComfyUI history, preview them, download them, and concatenate compatible video clips in the browser using FFmpeg.wasm.
+
+1. Run ComfyUI with the required image/video model and custom nodes installed.
+2. Open the workflow in ComfyUI and export it using **Save (API Format)**. The app cannot use a normal UI workflow JSON directly.
+3. Expand **Optional: Generate images or videos with ComfyUI**, set the ComfyUI server URL, upload the workflow JSON, and choose the positive prompt node ID and input key.
+4. Optionally map the negative prompt node. Confirm your workflow has a Save Image or Save Video output.
+5. Test the connection, then render one scene before using **Generate all scenes**.
+
+The workflow is user-supplied and must accept a text prompt in the configured node. The same workflow is used for each scene, so workflows that need different start/end images, custom nodes, or special inputs may require extra configuration in ComfyUI. Generation runs on the ComfyUI server, not Google Flow. Video concatenation works best when clips share compatible codecs, resolution, frame rate, and container format.
+
+The browser connects directly to your ComfyUI URL. Local browser security may block requests unless ComfyUI allows your app origin through CORS. Restrict CORS to the local development origin you trust; do not expose an unauthenticated ComfyUI server or allow every website to control it.
 
 ## Google Flow limits
 
