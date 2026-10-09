@@ -371,6 +371,7 @@ function App() {
     setNotice(nextKey ? "Gemini settings saved in this browser." : "API key removed from this browser.");
   };
 
+  return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-lockup">
