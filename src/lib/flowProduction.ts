@@ -5,7 +5,7 @@ import type { Storyboard, VideoForm } from "../types";
  * This follows the production principle that the image model must be told to
  * generate the storyboard image immediately and must not invent extra beats.
  */
-export function buildContactSheetPrompt(form: VideoForm, storyboard: Storyboard): string {
+export function buildContactSheetPrompt(form: Pick<VideoForm, "topic" | "platform" | "aspectRatio" | "visualStyle">, storyboard: Storyboard): string {
   const scenes = storyboard.scenes;
   const count = scenes.length;
   const columns = count <= 2 ? count : Math.ceil(Math.sqrt(count));
