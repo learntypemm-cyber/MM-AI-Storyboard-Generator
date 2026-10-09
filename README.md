@@ -10,7 +10,7 @@ MM Storyboard Studio converts a short idea into three creative concepts, a compl
 - Keep repeated people and places consistent with a visual bible, continuity rules, canonical reference handles, and self-contained prompts.
 - Add screenshots or reference images to ground the plan in real product UI.
 - Edit and regenerate one scene without rebuilding the whole project.
-- Run automated pre-generation checks for missing text policy, vague cross-scene references, opening/final frames, prompt labels, audio direction, and clip duration.
+- Run automated pre-generation checks for first-line text policy, vague cross-scene references, canonical @ReferenceHandles, opening/final frames, text-bleed tokens, punctuation compatibility, audio direction, and clip duration.
 - Copy a single prompt or all prompts and export Markdown, JSON, or a plain-text Google Flow prompt pack with voiceover, captions, and editing notes separated.
 - Save and reopen projects in the current browser.
 - Generate an exact-count storyboard contact-sheet prompt for visual planning.
@@ -54,7 +54,7 @@ The workflow is user-supplied and must accept a text prompt in the configured no
 
 The browser connects directly to your ComfyUI URL. Local browser security may block requests unless ComfyUI allows your app origin through CORS. Restrict CORS to the local development origin you trust; do not expose an unauthenticated ComfyUI server or allow every website to control it.
 
-## Google Flow limits
+## Bundled Google Flow scripting tools\n\nSelected upstream files from the MIT-licensed [Google Flow Scripting Skill](https://github.com/agbelemi/google-flow-scripting-skill) are included under `integrations/google-flow-scripting-skill/`, with the original license and attribution preserved. The bundle includes specialist production guidance, a storyboard contact-sheet prompt generator, and a command-line validator. See [the integration README](integrations/google-flow-scripting-skill/README.md).\n\nRun the validator from the repository root with `python integrations/google-flow-scripting-skill/scripts/validate.py --help`. To generate a contact-sheet prompt from the bundled JSON example, run `python integrations/google-flow-scripting-skill/scripts/generate_storyboard_prompt.py integrations/google-flow-scripting-skill/examples/storyboard-spec.json --output storyboard-package.md`.\n\n## Google Flow limits
 
 The app prepares prompts; it does not call Google Flow, generate video clips, spend Flow credits, or guarantee that a chosen model/mode combination is supported. Flow model availability, credits, duration, modes, and UI can change. The app gives compatibility warnings based on the current model guide, but verify the active model and settings in Flow before generating.
 
@@ -66,7 +66,7 @@ React, TypeScript, Vite, Lucide React, CSS, and the Gemini generateContent REST 
 
 ## Inspiration
 
-This is an independent implementation. It does not copy code from either inspiration repository.
+The React app and ComfyUI integration are independently implemented. Selected Google Flow Scripting Skill files are bundled separately under their original MIT license and attribution. No source code or workflow JSON from the AI Storyboard Generator repository is copied because its default branch currently has no LICENSE file, despite the README mentioning MIT.
 
 - AI Storyboard Generator: https://github.com/dseditor/AI-storyboard-generator
 - Google Flow Scripting Skill: https://github.com/agbelemi/google-flow-scripting-skill
