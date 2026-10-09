@@ -4,7 +4,7 @@ export type AuditItem = { label: string; ok: boolean; detail: string };
 
 const backwardReference = /\b(as before|same as before|previous scene|previously|from the previous|continuing from|as established|like earlier|returns to|the same character|the same location|same person as earlier|same setup as before|continue from the last clip)\b/i;
 const textBleed = /\b(?:scene\s*\d+|shot\s*\d+|\d{2}:\d{2}|#(?:[0-9a-f]{3}|[0-9a-f]{6})\b|\d{3,4}\s*K)\b/i;
-const referenceCandidates = /@[A-Za-z0-9][A-Za-z0-9 _-]*/g;
+const referenceCandidates = /@[A-Za-z][A-Za-z0-9_-]*/g;
 
 function hasOnlyCanonicalHandles(prompt: string): boolean {
   const candidates = prompt.match(referenceCandidates) ?? [];
