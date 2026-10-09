@@ -11,7 +11,7 @@ MM Storyboard Studio converts a short idea into three creative concepts, a compl
 - Add screenshots or reference images to ground the plan in real product UI.
 - Edit and regenerate one scene without rebuilding the whole project.
 - Run automated pre-generation checks for missing text policy, vague cross-scene references, opening/final frames, prompt labels, audio direction, and clip duration.
-- Copy a single prompt or all prompts and export Markdown or JSON.
+- Copy a single prompt or all prompts and export Markdown, JSON, or a plain-text Google Flow prompt pack with voiceover, captions, and editing notes separated.
 - Save and reopen projects in the current browser.
 
 ## Run locally
