@@ -22,6 +22,8 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: npm install
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
       - name: Type-check and build
         run: npm run build
       - name: Check bundled Flow scripts

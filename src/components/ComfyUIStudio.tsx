@@ -43,7 +43,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function normaliseEndpoint(value: string): string {
-  return value.trim().replace(/\/+$/, "");
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) throw new Error("Enter your ComfyUI server URL.");
+  let parsed: URL;
+  try { parsed = new URL(trimmed); }
+  catch { throw new Error("Enter a complete ComfyUI URL such as http://127.0.0.1:8188."); }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("ComfyUI URL must use http:// or https://.");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("Do not put a username or password in the ComfyUI URL.");
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error("Remove query parameters and fragments from the ComfyUI base URL.");
+  }
+  return trimmed;
 }
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

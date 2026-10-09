@@ -8,8 +8,18 @@ import type { Storyboard, VideoForm } from "../types";
 export function buildContactSheetPrompt(form: Pick<VideoForm, "topic" | "platform" | "aspectRatio" | "visualStyle">, storyboard: Storyboard): string {
   const scenes = storyboard.scenes;
   const count = scenes.length;
-  const columns = count <= 2 ? count : Math.ceil(Math.sqrt(count));
-  const rows = Math.ceil(count / Math.max(columns, 1));
+  if (count === 0) return "No storyboard scenes are available yet. Generate a storyboard before creating a contact-sheet prompt.";
+
+  // Prefer readable panel arrangements for short video storyboards.
+  const grid = count === 1 ? { rows: 1, columns: 1 }
+    : count === 2 ? { rows: 1, columns: 2 }
+    : count === 3 ? { rows: 1, columns: 3 }
+    : count === 4 ? { rows: 2, columns: 2 }
+    : count <= 6 ? { rows: 2, columns: 3 }
+    : count <= 8 ? { rows: 2, columns: 4 }
+    : { columns: Math.ceil(Math.sqrt(count)), rows: Math.ceil(count / Math.ceil(Math.sqrt(count))) };
+  const { rows, columns } = grid;
+  const emptyCells = rows * columns - count;
   const panels = scenes.map((scene, index) => [
     "PANEL " + (index + 1),
     "Scene purpose: " + scene.objective,
@@ -23,6 +33,7 @@ export function buildContactSheetPrompt(form: Pick<VideoForm, "topic" | "platfor
   return [
     "GENERATE THE STORYBOARD IMAGE NOW.",
     "Create exactly " + count + " distinct storyboard panels in one clean contact sheet, arranged in a " + rows + " row by " + columns + " column grid. Do not respond with a written plan.",
+    emptyCells > 0 ? "The grid has " + emptyCells + " unused cell(s). Leave those cell(s) completely blank with only the neutral background and no panel border, subject, object, label, or extra action." : "Every grid cell must contain exactly one of the authored panels.",
     "",
     "PROJECT",
     storyboard.projectTitle || form.topic,
@@ -41,6 +52,7 @@ export function buildContactSheetPrompt(form: Pick<VideoForm, "topic" | "platfor
     "",
     "LAYOUT AND STORY RULES",
     "- Output exactly " + count + " panels. Use clear, even gutters and a consistent panel size. Read panels from left to right and top to bottom.",
+    "- Do not invent additional panels to fill the layout. Any unused grid cell must remain completely empty.",
     "- Every panel must depict only the action and story state specified for its corresponding scene. Do not add unrequested scenes, characters, props, actions, or filler beats.",
     "- Preserve recurring subjects using consistent face, age, hair, wardrobe, body proportions, prop design, and environment. If a reference image is supplied, treat it as the visual source of truth.",
     "- Give each panel a clear focal point and distinct readable composition. Keep panels visually separate; do not merge them into one continuous panoramic scene.",
