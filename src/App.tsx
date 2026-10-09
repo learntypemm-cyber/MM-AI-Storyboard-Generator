@@ -7,6 +7,8 @@ import {
   Sparkles, Trash2, Upload, Volume2, Wand2, X, Zap, Clock3,
 } from "lucide-react";
 import { generateJson } from "./lib/gemini";
+import ComfyUIStudio from "./components/ComfyUIStudio";
+import { buildContactSheetPrompt } from "./lib/flowProduction";
 import { auditScene, auditStoryboard } from "./lib/audit";
 import { downloadText, fileSlug, flowPromptPack, storyboardMarkdown } from "./lib/export";
 import type {
@@ -438,7 +440,8 @@ function App() {
                   <Field label="Audio policy"><input className="input" value={form.audioPolicy} onChange={(event) => updateForm("audioPolicy", event.target.value)} /></Field>
                   <Field label="Text policy"><input className="input" value={form.textPolicy} onChange={(event) => updateForm("textPolicy", event.target.value)} /></Field>
                 </div>
-                {compatibility && <div className="compatibility-note"><AlertCircle size={16} /><span>{compatibility}</span></div>}
+                <ComfyUIStudio scenes={storyboard.scenes} storyboard={storyboard} />
+            {compatibility && <div className="compatibility-note"><AlertCircle size={16} /><span>{compatibility}</span></div>}
                 <Field label="Reference notes" hint="Describe brand rules, real UI, people, clothing, locations, or anything the AI must not invent."><textarea className="input" value={form.referenceNotes} onChange={(event) => updateForm("referenceNotes", event.target.value)} rows={3} /></Field>
                 <div className="upload-box">
                   <div className="upload-copy"><div className="upload-icon"><Upload size={18} /></div><div><strong>Reference images <span>Optional</span></strong><p>Upload real LearnTypeMM screenshots, logo, or visual references. Up to 4 images.</p></div></div>
@@ -486,6 +489,13 @@ function App() {
             <div className="storyboard-overview">
               <div className="overview-main"><div className="overview-eyebrow">SELECTED CONCEPT</div><h3>{storyboard.projectTitle || selectedConcept?.title || form.topic}</h3><p>{storyboard.logline}</p><div className="overview-meta"><span><Film size={14} /> {storyboard.scenes.length} scenes</span><span><Clock3 size={14} /> {storyboard.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)}s planned</span><span><MonitorPlay size={14} /> {form.aspectRatio}</span></div></div>
               <div className="visual-bible"><span><Sparkles size={14} /> VISUAL BIBLE</span><p>{storyboard.visualBible}</p></div>
+            </div>
+            <div className="contact-sheet-action">
+              <div className="contact-sheet-copy">
+                <span className="contact-sheet-icon"><Film size={17} /></span>
+                <div><strong>Visual storyboard contact sheet</strong><span>Generate a reference image prompt with one panel per scene and consistent visual direction.</span></div>
+              </div>
+              <button className="secondary-button" onClick={() => void copyText(buildContactSheetPrompt(form, storyboard), "Storyboard contact sheet prompt")}><Copy size={15} /> {copied === "Storyboard contact sheet prompt" ? "Copied" : "Copy contact-sheet prompt"}</button>
             </div>
             {storyboard.productionNotes.length > 0 && <div className="production-notes"><Lightbulb size={16} /><div><strong>Production notes</strong>{storyboard.productionNotes.map((note, index) => <p key={index}>{note}</p>)}</div></div>}
             {compatibility && <div className="compatibility-note"><AlertCircle size={16} /><span>{compatibility}</span></div>}
