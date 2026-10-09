@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Lightbulb, MonitorPlay, Plus, RefreshCw, Save, Settings,
   Sparkles, Trash2, Upload, Volume2, Wand2, X, Zap, Clock3,
 } from "lucide-react";
-import { generateJson } from "./lib/gemini";
+import { generateJson, normalizeGeminiModelName, testGeminiModel } from "./lib/gemini";
 import ComfyUIStudio from "./components/ComfyUIStudio";
 import { buildContactSheetPrompt } from "./lib/flowProduction";
 import { auditScene, auditStoryboard } from "./lib/audit";
@@ -153,6 +153,8 @@ function App() {
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>(() => readLocal(STORAGE.saved, []));
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [testingGemini, setTestingGemini] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -332,16 +334,43 @@ function App() {
     setForm((current) => ({ ...current, referenceImages: [...current.referenceImages, ...converted.filter((item): item is ReferenceImage => item !== null)] }));
   };
 
+  const testGeminiSettings = async () => {
+    const key = apiKeyDraft.trim() || apiKey.trim();
+    if (!key) {
+      setGeminiTestResult({ ok: false, message: "Enter a Gemini API key before testing." });
+      return;
+    }
+    setTestingGemini(true);
+    setGeminiTestResult(null);
+    try {
+      const result = await testGeminiModel(key, geminiModel || GEMINI_DEFAULT);
+      setGeminiModel(result.modelId);
+      setGeminiTestResult({ ok: true, message: "Connected: " + result.displayName + " (" + result.modelId + ") supports text generation." });
+    } catch (caught) {
+      setGeminiTestResult({ ok: false, message: caught instanceof Error ? caught.message : "Could not test Gemini. Check the key and model." });
+    } finally {
+      setTestingGemini(false);
+    }
+  };
+
   const saveApiSettings = () => {
     const nextKey = apiKeyDraft.trim();
+    let model: string;
+    try {
+      model = normalizeGeminiModelName(geminiModel || GEMINI_DEFAULT);
+    } catch (caught) {
+      setGeminiTestResult({ ok: false, message: caught instanceof Error ? caught.message : "Invalid Gemini model name." });
+      return;
+    }
     if (nextKey) { localStorage.setItem(STORAGE.key, nextKey); setApiKey(nextKey); }
     else { localStorage.removeItem(STORAGE.key); setApiKey(""); }
-    const model = geminiModel.trim() || GEMINI_DEFAULT;
-    localStorage.setItem(STORAGE.model, model); setGeminiModel(model); setSettingsOpen(false);
+    localStorage.setItem(STORAGE.model, model);
+    setGeminiModel(model);
+    setSettingsOpen(false);
+    setGeminiTestResult(null);
     setNotice(nextKey ? "Gemini settings saved in this browser." : "API key removed from this browser.");
   };
 
-  return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-lockup">
@@ -549,10 +578,11 @@ function App() {
         <section className="modal-card settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <div className="modal-top"><div className="modal-icon"><KeyRound size={20} /></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={18} /></button></div>
           <h2 id="settings-title">Connect Gemini</h2><p className="modal-description">Your API key powers concept generation, storyboard creation, and scene improvements.</p>
-          <Field label="Gemini API key" hint="Stored in this browser's localStorage. Never paste a production server key into a public website."><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value)} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
-          <Field label="Gemini API model" hint="Uses the Gemini generateContent REST endpoint. Change this if your project doesn't have access to the default model."><input className="input" value={geminiModel} onChange={(event) => setGeminiModel(event.target.value)} placeholder={GEMINI_DEFAULT} /></Field>
+          <Field label="Gemini API key" hint="Stored in this browser's localStorage. Never paste a production server key into a public website."><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => { setApiKeyDraft(event.target.value); setGeminiTestResult(null); }} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
+          <Field label="Gemini API model" hint="Enter the API model ID, e.g. gemini-3.8-flash. The app also normalizes models/<id> and full model URLs automatically."><input className="input" value={geminiModel} onChange={(event) => { setGeminiModel(event.target.value); setGeminiTestResult(null); }} placeholder={GEMINI_DEFAULT} /></Field>
+          {geminiTestResult && <div className={"gemini-test-result " + (geminiTestResult.ok ? "success" : "error")} role="status"><span>{geminiTestResult.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span><span>{geminiTestResult.message}</span></div>}
           <div className="privacy-note"><AlertCircle size={16} /><span>This is a browser-only development app. The key is sent to Google's Gemini API from your browser and stored locally. For a public deployment, proxy requests through a secured backend.</span></div>
-          <div className="modal-actions"><button className="quiet-button" onClick={() => { setApiKeyDraft(""); localStorage.removeItem(STORAGE.key); setApiKey(""); setSettingsOpen(false); }}>Remove key</button><button className="primary-button" onClick={saveApiSettings}><Check size={16} /> Save settings</button></div>
+          <div className="modal-actions"><button className="quiet-button" onClick={() => { setApiKeyDraft(""); localStorage.removeItem(STORAGE.key); setApiKey(""); setGeminiTestResult(null); setSettingsOpen(false); }}>Remove key</button><button className="secondary-button" onClick={() => void testGeminiSettings()} disabled={testingGemini}><Zap size={15} /> {testingGemini ? "Testing..." : "Test model"}</button><button className="primary-button" onClick={saveApiSettings}><Check size={16} /> Save settings</button></div>
           <div className="modal-help">Get or manage your key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Google AI Studio <ChevronRight size={12} /></a></div>
         </section>
       </div>}
