@@ -495,3 +495,9 @@ textarea.input { resize: vertical; min-height: 64px; }
   .comfy-results-heading { align-items: flex-start; flex-direction: column; }
   .comfy-results-heading > button { width: 100%; }
 }
+
+
+.gemini-test-result { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 10px 11px; border: 1px solid #dce6f5; border-radius: 9px; color: #4f607b; font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
+.gemini-test-result > span:first-child { display: inline-flex; flex: 0 0 auto; margin-top: 1px; }
+.gemini-test-result.success { border-color: #b8e2cb; background: #f1fbf5; color: #176b43; }
+.gemini-test-result.error { border-color: #f2c8ce; background: #fff6f6; color: #9b2c3e; }
