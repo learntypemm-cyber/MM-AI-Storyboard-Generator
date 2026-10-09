@@ -16,7 +16,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - name: Install dependencies
         run: npm install
       - name: Type-check and build
         run: npm run build
+      - name: Check bundled Flow scripts
+        run: |
+          python -m py_compile integrations/google-flow-scripting-skill/scripts/validate.py integrations/google-flow-scripting-skill/scripts/generate_storyboard_prompt.py
+          python integrations/google-flow-scripting-skill/scripts/validate.py --help
+          python integrations/google-flow-scripting-skill/scripts/generate_storyboard_prompt.py integrations/google-flow-scripting-skill/examples/storyboard-spec.json --output /tmp/mm-storyboard-package.md
+          grep -q '^GENERATE THE STORYBOARD IMAGE NOW\.$' /tmp/mm-storyboard-package.md
