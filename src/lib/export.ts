@@ -1,3 +1,4 @@
+import { buildContactSheetPrompt } from "./flowProduction";
 import type { SavedProject, Storyboard, VideoConcept, VideoForm } from "../types";
 
 const safe = (value: string) => value.trim() || "Not specified";
@@ -36,8 +37,16 @@ export function storyboardMarkdown(form: VideoForm | SavedProject["form"], conce
 }
 
 export function flowPromptPack(form: VideoForm | SavedProject["form"], concept: VideoConcept | undefined, storyboard: Storyboard): string {
+  const contactSheetPrompt = buildContactSheetPrompt(form, storyboard);
   const lines = [
     "GOOGLE FLOW PROMPT PACK",
+    "",
+    "VISUAL STORYBOARD CONTACT SHEET PROMPT",
+    "Copy this prompt into a compatible image generator to create a reference sheet before generating each video clip.",
+    "",
+    contactSheetPrompt,
+    "",
+    "================================================================",
     "Project: " + safe(storyboard.projectTitle || form.topic),
     "Topic: " + safe(form.topic),
     "Goal: " + safe(form.goal),
