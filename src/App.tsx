@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { generateJson } from "./lib/gemini";
 import { auditScene, auditStoryboard } from "./lib/audit";
-import { downloadText, fileSlug, storyboardMarkdown } from "./lib/export";
+import { downloadText, fileSlug, flowPromptPack, storyboardMarkdown } from "./lib/export";
 import type {
   FlowModel, GenerationMode, Language, Platform, ReferenceImage, SavedProject,
   Scene, Storyboard, VideoConcept, VideoForm, VisualStyle,
@@ -296,6 +296,13 @@ function App() {
     downloadText(fileSlug(storyboard.projectTitle) + ".md", storyboardMarkdown(form, selectedConcept, storyboard), "text/markdown;charset=utf-8");
     setNotice("Markdown storyboard downloaded.");
   };
+  const exportPromptPack = () => {
+    if (!storyboard) { setError("Generate a storyboard before exporting."); return; }
+    const pack = flowPromptPack(form, selectedConcept, storyboard);
+    downloadText(fileSlug(storyboard.projectTitle || form.topic) + "-google-flow-prompts.txt", pack, "text/plain;charset=utf-8");
+    setNotice("Google Flow prompt pack downloaded.");
+  };
+
   const exportJson = () => {
     if (!storyboard) { setError("Generate a storyboard before exporting."); return; }
     downloadText(fileSlug(storyboard.projectTitle) + ".json", JSON.stringify({ form: stripImages(form), selectedConcept, storyboard }, null, 2), "application/json;charset=utf-8");
@@ -474,7 +481,7 @@ function App() {
             <div className="section-heading results-heading">
               <div className="section-icon green"><Clapperboard size={18} /></div>
               <div><h2>Your storyboard</h2><p>Edit the prompts and narration before moving each clip into Google Flow.</p></div>
-              <div className="storyboard-actions"><button className="quiet-button" onClick={saveProject}><Save size={15} /> Save</button><button className="quiet-button" onClick={exportJson}><Download size={15} /> JSON</button><button className="primary-button small-primary" onClick={exportMarkdown}><Download size={15} /> Export .md</button></div>
+              <div className="storyboard-actions"><button className="quiet-button" onClick={saveProject}><Save size={15} /> Save</button><button className="quiet-button" onClick={exportPromptPack}><Download size={15} /> Flow .txt</button><button className="quiet-button" onClick={exportJson}><Download size={15} /> JSON</button><button className="primary-button small-primary" onClick={exportMarkdown}><Download size={15} /> Export .md</button></div>
             </div>
             <div className="storyboard-overview">
               <div className="overview-main"><div className="overview-eyebrow">SELECTED CONCEPT</div><h3>{storyboard.projectTitle || selectedConcept?.title || form.topic}</h3><p>{storyboard.logline}</p><div className="overview-meta"><span><Film size={14} /> {storyboard.scenes.length} scenes</span><span><Clock3 size={14} /> {storyboard.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)}s planned</span><span><MonitorPlay size={14} /> {form.aspectRatio}</span></div></div>
