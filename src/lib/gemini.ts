@@ -6,17 +6,28 @@ export function normalizeGeminiModelName(value: string): string {
   let model = value.trim();
   if (!model) model = "gemini-3.8-flash";
 
-  // Accept an API model ID, "models/<id>", or a full generateContent URL.
-  const pathMatch = model.match(/(?:^|\/)models\/([^/?#]+)/i);
-  if (pathMatch) model = pathMatch[1];
-  model = model.replace(/:generateContent$/i, "").trim().toLowerCase().replace(/\s+/g, "-");
+  // Accept an API model ID, models/<id>, or a full Gemini API URL.
+  const cleanInput = model.split("?")[0].split("#")[0];
+  const lowerInput = cleanInput.toLowerCase();
+  const marker = "models/";
+  const markerIndex = lowerInput.lastIndexOf(marker);
+  if (markerIndex >= 0) {
+    model = cleanInput.slice(markerIndex + marker.length);
+  } else if (cleanInput.includes("/")) {
+    throw new Error('Invalid Gemini model name. Enter an API model ID such as "gemini-3.8-flash" or a full Gemini models URL.');
+  } else {
+    model = cleanInput;
+  }
+
+  const suffix = ":generateContent";
+  if (model.toLowerCase().endsWith(suffix)) model = model.slice(0, -suffix.length);
+  model = model.trim().toLowerCase().replace(/\s+/g, "-");
 
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(model)) {
     throw new Error('Invalid Gemini model name. Enter an API model ID such as "gemini-3.8-flash" without a URL, "models/" prefix, or ":generateContent" suffix.');
   }
   return model;
 }
-
 type GeminiModelInfo = {
   name?: string;
   displayName?: string;
