@@ -7,9 +7,9 @@ export function normalizeGeminiModelName(value: string): string {
   if (!model) model = "gemini-3.8-flash";
 
   // Accept an API model ID, "models/<id>", or a full generateContent URL.
-  const pathMatch = model.match(/(?:^|\\/)models\\/([^/?#]+)/i);
+  const pathMatch = model.match(/(?:^|\/)models\/([^/?#]+)/i);
   if (pathMatch) model = pathMatch[1];
-  model = model.replace(/:generateContent$/i, "").trim().toLowerCase().replace(/\\s+/g, "-");
+  model = model.replace(/:generateContent$/i, "").trim().toLowerCase().replace(/\s+/g, "-");
 
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(model)) {
     throw new Error('Invalid Gemini model name. Enter an API model ID such as "gemini-3.8-flash" without a URL, "models/" prefix, or ":generateContent" suffix.');
