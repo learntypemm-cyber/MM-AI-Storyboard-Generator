@@ -57,7 +57,7 @@ function normaliseEndpoint(value: string): string {
   if (parsed.search || parsed.hash) {
     throw new Error("Remove query parameters and fragments from the ComfyUI base URL.");
   }
-  return trimmed;
+  return parsed.origin + parsed.pathname.replace(/\/+$/, "");
 }
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
