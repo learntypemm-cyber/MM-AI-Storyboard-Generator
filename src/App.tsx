@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { generateJson, normalizeGeminiModelName, testGeminiModel } from "./lib/gemini";
 import ComfyUIStudio from "./components/ComfyUIStudio";
+import AssetStudio from "./components/AssetStudio";
 import { buildContactSheetPrompt } from "./lib/flowProduction";
 import { auditScene, auditStoryboard } from "./lib/audit";
 import { downloadText, fileSlug, flowPromptPack, storyboardMarkdown } from "./lib/export";
@@ -156,6 +157,7 @@ function App() {
   const [testingGemini, setTestingGemini] = useState(false);
   const [geminiTestResult, setGeminiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [assetStudioOpen, setAssetStudioOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -383,6 +385,7 @@ function App() {
         <button className={step === "brief" ? "side-link active" : "side-link"} onClick={() => setStep("brief")}><LayoutDashboard size={17} /> Video brief</button>
         <button className={step === "concepts" ? "side-link active" : "side-link"} onClick={() => concepts.length ? setStep("concepts") : setNotice("Generate concepts first to use this step.")}><Lightbulb size={17} /> Concepts <span className="side-count">{concepts.length || "–"}</span></button>
         <button className={step === "storyboard" ? "side-link active" : "side-link"} onClick={() => storyboard ? setStep("storyboard") : setNotice("Build a storyboard first to use this step.")}><Film size={17} /> Storyboard <span className="side-count">{storyboard?.scenes.length || "–"}</span></button>
+        <button className={assetStudioOpen ? "side-link active" : "side-link"} onClick={() => setAssetStudioOpen(true)}><Wand2 size={17} /> Asset Studio <span className="side-count">NEW</span></button>
         <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
         <div className="saved-list">
           {savedProjects.slice(0, 4).map((project) => <button className="saved-item" key={project.id} onClick={() => loadProject(project)} title={project.title}><FolderOpen size={15} /><span>{project.title}</span></button>)}
@@ -574,6 +577,8 @@ function App() {
           <footer className="page-footer"><span>MM Storyboard Studio</span><span>Prompt generation only · Videos are created separately in Google Flow</span><button onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>API & privacy settings</button></footer>
         </div>
       </main>
+
+      {assetStudioOpen && <AssetStudio open={assetStudioOpen} onClose={() => setAssetStudioOpen(false)} apiKey={apiKey} projectTitle={storyboard?.projectTitle || selectedConcept?.title || form.topic} topic={form.topic} visualStyle={form.visualStyle} aspectRatio={form.aspectRatio} projectReferences={form.referenceImages} storyboard={storyboard} />}
 
       {settingsOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
         <section className="modal-card settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">

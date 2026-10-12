@@ -60,6 +60,17 @@ The app prepares prompts; it does not call Google Flow, generate video clips, sp
 
 For accurate LearnTypeMM tutorials, upload current screenshots as references and use real screen recordings for exact interactions. AI video prompts request no generated text by default; add Burmese captions and exact UI labels in a video editor.
 
+## AI Asset Studio
+
+The Asset Studio creates reusable visual assets instead of only writing storyboard prompts:
+
+- **Character Studio:** create a new character or refine an uploaded character image while asking Gemini to preserve identity, face, hair, clothing, and proportions. Generate a full-body reference, turnaround sheet, or expression sheet.
+- **Background Studio:** generate reusable environment plates without people, readable text, or logos; upload an approved background to create matching variants.
+- **Scene Image Generator:** create a separate image for each storyboard scene, with selected character and location images supplied as visual references. Batch generation is sequential and supports pause, resume, stop-after-current, per-scene retries, and generate-missing mode.
+- **Asset Library:** images are stored in browser IndexedDB, not embedded into saved storyboard projects. Download images individually and export their prompts for reuse.
+
+Image generation calls Google's Gemini Interactions API using the stable image model ID gemini-nano-banana-2.1. It uses the API key already entered in Settings; image-generation API usage may incur charges. Keep the app for personal/local use unless you add an authenticated backend, quotas, abuse protection, and server-side secret storage before public deployment. Image requests are sent directly from this browser to Google. Reference images are resized in the browser to a maximum 1280px long edge before being sent. Generated images include Google's SynthID watermark where supported by the model.
+
 ## Technology
 
 React, TypeScript, Vite, Lucide React, CSS, and the Gemini generateContent REST API.
