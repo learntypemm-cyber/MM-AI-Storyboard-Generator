@@ -1,68 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, Copy, ImagePlus, MapPin, Pause, Play, RotateCcw, Trash2, Upload, Users, Wand2, X, Images } from "lucide-react";
-import type { ReferenceImage, Scene, Storyboard, VideoForm, VisualStyle } from "../types";
+import { assetAsReference, putAsset, readAssets, removeAsset, sceneReferences } from "../lib/assetStore";
+import type { ImageAsset, ReferenceImage, Scene, Storyboard, VideoForm, VisualStyle } from "../types";
 import "./AssetStudio.css";
 
 type AssetKind = "character" | "background" | "scene";
 type StudioTab = "character" | "background" | "scene";
 type JobState = "idle" | "running" | "paused" | "done" | "cancelled";
-type ImageAsset = {
-  id: string; kind: AssetKind; title: string; prompt: string; mimeType: string; data: string;
-  createdAt: string; sceneNumber?: number; useAsReference: boolean;
-};
 type Props = {
+  protectedAssetIds: string[]; projectId: string; onAssetsChanged: () => void;
   open: boolean; onClose: () => void; apiKey: string; projectTitle: string; topic: string;
   visualStyle: VisualStyle; aspectRatio: VideoForm["aspectRatio"];
   projectReferences: ReferenceImage[]; storyboard: Storyboard | null;
 };
-const DB_NAME = "mm-storyboard-asset-library";
-const STORE_NAME = "assets";
 const IMAGE_MODEL = "gemini-nano-banana-2.1";
 const MAX_REFERENCES = 4;
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (!("indexedDB" in window)) { reject(new Error("This browser does not support local image storage. Try recent Chrome or Edge.")); return; }
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME, { keyPath: "id" }); };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("Could not open the asset library."));
-  });
-}
-async function readAssets(): Promise<ImageAsset[]> {
-  const db = await openDb();
-  try {
-    return await new Promise((resolve, reject) => {
-      const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => resolve((request.result as ImageAsset[]).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-      request.onerror = () => reject(request.error || new Error("Could not read saved images."));
-    });
-  } finally { db.close(); }
-}
-async function putAsset(asset: ImageAsset): Promise<void> {
-  const db = await openDb();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).put(asset);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error("Could not save the generated image."));
-      tx.onabort = () => reject(tx.error || new Error("Saving the generated image was cancelled."));
-    });
-  } finally { db.close(); }
-}
-async function removeAsset(id: string): Promise<void> {
-  const db = await openDb();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).delete(id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error("Could not delete the saved image."));
-      tx.onabort = () => reject(tx.error || new Error("Deleting the saved image was cancelled."));
-    });
-  } finally { db.close(); }
-}
 function makeId(): string { return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9); }
 function safeSlug(value: string): string {
   return value.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mm-storyboard-image";
@@ -114,6 +67,7 @@ function findOutputImage(payload: ApiResponse): ApiImage | undefined {
   return (payload.output || []).find((item) => item.data && (!item.type || item.type === "image"));
 }
 async function generateImage(apiKey: string, prompt: string, aspectRatio: VideoForm["aspectRatio"], references: ReferenceImage[]): Promise<{ data: string; mimeType: string }> {
+  if (references.length > MAX_REFERENCES) throw new Error("Choose at most four reference images. Remove extra references before generating.");
   if (!apiKey.trim()) throw new Error("Add your Gemini API key in Settings first, then reopen Asset Studio.");
   const input: Array<Record<string, string>> = [{ type: "text", text: prompt }];
   references.slice(0, MAX_REFERENCES).forEach((image) => {
@@ -136,9 +90,6 @@ async function generateImage(apiKey: string, prompt: string, aspectRatio: VideoF
   const image = findOutputImage(payload);
   if (!image?.data) throw new Error("Gemini returned no image. Try a shorter prompt or a simpler reference image.");
   return { data: image.data, mimeType: image.mime_type || image.mimeType || "image/png" };
-}
-function assetAsReference(asset: ImageAsset): ReferenceImage {
-  return { name: asset.title, mimeType: asset.mimeType, data: asset.data, previewUrl: "data:" + asset.mimeType + ";base64," + asset.data };
 }
 function downloadAsset(asset: ImageAsset): void {
   const binary = atob(asset.data);
@@ -197,9 +148,10 @@ function SceneImagePrompt(scene: Scene, storyboard: Storyboard, projectTitle: st
 }
 
 export default function AssetStudio(props: Props) {
-  const { open, onClose, apiKey, projectTitle, topic, visualStyle, aspectRatio, projectReferences, storyboard } = props;
+  const { protectedAssetIds, projectId, onAssetsChanged, open, onClose, apiKey, projectTitle, topic, visualStyle, aspectRatio, projectReferences, storyboard } = props;
   const [tab, setTab] = useState<StudioTab>("character");
   const [assets, setAssets] = useState<ImageAsset[]>([]);
+  const [selectedSceneIds, setSelectedSceneIds] = useState<string[]>([]);
   const [refs, setRefs] = useState<ReferenceImage[]>([]);
   const [useProjectReferences, setUseProjectReferences] = useState(false);
   const [characterName, setCharacterName] = useState("Main character");
@@ -221,34 +173,31 @@ export default function AssetStudio(props: Props) {
   useEffect(() => {
     if (!open) return;
     let live = true;
-    readAssets().then((items) => { if (live) setAssets(items); })
+    readAssets().then((items) => { if (live) setAssets(items.filter((asset) => asset.kind !== "scene" || asset.projectId === projectId || !asset.projectId)); })
       .catch((caught: unknown) => { if (live) setStorageError(caught instanceof Error ? caught.message : "The asset library could not be loaded."); });
     return () => { live = false; };
-  }, [open]);
+  }, [open, projectId]);
 
-  const selectedAssets = useMemo(() => assets.filter((asset) => asset.useAsReference && asset.kind !== "scene"), [assets]);
-  const sceneImageCounts = useMemo(() => {
-    const counts = new Map<number, number>();
-    assets.forEach((asset) => { if (asset.kind === "scene" && asset.sceneNumber) counts.set(asset.sceneNumber, (counts.get(asset.sceneNumber) || 0) + 1); });
-    return counts;
-  }, [assets]);
+  const selectedAssets = useMemo(() => assets.filter((asset) => asset.projectId === projectId && asset.useAsReference && asset.kind !== "scene"), [assets, projectId]);
+
   const visibleAssets = useMemo(() => assets.filter((asset) => tab === "scene" ? true : asset.kind === tab), [assets, tab]);
 
-  function inputReferences(): ReferenceImage[] {
+  function inputReferences(scene?: Scene): ReferenceImage[] {
     const chosen: ReferenceImage[] = [];
     if (useProjectReferences) chosen.push(...projectReferences);
     chosen.push(...refs);
-    selectedAssets.forEach((asset) => chosen.push(assetAsReference(asset)));
+    (scene ? sceneReferences(scene, assets.filter((asset) => asset.projectId === projectId)) : selectedAssets).forEach((asset) => chosen.push(assetAsReference(asset)));
     const unique = chosen.filter((image, index, list) => image.data && list.findIndex((other) => other.name === image.name && other.data === image.data) === index);
-    return unique.slice(0, MAX_REFERENCES);
+    return unique;
   }
-  async function saveGenerated(kind: AssetKind, title: string, prompt: string, image: { data: string; mimeType: string }, sceneNumber?: number): Promise<ImageAsset> {
+  async function saveGenerated(kind: AssetKind, title: string, prompt: string, image: { data: string; mimeType: string }, sceneNumber?: number, sceneId?: string): Promise<ImageAsset> {
     const asset: ImageAsset = {
       id: makeId(), kind, title: title.trim() || (kind === "scene" ? "Scene " + sceneNumber : kind === "character" ? "Character reference" : "Background"),
-      prompt, mimeType: image.mimeType, data: image.data, createdAt: new Date().toISOString(), sceneNumber, useAsReference: kind !== "scene"
+      prompt, mimeType: image.mimeType, data: image.data, createdAt: new Date().toISOString(), projectId, sceneId, sceneNumber, useAsReference: kind !== "scene" && selectedAssets.length < MAX_REFERENCES
     };
     await putAsset(asset);
     setAssets((current) => [asset, ...current]);
+    onAssetsChanged();
     setNotice("Saved " + asset.title + " to your local Asset Library.");
     return asset;
   }
@@ -280,12 +229,11 @@ export default function AssetStudio(props: Props) {
   async function runSceneQueue(sceneIds: string[]): Promise<void> {
     if (!apiKey.trim()) { setError("Add your Gemini API key in Settings first, then reopen Asset Studio."); return; }
     if (!storyboard) { setError("Build a storyboard before generating scene images."); return; }
-    const queue = storyboard.scenes.filter((scene) => sceneIds.includes(scene.id));
+    const queue = storyboard.scenes.filter((scene) => sceneIds.includes(scene.id) && !scene.locked);
     if (!queue.length) { setError("Choose at least one scene."); return; }
     controls.current = { paused: false, cancelled: false };
     setError(""); setNotice(""); setJobState("running");
     setJobProgress({ total: queue.length, complete: 0, failed: 0, current: "" }); setBusyId("");
-    const references = inputReferences();
     let completed = 0;
     let failed = 0;
     for (const scene of queue) {
@@ -294,8 +242,8 @@ export default function AssetStudio(props: Props) {
       setJobProgress((current) => ({ ...current, current: "Scene " + scene.sceneNumber + ": " + scene.title }));
       const prompt = SceneImagePrompt(scene, storyboard, projectTitle, visualStyle, aspectRatio, topic);
       try {
-        const image = await generateImage(apiKey, prompt, aspectRatio, references);
-        await saveGenerated("scene", "Scene " + scene.sceneNumber + " - " + scene.title, prompt, image, scene.sceneNumber);
+        const image = await generateImage(apiKey, prompt, aspectRatio, inputReferences(scene));
+        await saveGenerated("scene", "Scene " + scene.sceneNumber + " - " + scene.title, prompt, image, scene.sceneNumber, scene.id);
       } catch (caught) {
         failed += 1;
         setError("Scene " + scene.sceneNumber + " failed: " + (caught instanceof Error ? caught.message : "Image generation failed.") + " The queue will continue with the next scene.");
@@ -306,12 +254,21 @@ export default function AssetStudio(props: Props) {
     if (controls.current.cancelled) { setJobState("cancelled"); setNotice("Batch stopped after the current image. Completed images remain saved."); }
     else { setJobState("done"); setNotice("Batch finished: " + (completed - failed) + " images generated, " + failed + " failed. Each scene image is saved separately."); }
   }
-  function toggleReference(asset: ImageAsset): void {
-    const updated = { ...asset, useAsReference: !asset.useAsReference };
-    setAssets((current) => current.map((item) => item.id === asset.id ? updated : item));
-    void putAsset(updated).catch((caught: unknown) => setStorageError(caught instanceof Error ? caught.message : "Could not update reference selection."));
+  async function toggleReference(asset: ImageAsset): Promise<void> {
+    if (isBusy) return;
+    const selecting = asset.projectId !== projectId || !asset.useAsReference;
+    if (selecting && selectedAssets.length >= MAX_REFERENCES) { setError("Choose at most four project references. Deselect one first."); return; }
+    const updated = { ...asset, handle: asset.projectId === projectId ? asset.handle : undefined, id: asset.projectId === projectId ? asset.id : makeId(), projectId, useAsReference: selecting };
+    try {
+      await putAsset(updated);
+      setAssets((current) => asset.projectId === projectId ? current.map((item) => item.id === asset.id ? updated : item) : [updated, ...current]);
+      onAssetsChanged();
+    } catch (caught) { setStorageError(caught instanceof Error ? caught.message : "Could not update reference selection."); }
   }
   async function deleteImage(asset: ImageAsset): Promise<void> {
+    if (isBusy) return;
+    if (asset.kind === "scene" && storyboard?.scenes.some((scene) => scene.id === asset.sceneId && scene.locked)) { setError("Unlock this scene before deleting its image."); return; }
+    if (protectedAssetIds.includes(asset.id) || (asset.kind !== "scene" && asset.useAsReference)) { setError("This asset is used by a scene, version or project reference set. Keep it for continuity."); return; }
     try { await removeAsset(asset.id); setAssets((current) => current.filter((item) => item.id !== asset.id)); setNotice("Deleted " + asset.title + " from the local library."); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Could not delete this image."); }
   }
@@ -344,14 +301,14 @@ export default function AssetStudio(props: Props) {
 
   const refsCount = inputReferences().length;
   const allScenes = storyboard?.scenes || [];
-  const missingScenes = allScenes.filter((scene) => !(sceneImageCounts.get(scene.sceneNumber) || 0));
+  const missingScenes = allScenes.filter((scene) => !scene.locked && !assets.some((asset) => asset.kind === "scene" && asset.sceneId === scene.id && asset.projectId === projectId));
 
   return (
     <div className="asset-studio-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !isBusy) onClose(); }}>
       <section className="asset-studio" role="dialog" aria-modal="true" aria-labelledby="asset-studio-title">
         <header className="asset-studio-header">
           <div className="asset-studio-brand"><div className="asset-studio-mark"><Images size={20} /></div><div><h2 id="asset-studio-title">AI Asset Studio</h2><p>Characters · Backgrounds · Scene-by-scene images</p></div></div>
-          <div className="asset-studio-header-right"><span className={apiKey ? "asset-api-status good" : "asset-api-status"}>{apiKey ? "Gemini image API ready" : "API key required"}</span><button className="asset-icon-button" onClick={onClose} aria-label="Close Asset Studio"><X size={19} /></button></div>
+          <div className="asset-studio-header-right"><span className={apiKey ? "asset-api-status good" : "asset-api-status"}>{apiKey ? "Gemini image API ready" : "API key required"}</span><button className="asset-icon-button" onClick={onClose} disabled={isBusy} aria-label="Close Asset Studio"><X size={19} /></button></div>
         </header>
         <div className="asset-studio-projectbar">
           <div><span>PROJECT</span><strong>{projectTitle || topic || "Untitled project"}</strong></div>
@@ -402,17 +359,17 @@ export default function AssetStudio(props: Props) {
             {tab === "scene" && <section className="asset-workspace">
               <div className="asset-workspace-head"><div className="asset-section-icon blue"><ImagePlus size={20} /></div><div><h3>Scene Image Generator</h3><p>Generate one standalone image for every storyboard scene. Each result is saved as an individual image file, not as one combined sheet.</p></div></div>
               {!storyboard ? <div className="asset-empty-scenes"><Images size={29} /><strong>Build a storyboard first</strong><span>Return to the main studio and create the scene list, then generate its images here.</span></div> : <>
-                <div className="asset-batch-summary"><div><strong>{allScenes.length} storyboard scenes</strong><span>{assets.filter((asset) => asset.kind === "scene").length} saved scene images · {missingScenes.length} scenes without an image</span></div><div className="asset-batch-actions"><button className="asset-secondary-button" onClick={() => void runSceneQueue(missingScenes.map((scene) => scene.id))} disabled={isBusy || missingScenes.length === 0}><ImagePlus size={14} /> Generate missing</button><button className="asset-primary-button" onClick={() => void runSceneQueue(allScenes.map((scene) => scene.id))} disabled={isBusy || allScenes.length === 0}><Wand2 size={14} /> Generate all scene images</button></div></div>
+                <div className="asset-batch-summary"><div><strong>{allScenes.length} storyboard scenes</strong><span>{assets.filter((asset) => asset.kind === "scene").length} saved scene images · {missingScenes.length} scenes without an image</span></div><div className="asset-batch-actions"><button className="asset-secondary-button" onClick={() => void runSceneQueue(selectedSceneIds)} disabled={isBusy || !allScenes.some((scene) => selectedSceneIds.includes(scene.id) && !scene.locked)}>Generate selected</button><button className="asset-secondary-button" onClick={() => void runSceneQueue(missingScenes.map((scene) => scene.id))} disabled={isBusy || missingScenes.length === 0}><ImagePlus size={14} /> Generate missing</button><button className="asset-primary-button" onClick={() => void runSceneQueue(allScenes.map((scene) => scene.id))} disabled={isBusy || allScenes.length === 0}><Wand2 size={14} /> Generate all scene images</button></div></div>
                 {(jobState === "running" || jobState === "paused") && <div className="asset-progress-panel"><div className="asset-progress-top"><strong>{jobState === "paused" ? "Batch paused" : "Generating images"} · {jobProgress.complete}/{jobProgress.total}</strong><span>{jobProgress.failed} failed</span></div><div className="asset-progress-track"><span style={{ width: (jobProgress.total ? (jobProgress.complete / jobProgress.total) * 100 : 0) + "%" }} /></div><div className="asset-progress-bottom"><small>{jobProgress.current || "Preparing queue..."}</small><div><button onClick={pauseResume}>{jobState === "paused" ? <Play size={13} /> : <Pause size={13} />} {jobState === "paused" ? "Resume" : "Pause"}</button><button onClick={cancelBatch}><X size={13} /> Stop after current</button></div></div></div>}
                 {jobState === "done" && <div className="asset-batch-finished"><CheckCircle2 size={15} /> Last batch finished. Generate again to create new variations for these scenes.</div>}
                 {jobState === "cancelled" && <div className="asset-batch-finished muted"><AlertCircle size={15} /> Batch stopped. Already-generated images remain saved in the library.</div>}
                 <div className="asset-scene-list">{allScenes.map((scene) => {
-                  const sceneAssets = assets.filter((asset) => asset.kind === "scene" && asset.sceneNumber === scene.sceneNumber);
+                  const sceneAssets = assets.filter((asset) => asset.kind === "scene" && asset.sceneId === scene.id && asset.projectId === projectId);
                   return <article className="asset-scene-row" key={scene.id}>
-                    <div className="asset-scene-number">{String(scene.sceneNumber).padStart(2, "0")}</div>
+                    <input type="checkbox" aria-label={"Select scene image " + scene.sceneNumber} checked={selectedSceneIds.includes(scene.id)} disabled={isBusy || scene.locked} onChange={(event) => setSelectedSceneIds((ids) => event.target.checked ? [...ids, scene.id] : ids.filter((id) => id !== scene.id))} /><div className="asset-scene-number">{String(scene.sceneNumber).padStart(2, "0")}</div>
                     <div className="asset-scene-text"><strong>{scene.title}</strong><span>{scene.objective || scene.visualDescription}</span>{sceneAssets[0] && <small><CheckCircle2 size={12} /> {sceneAssets.length} image version(s) saved</small>}</div>
                     {sceneAssets[0] && <img className="asset-scene-preview" src={"data:" + sceneAssets[0].mimeType + ";base64," + sceneAssets[0].data} alt={sceneAssets[0].title} />}
-                    <button className="asset-icon-button compact" onClick={() => void runSceneQueue([scene.id])} disabled={isBusy} title="Generate or regenerate this scene image"><RotateCcw size={15} /></button>
+                    <button className="asset-icon-button compact" onClick={() => void runSceneQueue([scene.id])} disabled={isBusy || scene.locked} title={scene.locked ? "Unlock this scene to generate a new image" : "Generate or regenerate this scene image"}><RotateCcw size={15} /></button>
                   </article>;
                 })}</div>
               </>}
@@ -421,10 +378,10 @@ export default function AssetStudio(props: Props) {
             <section className="asset-library-panel">
               <div className="asset-library-heading"><div><h3>{tab === "scene" ? "All saved assets" : tab === "character" ? "Character library" : "Background library"}</h3><p>Images are stored in this browser's IndexedDB. Selected character and location assets can guide later scene generations.</p></div><span>{visibleAssets.length} ASSETS</span></div>
               {!visibleAssets.length ? <div className="asset-library-empty"><Images size={22} /><span>No generated assets here yet.</span></div> : <div className="asset-library-grid">{visibleAssets.map((asset) => <article className="asset-card" key={asset.id}>
-                <div className="asset-card-image"><img src={"data:" + asset.mimeType + ";base64," + asset.data} alt={asset.title} loading="lazy" /><span className={"asset-kind-badge " + asset.kind}>{asset.kind === "scene" ? "SCENE " + (asset.sceneNumber || "") : asset.kind.toUpperCase()}</span></div>
+                <div className="asset-card-image"><img src={"data:" + asset.mimeType + ";base64," + asset.data} alt={asset.title} loading="lazy" /><span className={"asset-kind-badge " + asset.kind}>{asset.kind === "scene" ? "SCENE " + (storyboard?.scenes.find((scene) => scene.id === asset.sceneId)?.sceneNumber ?? asset.sceneNumber ?? "Legacy") : asset.kind.toUpperCase()}</span></div>
                 <div className="asset-card-body"><strong title={asset.title}>{asset.title}</strong><small>{new Date(asset.createdAt).toLocaleString()}</small>
-                  <div className="asset-card-actions"><button onClick={() => downloadAsset(asset)} title="Download image"><ArrowDownToLine size={14} /></button><button onClick={() => void copyText(asset.prompt, asset.title)} title="Copy image prompt">{copied === asset.title ? <Check size={14} /> : <Copy size={14} />}</button>{asset.kind !== "scene" && <button className={asset.useAsReference ? "reference-selected" : ""} onClick={() => toggleReference(asset)} title={asset.useAsReference ? "Remove from reference set" : "Use as future reference"}><CheckCircle2 size={14} /></button>}<button className="delete" onClick={() => void deleteImage(asset)} title="Delete image"><Trash2 size={14} /></button></div>
-                  {asset.kind !== "scene" && <label className="asset-use-reference"><input type="checkbox" checked={asset.useAsReference} onChange={() => toggleReference(asset)} /> Use for consistency</label>}
+                  <div className="asset-card-actions"><button onClick={() => downloadAsset(asset)} title="Download image"><ArrowDownToLine size={14} /></button><button onClick={() => void copyText(asset.prompt, asset.title)} title="Copy image prompt">{copied === asset.title ? <Check size={14} /> : <Copy size={14} />}</button>{asset.kind !== "scene" && <button className={asset.projectId === projectId && asset.useAsReference ? "reference-selected" : ""} disabled={isBusy} onClick={() => void toggleReference(asset)} title={asset.projectId === projectId && asset.useAsReference ? "Remove from project reference set" : "Add a reusable copy to this project"}><CheckCircle2 size={14} /></button>}<button className="delete" onClick={() => void deleteImage(asset)} disabled={isBusy} title="Delete image"><Trash2 size={14} /></button></div>
+                  {asset.kind !== "scene" && <label className="asset-use-reference"><input type="checkbox" checked={asset.projectId === projectId && asset.useAsReference} disabled={isBusy} onChange={() => void toggleReference(asset)} /> Use for consistency</label>}
                 </div>
               </article>)}</div>}
             </section>

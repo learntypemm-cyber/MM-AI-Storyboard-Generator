@@ -111,7 +111,7 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "The ComfyUI request failed.";
 }
 
-export default function ComfyUIStudio({ scenes, storyboard }: { scenes: Scene[]; storyboard: Storyboard }) {
+export default function ComfyUIStudio({ scenes, storyboard, onBusyChange }: { scenes: Scene[]; storyboard: Storyboard; onBusyChange: (busy: boolean) => void }) {
   const saved = useMemo(readConfig, []);
   const [endpoint, setEndpoint] = useState(saved.endpoint);
   const [workflowName, setWorkflowName] = useState(saved.workflowName);
@@ -121,6 +121,7 @@ export default function ComfyUIStudio({ scenes, storyboard }: { scenes: Scene[];
   const [negativeNodeId, setNegativeNodeId] = useState(saved.negativeNodeId);
   const [negativeInputName, setNegativeInputName] = useState(saved.negativeInputName);
   const [selectedSceneId, setSelectedSceneId] = useState(scenes[0]?.id ?? "");
+  const [selectedSceneIds, setSelectedSceneIds] = useState<string[]>([]);
   const [jobs, setJobs] = useState<Record<string, Job>>({});
   const [busy, setBusy] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ completed: number; total: number } | null>(null);
@@ -128,6 +129,7 @@ export default function ComfyUIStudio({ scenes, storyboard }: { scenes: Scene[];
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<"unknown" | "connected" | "failed">("unknown");
   const [merging, setMerging] = useState(false);
+  useEffect(() => { onBusyChange(busy || merging); return () => onBusyChange(false); }, [busy, merging, onBusyChange]);
   const [mergeProgress, setMergeProgress] = useState(0);
   const [mergedUrl, setMergedUrl] = useState("");
   const controllerRef = useRef<AbortController | null>(null);
@@ -264,7 +266,7 @@ export default function ComfyUIStudio({ scenes, storyboard }: { scenes: Scene[];
   };
 
   const renderOne = async (scene: Scene) => {
-    if (busy) return;
+    if (busy || scene.locked) return;
     setBusy(true); setError(""); setMessage(""); setBatchProgress(null);
     setMergedUrl((old) => { if (old) URL.revokeObjectURL(old); return ""; });
     const controller = new AbortController();
@@ -282,17 +284,18 @@ export default function ComfyUIStudio({ scenes, storyboard }: { scenes: Scene[];
     }
   };
 
-  const renderAll = async () => {
-    if (busy || !scenes.length) return;
+  const renderAll = async (requested = scenes) => {
+    const queue = requested.filter((scene) => !scene.locked);
+    if (busy || !queue.length) return;
     setBusy(true); setError(""); setMessage(""); setMergedUrl((old) => { if (old) URL.revokeObjectURL(old); return ""; });
     const controller = new AbortController();
     controllerRef.current = controller;
-    setBatchProgress({ completed: 0, total: scenes.length });
+    setBatchProgress({ completed: 0, total: queue.length });
     let failed = 0;
     try {
-      for (let index = 0; index < scenes.length; index += 1) {
+      for (let index = 0; index < queue.length; index += 1) {
         if (controller.signal.aborted) break;
-        const scene = scenes[index];
+        const scene = queue[index];
         try { await queueAndWait(scene, controller.signal); }
         catch (caught) {
           const text = toErrorMessage(caught);
@@ -300,10 +303,10 @@ export default function ComfyUIStudio({ scenes, storyboard }: { scenes: Scene[];
           failed += 1;
           setJobs((previous) => ({ ...previous, [scene.id]: { status: "error", artifacts: [], error: text } }));
         }
-        setBatchProgress({ completed: index + 1, total: scenes.length });
+        setBatchProgress({ completed: index + 1, total: queue.length });
       }
       if (controller.signal.aborted) setMessage("Batch cancelled. Completed clips remain available below.");
-      else setMessage("Batch finished: " + (scenes.length - failed) + " succeeded, " + failed + " failed. Review outputs before merging.");
+      else setMessage("Batch finished: " + (queue.length - failed) + " succeeded, " + failed + " failed. Review outputs before merging.");
     } finally {
       if (controllerRef.current === controller) controllerRef.current = null;
       setBusy(false);
@@ -419,9 +422,12 @@ export default function ComfyUIStudio({ scenes, storyboard }: { scenes: Scene[];
           {busy && <div className="comfy-progress"><LoaderCircle className="comfy-spin" size={16} /><span>{batchProgress ? "Rendering scenes " + batchProgress.completed + "/" + batchProgress.total : "Rendering scene " + (currentScene?.sceneNumber ?? "") + "..."}</span><button type="button" className="quiet-button" onClick={() => controllerRef.current?.abort()}><Square size={13} /> Cancel</button></div>}
           <div className="comfy-toolbar comfy-render-toolbar">
             <label className="comfy-scene-select"><span className="field-label">Scene to render</span><select className="input" value={currentScene?.id ?? ""} onChange={(event) => setSelectedSceneId(event.target.value)} disabled={busy || !scenes.length}>{scenes.map((scene) => <option key={scene.id} value={scene.id}>Scene {scene.sceneNumber}: {scene.title}</option>)}</select></label>
-            <button type="button" className="primary-button" onClick={() => currentScene && void renderOne(currentScene)} disabled={!isConfigured || busy || !currentScene}><Play size={15} /> Render scene</button>
-            <button type="button" className="secondary-button" onClick={() => void renderAll()} disabled={!isConfigured || busy || !scenes.length}><Video size={15} /> Generate all scenes</button>
+            <button type="button" className="primary-button" onClick={() => currentScene && void renderOne(currentScene)} disabled={!isConfigured || busy || !currentScene || currentScene.locked}><Play size={15} /> Render scene</button>
+            <button type="button" className="secondary-button" onClick={() => void renderAll()} disabled={!isConfigured || busy || !scenes.some((scene) => !scene.locked)}><Video size={15} /> Generate unlocked scenes</button>
+            <button className="secondary-button" disabled={!isConfigured || busy || !scenes.some((scene) => !scene.locked && selectedSceneIds.includes(scene.id))} onClick={() => void renderAll(scenes.filter((scene) => selectedSceneIds.includes(scene.id)))}>Generate selected</button>
+            <button className="secondary-button" disabled={!isConfigured || busy || !scenes.some((scene) => !scene.locked && jobs[scene.id]?.status !== "done")} onClick={() => void renderAll(scenes.filter((scene) => jobs[scene.id]?.status !== "done"))}>Generate missing / failed</button>
           </div>
+          <div className="workflow-toolbar">{scenes.map((scene) => <label key={scene.id}><input type="checkbox" checked={selectedSceneIds.includes(scene.id)} disabled={busy || scene.locked} onChange={(event) => setSelectedSceneIds((ids) => event.target.checked ? [...ids, scene.id] : ids.filter((id) => id !== scene.id))} /> Scene {scene.sceneNumber}{scene.locked ? " (locked)" : ""}</label>)}</div>
           {Object.keys(jobs).length > 0 && <div className="comfy-results">
             <div className="comfy-results-heading"><div><h3>Generated outputs</h3><p>Jobs are ordered by storyboard scene. Failed jobs can be retried individually.</p></div>{completedVideos.length > 1 && <button className="primary-button" onClick={() => void mergeClips()} disabled={merging || busy}><Film size={15} /> {merging ? "Merging " + mergeProgress + "%" : "Merge video clips"}</button>}</div>
             {merging && <div className="comfy-merge-track"><span style={{ width: mergeProgress + "%" }} /></div>}
@@ -438,7 +444,7 @@ export default function ComfyUIStudio({ scenes, storyboard }: { scenes: Scene[];
                     {item.mediaType === "video" ? <video src={item.url} controls preload="metadata" /> : <img src={item.url} loading="lazy" alt={"ComfyUI output for scene " + scene.sceneNumber} />}
                     <a href={item.url} target="_blank" rel="noreferrer" download={item.filename}><Download size={13} /> {item.filename}</a>
                   </div>)}
-                  <div className="comfy-output-foot"><span>{job.promptId ? "Job " + job.promptId.slice(0, 8) : "Not queued"}</span><button type="button" className="copy-prompt-link" onClick={() => void renderOne(scene)} disabled={busy || !isConfigured}>Retry scene</button></div>
+                  <div className="comfy-output-foot"><span>{job.promptId ? "Job " + job.promptId.slice(0, 8) : "Not queued"}</span><button type="button" className="copy-prompt-link" onClick={() => void renderOne(scene)} disabled={busy || !isConfigured || scene.locked}>Retry scene</button></div>
                 </article>;
               })}
             </div>

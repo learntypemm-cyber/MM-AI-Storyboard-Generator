@@ -19,7 +19,7 @@ MM Storyboard Studio converts a short idea into three creative concepts, a compl
 
 ## Run locally
 
-Requirements: Node.js 20 or later and a Gemini API key with access to the configured model.
+Requirements: Node.js 22.22.2+, 24.15.0+, or 26+ and a Gemini API key with access to the configured model.
 
 1. Install dependencies with npm install.
 2. Start the development server with npm run dev.
@@ -32,13 +32,13 @@ Requirements: Node.js 20 or later and a Gemini API key with access to the config
 9. Optionally expand **Generate images or videos with ComfyUI**, load your own API-format workflow, map its prompt node, and generate one scene or the full batch. Use the merge action when two or more video outputs are available.
 10. Edit Burmese captions and any real LearnTypeMM screen recordings into the finished tutorial.
 
-To create a production build, run npm run build. To preview the build, run npm run preview.
+Run `npm test` for the production workflow regression suite. To create a production build, run npm run build. To preview the build, run npm run preview.
 
 ## API and privacy
 
 The app calls the Gemini generateContent REST API directly from the browser using the API key entered by the user. The key is stored in this browser's localStorage, not committed to this repository. This is suitable for personal/local use, but localStorage is not a secrets vault. Do not publish a shared deployment with a private server key in the frontend. For a public deployment, add an authenticated backend route with quotas, abuse protection, and server-side secret storage.
 
-Uploaded reference images are included only in Gemini requests for the current session. The app deliberately omits reference image data from saved projects to avoid filling browser storage. Saved projects and the API key remain in the current browser; clearing site data removes them.
+Uploaded reference images are sent to Gemini only when generation is requested. Reference image files are stored in browser IndexedDB, keyed by project, and restored with saved projects. Saved projects and the API key remain in the current browser; clearing site data removes them.
 
 ## Optional ComfyUI generation
 
@@ -87,3 +87,17 @@ The Flow scripting project is MIT licensed. The storyboard project documents MIT
 ## License
 
 MIT. See LICENSE.
+
+
+## Scene revisions, references and portable backups
+
+- Lock a scene to protect its text, references and generated images from edits, deletion and regeneration. Approving a scene also locks it. Unlock it before making further revisions.
+- Keep feedback in each scene's review notes and mark it Draft, Needs review or Approved. These are local review states; there is no shared account, real-time collaboration or external approval service.
+- Versions are captured before scene edits, regeneration, reorder, deletion and storyboard replacement. Save version creates an explicit checkpoint. Restore version keeps the replaced board in history; unlock all scenes first. The original concept and brief settings are restored with each version. The most recent 30 versions are retained.
+- Add scenes, move them up/down or delete unlocked scenes. Scene images use stable scene IDs, so moving a scene does not attach another scene's image to it.
+- Create character/background assets in Asset Studio. New assets join the current project's reference set up to four images. Select an asset from another project to create an independent reusable copy. Each scene can use the project reference set, a custom selection, or an explicitly empty reference set. Locks freeze that scene's asset selection.
+- Copy/exported Flow prompts include a registry of the scene's linked character/location references. Download and upload those images in Flow and bind the matching handles; text handles alone do not attach files. Reference images help guide consistency but do not guarantee identical generated characters.
+- Generate selected or missing prompts in the storyboard. Asset Studio supports selected/missing image generation, pause/resume and per-scene retry. ComfyUI supports selected and missing/failed outputs for the current session. Batch actions skip locked scenes.
+- Save production presets and apply them to new topics. A preset contains goal, audience and production settings, excluding topic, images and credentials.
+- Backup ZIP includes the current storyboard, concepts, brief references, image assets, version history, review states, locks and presets. Import ZIP validates the archive and restores an independent copy with new project/asset IDs, preserving other projects. Reference handles stay stable across restoration. API keys and ComfyUI connection settings are excluded. ComfyUI video outputs remain remote/session media and must be downloaded separately; they are not included in ZIP backups.
+- The ZIP stores portable image data in `project.json`; use Import ZIP to restore it. Downloads and local browser storage are the persistence mechanisms. Clearing browser site data removes projects and images, so keep a ZIP backup when moving browsers.
