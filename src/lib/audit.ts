@@ -78,7 +78,7 @@ export function auditStoryboard(storyboard: Storyboard | null, form: VideoForm):
     {
       label: "Reference accuracy",
       ok: /invent|fabricat|fake|unreadable|watermark/i.test(negative),
-      detail: "Use real LearnTypeMM screenshots for exact website UI; do not rely on invented interface details."
+      detail: "Use authentic reference images for recurring characters and products. For website UI, use real screenshots; do not invent interface details."
     }
   ];
 }

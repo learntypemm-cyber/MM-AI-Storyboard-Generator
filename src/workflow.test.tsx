@@ -116,6 +116,38 @@ describe("editor workflow", () => {
     expect(titles[0].value).toBe("Better hook"); expect(titles[0].disabled).toBe(true);
     expect(screen.getAllByRole("button", { name: /Locked · unlock/ })).toHaveLength(2);
   });
+  it("saves an unsaved draft and its images before starting a clean topic", async () => {
+    const ref = { name: "Draft reference", mimeType: "image/png", data: "aGVsbG8=", previewUrl: "data:image/png;base64,aGVsbG8=" };
+    await saveReferences("editor-test", [ref]);
+    await openEditor();
+    fireEvent.change(screen.getAllByLabelText("Scene title")[0], { target: { value: "Unsaved change" } });
+    fireEvent.click(screen.getByRole("button", { name: /New project/ }));
+    await waitFor(() => expect((screen.getByLabelText(/What video do you want to make/) as HTMLTextAreaElement).value).toBe(""));
+    const saved = JSON.parse(localStorage.getItem("mm-storyboard-saved-projects")!)[0];
+    expect(saved.storyboard.scenes[0].title).toBe("Unsaved change");
+    expect(await loadReferences(saved.id)).toEqual([ref]);
+    fireEvent.click(screen.getByRole("button", { name: "Coffee" }));
+    await waitFor(() => expect((screen.getAllByLabelText("Scene title")[0] as HTMLInputElement).value).toBe("Unsaved change"));
+    expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).form.referenceNotes).toBe("");
+  });
+  it("keeps the current draft open when saving before a switch fails", async () => {
+    await openEditor();
+    const original = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
+      if (key === "mm-storyboard-saved-projects") throw new DOMException("Storage full", "QuotaExceededError");
+      return original.call(this, key, value);
+    });
+    fireEvent.click(screen.getByRole("button", { name: /New project/ }));
+    await waitFor(() => expect(screen.getByText(/Could not save your draft/)).toBeTruthy());
+    expect((screen.getAllByLabelText("Scene title")[0] as HTMLInputElement).value).toBe("one");
+    expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).projectId).toBe("editor-test");
+  });
+  it("marks an unlocked approved scene as needing review", async () => {
+    await openEditor();
+    fireEvent.change(screen.getByLabelText("Review status scene 1"), { target: { value: "approved" } });
+    fireEvent.click(screen.getAllByRole("button", { name: /Locked · unlock/ })[0]);
+    expect((screen.getByLabelText("Review status scene 1") as HTMLSelectElement).value).toBe("review");
+  });
   it("restores a version after editing and keeps the replaced board in history", async () => {
     await openEditor();
     fireEvent.click(screen.getAllByRole("button", { name: /Locked · unlock/ })[0]);
@@ -159,6 +191,7 @@ describe("editor workflow", () => {
     expect((screen.getAllByLabelText("Scene title")[1] as HTMLInputElement).value).toBe("New scene");
     fireEvent.click(screen.getByRole("button", { name: "Delete scene 2" }));
     expect(screen.getAllByLabelText("Scene title")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /Production settings/ }));
     fireEvent.change(screen.getByLabelText("Preset name"), { target: { value: "My preset" } });
     fireEvent.click(screen.getByRole("button", { name: "Save preset" }));
     const preset = JSON.parse(localStorage.getItem("mm-storyboard-presets")!)[0];

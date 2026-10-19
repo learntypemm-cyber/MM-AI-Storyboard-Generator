@@ -101,3 +101,7 @@ MIT. See LICENSE.
 - Save production presets and apply them to new topics. A preset contains goal, audience and production settings, excluding topic, images and credentials.
 - Backup ZIP includes the current storyboard, concepts, brief references, image assets, version history, review states, locks and presets. Import ZIP validates the archive and restores an independent copy with new project/asset IDs, preserving other projects. Reference handles stay stable across restoration. API keys and ComfyUI connection settings are excluded. ComfyUI video outputs remain remote/session media and must be downloaded separately; they are not included in ZIP backups.
 - The ZIP stores portable image data in `project.json`; use Import ZIP to restore it. Downloads and local browser storage are the persistence mechanisms. Clearing browser site data removes projects and images, so keep a ZIP backup when moving browsers.
+
+### Draft protection
+
+Starting a new project or opening another project saves the current draft and its reference images to My projects first. If browser storage fails, the current editor remains open. Opening the currently active saved project keeps its latest edits. Projects are not silently removed when the library exceeds 30 entries. Unlocking an approved scene returns it to Needs review. New briefs start with an empty topic and generic video settings.

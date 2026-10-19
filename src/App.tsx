@@ -26,15 +26,15 @@ const STORAGE = {
   saved: "mm-storyboard-saved-projects", current: "mm-storyboard-current",
 };
 const DEFAULT_FORM: VideoForm = {
-  topic: "How to use LearnTypeMM to practice Myanmar typing",
-  goal: "Teach beginners the basic workflow and encourage them to try a lesson",
+  topic: "",
+  goal: "Turn the topic into a clear, engaging short video",
   platform: "Facebook Reels", targetDuration: 30, language: "Burmese",
-  audience: "Myanmar typing beginners and students", visualStyle: "Realistic tutorial",
+  audience: "Myanmar-speaking viewers", visualStyle: "Cinematic live action",
   aspectRatio: "9:16", flowModel: "Veo 3.1 Fast", generationMode: "Text to Video",
   clipDuration: 8,
-  audioPolicy: "Natural Burmese voiceover, subtle upbeat background music, clean keyboard sound effects",
+  audioPolicy: "Natural Burmese voiceover, subtle upbeat background music, scene-appropriate sound effects",
   textPolicy: "No readable text generated inside AI video. Add Burmese captions and exact website UI in the video editor.",
-  referenceNotes: "Use real LearnTypeMM screenshots or screen recordings whenever the actual website UI is shown. Brand colors: clean blue and white. Do not invent product features.",
+  referenceNotes: "",
   referenceImages: [],
 };
 const GEMINI_DEFAULT = "gemini-3.8-flash";
@@ -87,7 +87,7 @@ function buildConceptPrompt(form: VideoForm): string {
     "TEXT POLICY: " + form.textPolicy,
     "REFERENCE NOTES: " + form.referenceNotes,
     "",
-    "For a LearnTypeMM tutorial, never invent website buttons, page layout, statistics, features, or navigation. Use provided reference images as evidence, not as a license to fabricate details. If images are provided, study them and recommend where real screen recordings should be inserted. Voiceover must be in the selected language. Put exact Burmese captions in a separate field for editing, never ask a video model to render complex Burmese text.",
+    "For a product or website tutorial, never invent website buttons, page layout, statistics, features, or navigation. Use provided reference images as evidence, not as a license to fabricate details. If images are provided, study them and recommend where real screen recordings should be inserted. Voiceover must be in the selected language. Put exact Burmese captions in a separate field for editing, never ask a video model to render complex Burmese text.",
     "The three concepts must have distinct creative approaches: (1) accurate, clean tutorial demonstration; (2) fast hook and social-first visual storytelling; (3) memorable cinematic or animated visual metaphor.",
     "For each concept include id (short unique slug), title, style, hook (first 1-3 seconds), summary, visualDirection, whyItWorks, storyArc (array of 4-6 short beats), and estimatedDuration (number of seconds near the target).",
     "Make each concept specific to this brief and practical to generate as short clips. Return JSON matching this shape:",
@@ -118,7 +118,7 @@ function buildStoryboardPrompt(form: VideoForm, concept: VideoConcept): string {
     "- Each flowPrompt starts with exactly one policy: 'NO TEXT IN THE IMAGE.' or 'INTENTIONAL TEXT IN THE IMAGE: [exact short text]'. For accurate product UI and Burmese captions, use 'NO TEXT IN THE IMAGE.' and add real screen recordings/subtitles in post.",
     "- Each flowPrompt is detailed copy-paste English, ideally 100-180 words. Include a complete opening frame and final frame, plus audio direction. No markdown fences.",
     "- Use physically possible camera movement. Avoid conflicting actions. Do not put labels, timestamps, hex colors, scene numbers, prompt annotations or technical UI text inside the visual prompt.",
-    "- Don't ask the model to draw website UI unless the user supplied a relevant screenshot. For LearnTypeMM, use authentic screen recordings for any actual click-through.",
+    "- Don't ask the model to draw website UI unless the user supplied a relevant screenshot. For website tutorials, use authentic screen recordings for any actual click-through.",
     "- Voiceover must be in " + form.language + ". On-screen text is exact caption copy for editing, not for the video model. Use empty string if no caption is needed.",
     "- Negative prompts should prevent malformed hands, unstable keyboards, illegible text, layout drift, flicker, extra fingers, artificial logos, fake website UI, duplicate objects, and watermarks where relevant.",
     "- Avoid copyrighted characters, celebrity likenesses, and misleading claims. JSON only, no prose outside it.",
@@ -219,6 +219,7 @@ function App() {
   }, [projectId, form.referenceImages, hydrated, mediaReady]);
 
   const updateForm = <K extends keyof VideoForm,>(key: K, value: VideoForm[K]) => {
+    if (!hydrated || busy) return;
     setForm((current) => ({ ...current, [key]: value }));
     setError("");
   };
@@ -237,6 +238,7 @@ function App() {
     setError(""); setNotice("");
     if (storyboard?.scenes.some((scene) => scene.locked)) { setError("Unlock approved scenes before replacing the project concepts."); return; }
     remember("Before replacing concepts");
+    if (!hydrated || busy) return;
     if (!form.topic.trim()) { setError("Enter a topic first."); return; }
     if (!requireKey()) return;
     setBusy("concepts");
@@ -254,6 +256,7 @@ function App() {
   };
 
   const generateStoryboard = async (concept: VideoConcept) => {
+    if (!hydrated || busy) return;
     if (storyboard?.scenes.some((scene) => scene.locked)) { setError("Unlock approved scenes before rebuilding the storyboard."); return; }
     remember("Before rebuilding storyboard");
     setError(""); setNotice("");
@@ -297,7 +300,7 @@ function App() {
     lastEdit.current = { label, time: Date.now() };
   };
   const updateScene = (id: string, patch: Partial<Scene>) => {
-    if (busy || storyboard?.scenes.find((scene) => scene.id === id)?.locked) return;
+    if (busy || !hydrated || storyboard?.scenes.find((scene) => scene.id === id)?.locked) return;
     remember("Before editing scene " + (storyboard?.scenes.find((scene) => scene.id === id)?.sceneNumber || ""), true);
     const original = storyboard?.scenes.find((scene) => scene.id === id);
     if (patch.locked && original) patch.assetIds = sceneReferences(original, projectAssets).map((asset) => asset.id);
@@ -324,17 +327,17 @@ function App() {
     setBusy(null); setNotice((queue.length - failed) + " scene(s) updated; " + failed + " failed. Locked scenes were preserved.");
   };
   const toggleLock = (scene: Scene) => {
-    if (busy) return;
+    if (busy || !hydrated) return;
     remember(scene.locked ? "Before unlocking scene" : "Before locking scene");
-    setStoryboard((current) => current ? { ...current, scenes: current.scenes.map((item) => item.id === scene.id ? { ...item, locked: !item.locked, assetIds: item.assetIds ?? sceneReferences(item, projectAssets).map((asset) => asset.id) } : item) } : current);
+    setStoryboard((current) => current ? { ...current, scenes: current.scenes.map((item) => item.id === scene.id ? { ...item, locked: !item.locked, reviewStatus: item.locked && item.reviewStatus === "approved" ? "review" : item.reviewStatus, assetIds: item.assetIds ?? sceneReferences(item, projectAssets).map((asset) => asset.id) } : item) } : current);
   };
   const moveScene = (scene: Scene, direction: number) => {
-    if (!storyboard || busy) return;
+    if (!storyboard || busy || !hydrated) return;
     remember("Before moving scene " + scene.sceneNumber);
     setStoryboard(reorderScene(storyboard, scene.id, direction));
   };
   const addScene = () => {
-    if (!storyboard || busy) return;
+    if (!storyboard || busy || !hydrated) return;
     remember("Before adding a scene");
     const scene: Scene = { id: makeId(), sceneNumber: storyboard.scenes.length + 1, title: "New scene", durationSeconds: form.clipDuration, objective: "", visualDescription: "", shotSize: "", cameraMovement: "", lighting: "", mood: "", action: "", flowPrompt: "", voiceover: "", onscreenText: "", audioNotes: form.audioPolicy, transition: "Cut", referenceAssets: [], negativePrompt: storyboard.globalNegativePrompt, openingFrame: "", finalFrame: "", handoff: "CUT" };
     setStoryboard({ ...storyboard, scenes: [...storyboard.scenes, scene] });
@@ -359,7 +362,9 @@ function App() {
     setPresets((items) => [{ id: makeId(), name: presetName.trim().slice(0, 100), settings }, ...items.filter((item) => item.name !== presetName.trim())].slice(0, 50)); setPresetName(""); setNotice("Preset saved. Topic and images are kept separate.");
   };
   const exportZip = async () => {
-    if (busy || !hydrated) return; setBusy("backup"); setError("");
+    if (busy || !hydrated) return;
+    if (!mediaReady) { setError("Reference images could not be loaded. Reopen this project before creating a complete backup."); return; }
+    setBusy("backup"); setError("");
     try {
       const allAssets = await readAssets();
       const linkedIds = new Set([storyboard, ...history.map((item) => item.storyboard)].flatMap((board) => board?.scenes.flatMap((scene) => scene.assetIds || []) || []));
@@ -377,9 +382,8 @@ function App() {
       const remapBoard = (board: Storyboard | null): Storyboard | null => board ? { ...board, scenes: board.scenes.map((scene) => ({ ...scene, assetIds: scene.assetIds?.map((id) => assetIds.get(id)!) })) } : null;
       const project = { ...archive.project, id: newId, storyboard: remapBoard(archive.project.storyboard), history: archive.project.history?.map((version) => ({ ...version, storyboard: remapBoard(version.storyboard)! })) };
       await writeAssets(archive.assets.map((asset) => ({ ...asset, handle: assetHandle(asset), id: assetIds.get(asset.id)!, projectId: newId })));
-      loadProject(project, archive.references);
-      const previous = snapshotProject();
-      setSavedProjects((items) => [project, previous, ...items.filter((item) => item.id !== previous.id)].slice(0, 30));
+      if (!await loadProject(project, archive.references)) return;
+      setSavedProjects((items) => [project, ...items.filter((item) => item.id !== project.id)]);
       setPresets((items) => [...items, ...archive.presets.filter((preset) => !items.some((item) => item.name === preset.name)).map((preset) => ({ ...preset, id: makeId() }))].slice(0, 50));
       setNotice("ZIP restored as a new project. Existing projects are preserved.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not restore backup."); } finally { setBusy(null); }
@@ -398,30 +402,55 @@ function App() {
     if (!hydrated || !mediaReady) { setError("Reference images are not loaded yet. Please reopen this project before saving."); return; }
     try { await saveReferences(projectId, form.referenceImages); } catch { setError("Could not save reference images. Export a ZIP backup."); return; }
     const saved = snapshotProject();
-    setSavedProjects((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, 30));
+    setSavedProjects((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
     setNotice("Project saved with reference images, scene locks and version history in this browser.");
   };
 
-  const loadProject = (project: SavedProject, references: ReferenceImage[] = []) => {
-    if ((busy && busy !== "restore") || !hydrated) return;
-    setHydrated(false); setMediaReady(false); lastEdit.current = { label: "", time: 0 };
-    setProjectId(project.id); setHistory(project.history || []); setSelectedSceneIds([]); setVersionId("");
-    setForm({ ...DEFAULT_FORM, ...project.form, referenceImages: references });
-    void (references.length ? saveReferences(project.id, references).then(() => references) : loadReferences(project.id))
-      .then((images) => { setForm((current) => ({ ...current, referenceImages: images })); setMediaReady(true); })
-      .catch(() => setError("Could not restore reference images."))
-      .finally(() => setHydrated(true));
-    setConcepts(project.concepts); setSelectedConceptId(project.selectedConceptId); setStoryboard(project.storyboard);
-    setStep(project.storyboard ? "storyboard" : project.concepts.length ? "concepts" : "brief");
-    setLibraryOpen(false); setError(""); setNotice("Opened " + project.title + " with its saved production settings.");
+  // Persist before switching so the single current-project slot never destroys a draft.
+  const preserveCurrentProject = async () => {
+    if (!form.topic.trim() && !concepts.length && !storyboard && !history.length && !form.referenceImages.length) return;
+    if (!mediaReady) throw new Error("Reference images are not loaded. Reopen this project before switching.");
+    await saveReferences(projectId, form.referenceImages);
+    const saved = snapshotProject();
+    const next = [saved, ...savedProjects.filter((item) => item.id !== saved.id)];
+    // Write first: a quota error must leave the current editor intact.
+    localStorage.setItem(STORAGE.saved, JSON.stringify(next));
+    setSavedProjects(next);
   };
 
-  const newProject = () => {
+  const loadProject = async (project: SavedProject, references?: ReferenceImage[]) => {
+    if ((busy && busy !== "restore") || !hydrated) return false;
+    if (project.id === projectId && references === undefined) { setLibraryOpen(false); return true; }
+    setHydrated(false); setError("");
+    try {
+      await preserveCurrentProject();
+      const images = references ?? await loadReferences(project.id);
+      if (references !== undefined) await saveReferences(project.id, references);
+      lastEdit.current = { label: "", time: 0 };
+      setProjectId(project.id); setHistory(project.history || []); setSelectedSceneIds([]); setVersionId("");
+      setForm({ ...DEFAULT_FORM, ...project.form, referenceImages: images }); setMediaReady(true);
+      setConcepts(project.concepts); setSelectedConceptId(project.selectedConceptId); setStoryboard(project.storyboard);
+      setStep(project.storyboard ? "storyboard" : project.concepts.length ? "concepts" : "brief");
+      setLibraryOpen(false); setNotice("Opened " + project.title + ". Your previous draft is saved in My projects.");
+      return true;
+    } catch (caught) {
+      setError("Could not switch projects. Your current work is still open. " + (caught instanceof Error ? caught.message : "Check browser storage."));
+      return false;
+    } finally { setHydrated(true); }
+  };
+
+  const newProject = async () => {
     if (busy || !hydrated) return;
-    setMediaReady(true); lastEdit.current = { label: "", time: 0 };
-    setProjectId(makeId()); setHistory([]); setSelectedSceneIds([]); setVersionId("");
-    setForm(DEFAULT_FORM); setConcepts([]); setSelectedConceptId(""); setStoryboard(null);
-    setStep("brief"); setError(""); setNotice(""); setShowAdvanced(false);
+    setHydrated(false); setError("");
+    try {
+      await preserveCurrentProject();
+      setMediaReady(true); lastEdit.current = { label: "", time: 0 };
+      setProjectId(makeId()); setHistory([]); setSelectedSceneIds([]); setVersionId("");
+      setForm(DEFAULT_FORM); setConcepts([]); setSelectedConceptId(""); setStoryboard(null);
+      setStep("brief"); setNotice("Ready for a new topic. Your previous draft is saved in My projects."); setShowAdvanced(false);
+    } catch (caught) {
+      setError("Could not save your draft. Your current work is still open. " + (caught instanceof Error ? caught.message : "Export a ZIP backup."));
+    } finally { setHydrated(true); }
   };
 
   const boardForExport = (): Storyboard => ({ ...storyboard!, scenes: storyboard!.scenes.map((scene) => ({ ...scene, flowPrompt: promptWithReferences(scene, projectAssets), referenceAssets: [...scene.referenceAssets, ...sceneReferences(scene, projectAssets).map((asset) => assetHandle(asset) + " = " + asset.title)] })) });
@@ -514,7 +543,7 @@ function App() {
         <button className={step === "brief" ? "side-link active" : "side-link"} onClick={() => setStep("brief")}><LayoutDashboard size={17} /> Video brief</button>
         <button className={step === "concepts" ? "side-link active" : "side-link"} onClick={() => concepts.length ? setStep("concepts") : setNotice("Generate concepts first to use this step.")}><Lightbulb size={17} /> Concepts <span className="side-count">{concepts.length || "–"}</span></button>
         <button className={step === "storyboard" ? "side-link active" : "side-link"} onClick={() => storyboard ? setStep("storyboard") : setNotice("Build a storyboard first to use this step.")}><Film size={17} /> Storyboard <span className="side-count">{storyboard?.scenes.length || "–"}</span></button>
-        <button className={assetStudioOpen ? "side-link active" : "side-link"} disabled={Boolean(busy)} onClick={() => setAssetStudioOpen(true)}><Wand2 size={17} /> Asset Studio <span className="side-count">NEW</span></button>
+        <button className={assetStudioOpen ? "side-link active" : "side-link"} disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={17} /> Asset Studio <span className="side-count">NEW</span></button>
         <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
         <div className="saved-list">
           {savedProjects.slice(0, 4).map((project) => <button className="saved-item" key={project.id} disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)} title={project.title}><FolderOpen size={15} /><span>{project.title}</span></button>)}
@@ -532,8 +561,8 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "Concept selection" : "Storyboard editor"}</strong></div>
           <div className="topbar-actions">
-            <button className="quiet-button" disabled={Boolean(busy)} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
-            <label className="quiet-button archive-upload">Import ZIP<input type="file" accept=".zip" disabled={Boolean(busy)} onChange={(event) => { void importZip(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
+            <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
+            <label className="quiet-button archive-upload">Import ZIP<input type="file" accept=".zip" disabled={Boolean(busy) || !hydrated} onChange={(event) => { void importZip(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
             <button className="quiet-button" onClick={() => setLibraryOpen(true)}><FolderOpen size={16} /> My projects</button>
             <button className="settings-button" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}><Settings size={16} /> Settings</button>
             <div className={apiKey ? "avatar-dot online" : "avatar-dot"}>M</div>
@@ -565,8 +594,8 @@ function App() {
             })}
           </div>
 
-          {error && <div className="alert error-alert"><AlertCircle size={17} /><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss"><X size={15} /></button></div>}
-          {notice && <div className="alert success-alert"><CheckCircle2 size={17} /><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}
+          {error && <div className="alert error-alert" role="alert"><AlertCircle size={17} /><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss"><X size={15} /></button></div>}
+          {notice && <div className="alert success-alert" role="status"><CheckCircle2 size={17} /><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}
 
           <section className="panel brief-panel">
             <div className="section-heading">
@@ -575,8 +604,7 @@ function App() {
               <div className="panel-kicker">VIDEO BRIEF</div>
             </div>
             <div className="form-content">
-              <div className="workflow-toolbar"><label className="field"><span className="field-label">Production preset</span><select className="input" defaultValue="" disabled={Boolean(busy)} onChange={(event) => { const preset = presets.find((item) => item.id === event.target.value); if (preset) { setForm((current) => ({ ...current, ...preset.settings })); setNotice("Applied " + preset.name); } event.currentTarget.value = ""; }}><option value="">Apply saved settings…</option>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><input className="input" aria-label="Preset name" placeholder="Name these settings" maxLength={100} value={presetName} onChange={(event) => setPresetName(event.target.value)} /><button className="secondary-button" disabled={Boolean(busy)} onClick={savePreset}>Save preset</button><select className="input" aria-label="Delete preset" defaultValue="" onChange={(event) => { setPresets((items) => items.filter((item) => item.id !== event.target.value)); event.currentTarget.value = ""; }}><option value="">Delete a preset…</option>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div>
-              <Field label="What video do you want to make?" hint="Add one sentence or a short paragraph. Example: Show beginners how to start a Myanmar typing lesson.">
+              <Field label="What video do you want to make?" hint="Add one sentence or a short paragraph. Example: A warm coffee advertisement with a surprising opening and a memorable ending.">
                 <textarea className="input topic-input" value={form.topic} onChange={(event) => updateForm("topic", event.target.value)} placeholder="Describe your video topic..." rows={3} />
               </Field>
               <Field label="Main goal"><input className="input" value={form.goal} onChange={(event) => updateForm("goal", event.target.value)} placeholder="Teach, explain, promote, entertain..." /></Field>
@@ -595,8 +623,10 @@ function App() {
                 </button>)}
               </div>
 
-              <button className="advanced-toggle" onClick={() => setShowAdvanced((current) => !current)}><Settings size={15} /> Production settings <span>Google Flow model, clip length, audio & references</span>{showAdvanced ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+              <button className="advanced-toggle" onClick={() => setShowAdvanced((current) => !current)}><Settings size={15} /> Production settings <span>Presets, Google Flow model, clip length, audio & references</span>{showAdvanced ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
               {showAdvanced && <div className="advanced-content">
+              <div className="workflow-toolbar"><label className="field"><span className="field-label">Production preset</span><select className="input" defaultValue="" disabled={Boolean(busy) || !hydrated} onChange={(event) => { const preset = presets.find((item) => item.id === event.target.value); if (preset) { setForm((current) => ({ ...current, ...preset.settings })); setNotice("Applied " + preset.name); } event.currentTarget.value = ""; }}><option value="">Apply saved settings…</option>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><input className="input" aria-label="Preset name" placeholder="Name these settings" maxLength={100} value={presetName} onChange={(event) => setPresetName(event.target.value)} /><button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={savePreset}>Save preset</button><select className="input" aria-label="Delete preset" defaultValue="" onChange={(event) => { setPresets((items) => items.filter((item) => item.id !== event.target.value)); event.currentTarget.value = ""; }}><option value="">Delete a preset…</option>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div>
+
                 <div className="form-grid three-columns">
                   <Field label="Flow model"><select className="input select-input" value={form.flowModel} onChange={(event) => updateForm("flowModel", event.target.value as FlowModel)}>{FLOW_MODELS.map((item) => <option key={item}>{item}</option>)}</select></Field>
                   <Field label="Generation mode"><select className="input select-input" value={form.generationMode} onChange={(event) => updateForm("generationMode", event.target.value as GenerationMode)}>{MODES.map((item) => <option key={item}>{item}</option>)}</select></Field>
@@ -608,14 +638,14 @@ function App() {
             {compatibility && <div className="compatibility-note"><AlertCircle size={16} /><span>{compatibility}</span></div>}
                 <Field label="Reference notes" hint="Describe brand rules, real UI, people, clothing, locations, or anything the AI must not invent."><textarea className="input" value={form.referenceNotes} onChange={(event) => updateForm("referenceNotes", event.target.value)} rows={3} /></Field>
                 <div className="upload-box">
-                  <div className="upload-copy"><div className="upload-icon"><Upload size={18} /></div><div><strong>Reference images <span>Optional</span></strong><p>Upload real LearnTypeMM screenshots, logo, or visual references. Up to 4 images.</p></div></div>
+                  <div className="upload-copy"><div className="upload-icon"><Upload size={18} /></div><div><strong>Reference images <span>Optional</span></strong><p>Upload character photos, product images, logos, or visual references. Up to 4 images.</p></div></div>
                   <label className="upload-button"><Upload size={15} /> Add images<input type="file" accept="image/*" multiple onChange={(event) => { void onImageUpload(event.target.files); event.currentTarget.value = ""; }} /></label>
                   {form.referenceImages.length > 0 && <div className="reference-list">{form.referenceImages.map((image, index) => <div className="reference-chip" key={image.name + "-" + index}><img src={image.previewUrl} alt={image.name} /><span>{image.name}</span><button onClick={() => updateForm("referenceImages", form.referenceImages.filter((_, i) => i !== index))} aria-label={"Remove " + image.name}><X size={13} /></button></div>)}</div>}
                 </div>
               </div>}
               <div className="brief-footer">
                 <div className="footer-info"><span className="secure-icon"><KeyRound size={14} /></span><span>{apiKey ? "Gemini API is configured" : "Set up a Gemini API key to start"} <button className="inline-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>{apiKey ? "Manage key" : "Set up API key"}</button></span></div>
-                <button className="primary-button generate-button" onClick={() => void generateConcepts()} disabled={Boolean(busy)}>{busy === "concepts" ? <span className="spinner" /> : <Sparkles size={17} />}{busy === "concepts" ? "Generating concepts..." : "Generate 3 concepts"}<ChevronRight size={17} /></button>
+                <button className="primary-button generate-button" onClick={() => void generateConcepts()} disabled={Boolean(busy) || !hydrated}>{busy === "concepts" ? <span className="spinner" /> : <Sparkles size={17} />}{busy === "concepts" ? "Generating concepts..." : "Generate 3 concepts"}<ChevronRight size={17} /></button>
               </div>
             </div>
           </section>
@@ -636,7 +666,7 @@ function App() {
                   <div className="concept-direction"><span>VISUAL DIRECTION</span><p>{concept.visualDirection}</p></div>
                   {concept.storyArc.length > 0 && <div className="story-arc">{concept.storyArc.slice(0, 5).map((beat, i) => <div className="arc-beat" key={i + "-" + beat}><span>{String(i + 1).padStart(2, "0")}</span><p>{beat}</p></div>)}</div>}
                   <div className="concept-reason"><Lightbulb size={14} /><span>{concept.whyItWorks}</span></div>
-                  <button className={selectedConceptId === concept.id && storyboard ? "secondary-button full-width" : "primary-button full-width"} onClick={() => { void generateStoryboard(concept); }} disabled={Boolean(busy)}>
+                  <button className={selectedConceptId === concept.id && storyboard ? "secondary-button full-width" : "primary-button full-width"} onClick={() => { void generateStoryboard(concept); }} disabled={Boolean(busy) || !hydrated}>
                     {busy === "storyboard" && selectedConceptId === concept.id ? <span className="spinner" /> : <Wand2 size={16} />}{busy === "storyboard" && selectedConceptId === concept.id ? "Building storyboard..." : "Build this storyboard"}<ChevronRight size={16} />
                   </button>
                 </div>
@@ -671,10 +701,10 @@ function App() {
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
             <div className="workflow-toolbar">
-              <button className="secondary-button" disabled={Boolean(busy)} onClick={() => { remember("Saved version"); setNotice("Version saved in history."); }}><History size={15} /> Save version</button>
+              <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={() => { remember("Saved version"); setNotice("Version saved in history."); }}><History size={15} /> Save version</button>
               <select className="input" aria-label="Storyboard version" value={versionId} onChange={(event) => setVersionId(event.target.value)}><option value="">Choose an earlier version…</option>{history.map((version) => <option value={version.id} key={version.id}>{new Date(version.createdAt).toLocaleString()} · {version.label}</option>)}</select>
               <button className="secondary-button" disabled={!versionId || Boolean(busy)} onClick={restoreVersion}>Restore version</button>
-              <button className="secondary-button" disabled={Boolean(busy)} onClick={addScene}><Plus size={14} /> Add scene</button>
+              <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={addScene}><Plus size={14} /> Add scene</button>
               <button className="quiet-button" onClick={() => setSelectedSceneIds(storyboard.scenes.filter((scene) => !scene.locked).map((scene) => scene.id))}>Select unlocked</button>
               <button className="quiet-button" onClick={() => setSelectedSceneIds([])}>Clear</button>
               <button className="secondary-button" disabled={Boolean(busy) || !selectedSceneIds.length} onClick={() => void regenerateScenes(selectedSceneIds)}>Regenerate selected prompts</button>
@@ -686,19 +716,19 @@ function App() {
                 const flags = sceneAudit.filter((item) => !item.ok).length;
                 return <article className="scene-card" key={scene.id}>
                   <div className="scene-card-head">
-                    <input type="checkbox" aria-label={"Select scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy)} checked={selectedSceneIds.includes(scene.id)} onChange={(event) => setSelectedSceneIds((ids) => event.target.checked ? [...ids, scene.id] : ids.filter((id) => id !== scene.id))} /><div className="scene-number">{String(scene.sceneNumber).padStart(2, "0")}</div>
-                    <div className="scene-title-area"><input className="scene-title-input" disabled={scene.locked || Boolean(busy)} value={scene.title} onChange={(event) => updateScene(scene.id, { title: event.target.value })} aria-label="Scene title" /><div className="scene-tags"><span><Clock3 size={12} /> {scene.durationSeconds}s clip</span><span><Film size={12} /> {scene.shotSize || "Shot plan"}</span><span className={flags ? "quality-tag warn" : "quality-tag"}>{flags ? flags + " checks to review" : "Prompt checked"}</span></div></div>
+                    <input type="checkbox" aria-label={"Select scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy) || !hydrated} checked={selectedSceneIds.includes(scene.id)} onChange={(event) => setSelectedSceneIds((ids) => event.target.checked ? [...ids, scene.id] : ids.filter((id) => id !== scene.id))} /><div className="scene-number">{String(scene.sceneNumber).padStart(2, "0")}</div>
+                    <div className="scene-title-area"><input className="scene-title-input" disabled={scene.locked || Boolean(busy) || !hydrated} value={scene.title} onChange={(event) => updateScene(scene.id, { title: event.target.value })} aria-label="Scene title" /><div className="scene-tags"><span><Clock3 size={12} /> {scene.durationSeconds}s clip</span><span><Film size={12} /> {scene.shotSize || "Shot plan"}</span><span className={flags ? "quality-tag warn" : "quality-tag"}>{flags ? flags + " checks to review" : "Prompt checked"}</span></div></div>
                     <button className="icon-button" onClick={() => void copyText(promptWithReferences(scene, projectAssets), "Scene " + scene.sceneNumber + " prompt")} title="Copy Flow prompt">{copied === "Scene " + scene.sceneNumber + " prompt" ? <Check size={16} /> : <Copy size={16} />}</button>
                     <button className="icon-button" onClick={() => void regenerateScenes([scene.id])} disabled={Boolean(busy) || scene.locked} title="Regenerate scene"><RefreshCw className={busy === scene.id ? "spinning" : ""} size={16} /></button>
                   </div>
                   <div className="scene-controls">
-                    <button className="secondary-button" disabled={Boolean(busy)} onClick={() => toggleLock(scene)}>{scene.locked ? <Lock size={14} /> : <Unlock size={14} />}{scene.locked ? "Locked · unlock" : "Lock scene"}</button>
+                    <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={() => toggleLock(scene)}>{scene.locked ? <Lock size={14} /> : <Unlock size={14} />}{scene.locked ? "Locked · unlock" : "Lock scene"}</button>
                     <button className="quiet-button" disabled={Boolean(busy) || scene.sceneNumber === 1} aria-label={"Move scene " + scene.sceneNumber + " up"} onClick={() => moveScene(scene, -1)}><ArrowUp size={15} /></button>
                     <button className="quiet-button" disabled={Boolean(busy) || scene.sceneNumber === storyboard.scenes.length} aria-label={"Move scene " + scene.sceneNumber + " down"} onClick={() => moveScene(scene, 1)}><ArrowDown size={15} /></button>
                     <button className="quiet-button" disabled={Boolean(busy) || scene.locked} aria-label={"Delete scene " + scene.sceneNumber} onClick={() => removeScene(scene)}><Trash2 size={15} /></button>
-                    <select className="input" aria-label={"Review status scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy)} value={scene.reviewStatus || "draft"} onChange={(event) => updateScene(scene.id, { reviewStatus: event.target.value as Scene["reviewStatus"], locked: event.target.value === "approved" })}><option value="draft">Draft</option><option value="review">Needs review</option><option value="approved">Approved · lock</option></select>
+                    <select className="input" aria-label={"Review status scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy) || !hydrated} value={scene.reviewStatus || "draft"} onChange={(event) => updateScene(scene.id, { reviewStatus: event.target.value as Scene["reviewStatus"], locked: event.target.value === "approved" })}><option value="draft">Draft</option><option value="review">Needs review</option><option value="approved">Approved · lock</option></select>
                   </div>
-                  <fieldset className="scene-content scene-fieldset" disabled={scene.locked || Boolean(busy)}>
+                  <fieldset className="scene-content scene-fieldset" disabled={scene.locked || Boolean(busy) || !hydrated}>
                     <Field label="Review notes"><input className="input" value={scene.reviewNotes || ""} onChange={(event) => updateScene(scene.id, { reviewNotes: event.target.value })} placeholder="Keep feedback with this scene…" /></Field>
                     <div className="scene-reference-picker"><strong>Character & location references</strong><label><input type="checkbox" checked={scene.assetIds === undefined} onChange={(event) => updateScene(scene.id, { assetIds: event.target.checked ? undefined : [] })} /> Use project reference set</label>{castAssets.map((asset) => <label key={asset.id}><input type="checkbox" checked={sceneReferences(scene, projectAssets).some((item) => item.id === asset.id)} onChange={(event) => { const ids = sceneReferences(scene, projectAssets).map((item) => item.id); if (event.target.checked && ids.length >= 4) { setError("A scene can use up to four reference assets."); return; } updateScene(scene.id, { assetIds: event.target.checked ? [...ids, asset.id] : ids.filter((id) => id !== asset.id) }); }} /><img src={assetAsReference(asset).previewUrl} alt="" />{asset.title}</label>)}{!castAssets.length && <span>Add a character or location in Asset Studio to reuse it here.</span>}</div>
                     <div className="scene-visual-details"><div className="scene-detail"><span>SCENE PURPOSE</span><p>{scene.objective}</p></div><div className="scene-detail"><span>VISUAL ACTION</span><p>{scene.visualDescription}</p></div><div className="scene-detail two-detail"><div><span>CAMERA</span><p>{scene.cameraMovement}</p></div><div><span>LIGHT / MOOD</span><p>{scene.lighting} · {scene.mood}</p></div></div><div className="scene-detail"><span>ACTION BEAT</span><p>{scene.action}</p></div></div>
