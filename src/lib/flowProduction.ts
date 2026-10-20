@@ -58,7 +58,7 @@ export function buildContactSheetPrompt(form: Pick<VideoForm, "topic" | "platfor
     "- Give each panel a clear focal point and distinct readable composition. Keep panels visually separate; do not merge them into one continuous panoramic scene.",
     "- No visible text, captions, subtitles, watermarks, panel numbers, labels, logos, interface text, or decorative lettering inside the image. Add exact text later in editing.",
     "- Do not include timestamps, camera instructions, or production notes as visible graphic elements.",
-    "- Keep hands, fingers, keyboards, screens, and physical interactions plausible. Do not invent LearnTypeMM website UI; use authentic screenshots for accurate product interfaces.",
+    "- Keep hands, fingers, keyboards, screens, and physical interactions plausible. Do not invent website UI; use authentic screenshots for accurate product interfaces.",
     "",
     "NEGATIVE GUIDANCE",
     storyboard.globalNegativePrompt || "Avoid inconsistent faces or wardrobe, duplicate people, malformed hands, extra fingers, broken keyboards, illegible text, fake website interfaces, fused panels, missing gutters, watermarks, flicker-like artifacts, and unrequested story events.",

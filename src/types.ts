@@ -15,6 +15,8 @@ export type VideoConcept = {
   whyItWorks: string; storyArc: string[]; estimatedDuration: number;
 };
 export type Scene = {
+  locked?: boolean; reviewStatus?: "draft" | "review" | "approved"; reviewNotes?: string;
+  assetIds?: string[];
   id: string; sceneNumber: number; title: string; durationSeconds: number; objective: string;
   visualDescription: string; shotSize: string; cameraMovement: string; lighting: string; mood: string;
   action: string; flowPrompt: string; voiceover: string; onscreenText: string; audioNotes: string;
@@ -28,4 +30,13 @@ export type Storyboard = {
 export type SavedProject = {
   id: string; title: string; savedAt: string; form: Omit<VideoForm, "referenceImages">;
   concepts: VideoConcept[]; selectedConceptId: string; storyboard: Storyboard | null;
+  history?: BoardVersion[];
 };
+export type BoardVersion = { id: string; label: string; createdAt: string; storyboard: Storyboard; concept?: VideoConcept; form?: Omit<VideoForm, "referenceImages"> };
+export type ImageAsset = {
+  handle?: string;
+  id: string; kind: "character" | "background" | "scene"; title: string; prompt: string;
+  mimeType: string; data: string; createdAt: string; useAsReference: boolean;
+  projectId?: string; sceneId?: string; sceneNumber?: number;
+};
+export type ProductionPreset = { id: string; name: string; settings: Omit<VideoForm, "topic" | "referenceImages"> };
