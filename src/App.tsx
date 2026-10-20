@@ -9,6 +9,7 @@ import {
 import type { GeminiModelOption } from "./lib/gemini";
 import { generateJson, listGeminiModels, testGeminiModel } from "./lib/gemini";
 import { assetAsReference, assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
+import { prepareAutomaticAssets, flowSceneBundle } from "./lib/automaticAssets";
 import { loadReferences, saveReferences } from "./lib/projectMedia";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { createArchive, readArchive, presetSchema } from "./lib/projectArchive";
@@ -159,6 +160,8 @@ function App() {
   const [presets, setPresets] = useState<ProductionPreset[]>(() => readLocal<ProductionPreset[]>("mm-storyboard-presets", []).filter((item) => presetSchema.safeParse(item).success));
   const [hydrated, setHydrated] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
+  const stopAssets = useRef(false);
+  const [assetProgress, setAssetProgress] = useState("");
   const lastEdit = useRef({ label: "", time: 0 });
   const [form, setForm] = useState<VideoForm>(DEFAULT_FORM);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(STORAGE.key) ?? "");
@@ -312,14 +315,44 @@ function App() {
         negativePrompt: scene.negativePrompt || "", openingFrame: scene.openingFrame || "",
         finalFrame: scene.finalFrame || "", handoff: scene.handoff === "CONTINUATION" ? "CONTINUATION" : "CUT",
       }));
-      setStoryboard({
-        ...result, scenes,
+      const built: Storyboard = {
+        ...result, scenes, referencePlan: undefined,
         continuityRules: Array.isArray(result.continuityRules) ? result.continuityRules : [],
         productionNotes: Array.isArray(result.productionNotes) ? result.productionNotes : [],
-      });
+      };
+      setStoryboard(built);
       setStep("storyboard");
-      setNotice("Storyboard created. Review the prompts and audit warnings before generating clips in Flow.");
+      if (fromConcepts) await createReferences(built);
+      else setNotice("Storyboard created. Use Create character & background images to prepare Flow references.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Couldn't build the storyboard. Please try again."); }
+    finally { setBusy(null); }
+  };
+
+  const createReferences = async (board: Storyboard) => {
+    stopAssets.current = false; setBusy("assets"); setError("");
+    try {
+      const result = await prepareAutomaticAssets(board, form, projectId, apiKey.trim(), geminiModel, setStoryboard, setAssetProgress, () => stopAssets.current);
+      refreshAssets();
+      if (result.failed.length) setError(result.failed.join("\n"));
+      setNotice(stopAssets.current ? "Stopped after the current image. Completed images are saved. Retry to continue." : result.failed.length ? "Some images failed. Retry creates only missing images." : "Character and background references are ready. Download the Flow scene ZIP.");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not prepare references."); }
+    finally { setBusy(null); setAssetProgress(""); }
+  };
+  const retryReferences = async () => {
+    if (!storyboard || busy || !hydrated || !requireKey()) return;
+    remember("Before creating reference images");
+    await createReferences(storyboard);
+  };
+  const downloadFlowScenes = async () => {
+    if (!storyboard || busy) return;
+    setBusy("flow-download");
+    try {
+      const blob = await flowSceneBundle(storyboard, (await readAssets()).filter((asset) => asset.projectId === projectId));
+      const url = URL.createObjectURL(blob); const link = document.createElement("a");
+      link.href = url; link.download = fileSlug(storyboard.projectTitle) + "-flow-scenes.zip"; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setNotice("Flow scene ZIP downloaded: each scene contains its prompt, voiceover and reference images.");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Download failed."); }
     finally { setBusy(null); }
   };
 
@@ -414,7 +447,8 @@ function App() {
       const archive = await readArchive(file);
       const newId = makeId();
       const assetIds = new Map(archive.assets.map((asset) => [asset.id, makeId()]));
-      const remapBoard = (board: Storyboard | null): Storyboard | null => board ? { ...board, scenes: board.scenes.map((scene) => ({ ...scene, assetIds: scene.assetIds?.map((id) => assetIds.get(id)!) })) } : null;
+      for (const board of [archive.project.storyboard, ...(archive.project.history || []).map((item) => item.storyboard)]) for (const item of board?.referencePlan || []) if (!assetIds.has(item.id)) assetIds.set(item.id, makeId());
+      const remapBoard = (board: Storyboard | null): Storyboard | null => board ? { ...board, referencePlan: board.referencePlan?.map((item) => ({ ...item, id: assetIds.get(item.id)! })), scenes: board.scenes.map((scene) => ({ ...scene, assetIds: scene.assetIds?.map((id) => assetIds.get(id)!) })) } : null;
       const project = { ...archive.project, id: newId, storyboard: remapBoard(archive.project.storyboard), history: archive.project.history?.map((version) => ({ ...version, storyboard: remapBoard(version.storyboard)! })) };
       await writeAssets(archive.assets.map((asset) => ({ ...asset, handle: assetHandle(asset), id: assetIds.get(asset.id)!, projectId: newId })));
       if (!await loadProject(project, archive.references)) return;
@@ -676,7 +710,8 @@ function App() {
               </div>}
               <div className="brief-footer">
                 <div className="footer-info"><span className="secure-icon"><KeyRound size={14} /></span><span>{apiKey ? "Gemini API is configured" : "Set up a Gemini API key to start"} <button className="inline-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>{apiKey ? "Manage key" : "Set up API key"}</button></span></div>
-                <button className="primary-button generate-button" onClick={() => void generateConcepts(true)} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "concepts" ? "Choosing the best concept…" : busy === "storyboard" ? "Building storyboard…" : "Auto: topic to storyboard"}</button>
+                <span className="field-hint">Auto creates the storyboard plus character/background images. Gemini image API usage charges may apply.</span>
+                <button className="primary-button generate-button" onClick={() => void generateConcepts(true)} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "concepts" ? "Choosing the best concept…" : busy === "storyboard" ? "Building storyboard…" : busy === "assets" ? "Creating reference images…" : "Auto: topic to storyboard"}</button>
                 <button className="secondary-button" onClick={() => void generateConcepts()} disabled={Boolean(busy) || !hydrated}>{busy === "concepts" ? <span className="spinner" /> : <Sparkles size={17} />}{busy === "concepts" ? "Generating concepts..." : "Generate 3 concepts"}<ChevronRight size={17} /></button>
               </div>
             </div>
@@ -733,6 +768,12 @@ function App() {
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
             <div className="workflow-toolbar">
+              <button className="primary-button" disabled={Boolean(busy) || !hydrated} onClick={() => void retryReferences()}>Create / retry character & background images</button>
+              <button className="secondary-button" disabled={Boolean(busy)} onClick={() => void downloadFlowScenes()}>Download Flow scene ZIP</button>
+              <span className="field-hint">Automatic mode includes reference images via Gemini image API (usage charges may apply). Video generation stays manual in Flow.</span>
+              {storyboard.referencePlan?.map((item) => <span key={item.id}>{item.kind === "character" ? "Character" : "Background"}: {item.title} · {projectAssets.some((asset) => asset.id === item.id) ? "Ready" : "Pending / retry"}</span>)}
+              {assetProgress && <span role="status">{assetProgress}</span>}
+              {busy === "assets" && <button className="secondary-button" onClick={() => { stopAssets.current = true; }}>Stop after current image</button>}
               <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={() => { remember("Saved version"); setNotice("Version saved in history."); }}><History size={15} /> Save version</button>
               <select className="input" aria-label="Storyboard version" value={versionId} onChange={(event) => setVersionId(event.target.value)}><option value="">Choose an earlier version…</option>{history.map((version) => <option value={version.id} key={version.id}>{new Date(version.createdAt).toLocaleString()} · {version.label}</option>)}</select>
               <button className="secondary-button" disabled={!versionId || Boolean(busy)} onClick={restoreVersion}>Restore version</button>

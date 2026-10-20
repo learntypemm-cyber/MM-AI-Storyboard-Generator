@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import "fake-indexeddb/auto";
 import JSZip from "jszip";
 import App from "./App";
+import { prepareAutomaticAssets, validateReferencePlan, flowSceneBundle } from "./lib/automaticAssets";
 import { listGeminiModels } from "./lib/gemini";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
@@ -80,9 +81,11 @@ describe("portable archives", () => {
   });
   it("retains the creative brief and concept with a historical storyboard", async () => {
     const data = value();
+    data.project.storyboard.referencePlan = [{ id: "pending", kind: "background", title: "Cafe", prompt: "Warm cafe", sceneIds: ["one"] }];
     data.project.history[0].concept = concept;
     data.project.history[0].form = form;
     const result = await readArchive(new File([await createArchive(data)], "history.zip"));
+    expect(result.project.storyboard?.referencePlan?.[0].id).toBe("pending");
     expect(result.project.history?.[0].concept?.id).toBe(concept.id);
     expect(result.project.history?.[0].form?.topic).toBe("Coffee");
   });
@@ -256,14 +259,58 @@ describe("automatic concept selection", () => {
     const reply = (data: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }] }));
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(reply({ concepts: [concept, { ...concept, id: "best", title: "Best concept" }, { ...concept, id: "third" }], recommendedConceptIndex: 1 }))
-      .mockResolvedValueOnce(reply(board()));
+      .mockResolvedValueOnce(reply(board()))
+      .mockImplementationOnce(async (_url, init) => {
+        const prompt = JSON.parse(String(init?.body)).contents[0].parts[0].text as string;
+        const brief = JSON.parse(prompt.split("\n").at(-1)!);
+        return reply({ assets: [{ kind: "background", title: "Cafe", prompt: "A warm cafe without people, no visible text", sceneIds: brief.scenes.map((item: Scene) => item.id) }] });
+      })
+      .mockResolvedValueOnce(new Response(JSON.stringify({ output_image: { data: "aGVsbG8=", mime_type: "image/png" } })));
     render(<App />);
     await waitFor(() => expect((screen.getByRole("button", { name: "Auto: topic to storyboard" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Coffee" } });
     fireEvent.click(screen.getByRole("button", { name: "Auto: topic to storyboard" }));
     await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(2));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(screen.getByText(/Character and background references are ready/)).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("Best concept");
     expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).selectedConceptId).toBe("best");
+  });
+});
+
+
+describe("automatic character and background production", () => {
+  const planning = { assets: [
+    { kind: "character", title: "May", prompt: "One full-body character portrait, consistent clothes, plain backdrop", sceneIds: ["one"] },
+    { kind: "background", title: "Cafe", prompt: "A warm cafe background plate, no people or text", sceneIds: ["one"] },
+  ] };
+  const textReply = (value: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(value) }] } }] }));
+  it("rejects unknown scenes, missing backgrounds, and reference overload", () => {
+    expect(() => validateReferencePlan({ assets: [{ ...planning.assets[1], sceneIds: ["wrong"] }] }, board())).toThrow("protected scene");
+    expect(() => validateReferencePlan({ assets: [planning.assets[0]] }, board())).toThrow("background");
+    expect(() => validateReferencePlan({ assets: [...planning.assets, ...planning.assets] }, board())).toThrow("at most three");
+  });
+  it("saves successes, retries only missing images, preserves locks, and packages scene files", async () => {
+    let current = board();
+    const project = "auto-assets-" + crypto.randomUUID();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(textReply(planning))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ output_image: { data: "aGVsbG8=", mime_type: "image/png" } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "Quota" } }), { status: 429 }));
+    const first = await prepareAutomaticAssets(current, form, project, "key", "model", (value) => { current = value; }, () => {}, () => false);
+    expect(first.failed).toHaveLength(1);
+    expect(current.scenes[0].assetIds).toHaveLength(1);
+    expect(current.scenes[1]).toEqual(board().scenes[1]);
+    expect(current.referencePlan).toHaveLength(2);
+    await expect(flowSceneBundle(current, (await readAssets()).filter((asset) => asset.projectId === project))).rejects.toThrow("Finish or retry");
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ output_image: { data: "aGVsbG8=", mime_type: "image/png" } })));
+    await prepareAutomaticAssets(current, form, project, "key", "model", (value) => { current = value; }, () => {}, () => false);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(current.scenes[0].assetIds).toHaveLength(2);
+    const images = (await readAssets()).filter((asset) => asset.projectId === project);
+    const zip = await JSZip.loadAsync(await flowSceneBundle(current, images));
+    expect(await zip.file("scene-01/prompt.txt")!.async("string")).toContain("Visual references");
+    expect(Object.keys(zip.files).filter((path) => path.endsWith(".png"))).toHaveLength(2);
+    expect(await zip.file("scene-01/voiceover.txt")!.async("string")).toBe("Hello");
   });
 });
