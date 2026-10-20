@@ -236,3 +236,34 @@ describe("Gemini model discovery", () => {
   });
 });
 
+
+
+describe("automatic concept selection", () => {
+  it("keeps concepts for recovery when AI omits a valid recommendation", async () => {
+    localStorage.setItem("mm-storyboard-gemini-key", "test-key");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ concepts: [concept, { ...concept, id: "other" }] }) }] } }] })));
+    render(<App />);
+    await waitFor(() => expect((screen.getByRole("button", { name: "Auto: topic to storyboard" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Coffee" } });
+    fireEvent.click(screen.getByRole("button", { name: "Auto: topic to storyboard" }));
+    await waitFor(() => expect(screen.getByText(/AI did not return a valid recommendation/)).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("button", { name: /Build this storyboard/ })).toHaveLength(2);
+  });
+
+  it("builds the recommended concept without a manual selection", async () => {
+    localStorage.setItem("mm-storyboard-gemini-key", "test-key");
+    const reply = (data: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }] }));
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(reply({ concepts: [concept, { ...concept, id: "best", title: "Best concept" }, { ...concept, id: "third" }], recommendedConceptIndex: 1 }))
+      .mockResolvedValueOnce(reply(board()));
+    render(<App />);
+    await waitFor(() => expect((screen.getByRole("button", { name: "Auto: topic to storyboard" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Coffee" } });
+    fireEvent.click(screen.getByRole("button", { name: "Auto: topic to storyboard" }));
+    await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(2));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("Best concept");
+    expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).selectedConceptId).toBe("best");
+  });
+});

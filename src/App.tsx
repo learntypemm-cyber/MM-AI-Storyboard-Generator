@@ -264,7 +264,7 @@ function App() {
     return true;
   };
 
-  const generateConcepts = async () => {
+  const generateConcepts = async (autoBuild = false) => {
     setError(""); setNotice("");
     if (storyboard?.scenes.some((scene) => scene.locked)) { setError("Unlock approved scenes before replacing the project concepts."); return; }
     remember("Before replacing concepts");
@@ -273,22 +273,27 @@ function App() {
     if (!requireKey()) return;
     setBusy("concepts");
     try {
-      const result = await generateJson<{ concepts: VideoConcept[] }>(apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT, buildConceptPrompt(form), form.referenceImages);
+      const result = await generateJson<{ concepts: VideoConcept[]; recommendedConceptIndex?: number }>(apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT, buildConceptPrompt(form) + (autoBuild ? "\nEvaluate all three concepts for topic relevance, a strong opening, visual clarity, achievable runtime and reference continuity. Include recommendedConceptIndex (0, 1 or 2) for the strongest concept." : ""), form.referenceImages);
       if (!Array.isArray(result.concepts) || result.concepts.length < 2) throw new Error("The response did not contain three video concepts. Try generating again.");
       const next = result.concepts.slice(0, 3).map((concept, index) => ({
         ...concept, id: concept.id || "concept-" + (index + 1), title: concept.title || "Concept " + (index + 1),
         storyArc: Array.isArray(concept.storyArc) ? concept.storyArc : [],
       }));
       setConcepts(next); setSelectedConceptId(next[0].id); setStoryboard(null); setStep("concepts");
-      setNotice("Three concepts are ready. Choose one to build the full storyboard.");
+      if (autoBuild) {
+        const index = result.recommendedConceptIndex;
+        if (!Number.isInteger(index) || index! < 0 || index! >= next.length) throw new Error("Concepts were saved, but AI did not return a valid recommendation. Choose a concept below to continue.");
+        setNotice("AI selected: " + next[index!].title + ". Building the storyboard…");
+        await generateStoryboard(next[index!], true);
+      } else setNotice("Three concepts are ready. Choose one to build the full storyboard.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Couldn't generate concepts. Please try again."); }
     finally { setBusy(null); }
   };
 
-  const generateStoryboard = async (concept: VideoConcept) => {
-    if (!hydrated || busy) return;
+  const generateStoryboard = async (concept: VideoConcept, fromConcepts = false) => {
+    if (!hydrated || (busy && !fromConcepts)) return;
     if (storyboard?.scenes.some((scene) => scene.locked)) { setError("Unlock approved scenes before rebuilding the storyboard."); return; }
-    remember("Before rebuilding storyboard");
+    if (!fromConcepts) remember("Before rebuilding storyboard");
     setError(""); setNotice("");
     if (!requireKey()) return;
     setBusy("storyboard"); setSelectedConceptId(concept.id);
@@ -671,7 +676,8 @@ function App() {
               </div>}
               <div className="brief-footer">
                 <div className="footer-info"><span className="secure-icon"><KeyRound size={14} /></span><span>{apiKey ? "Gemini API is configured" : "Set up a Gemini API key to start"} <button className="inline-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>{apiKey ? "Manage key" : "Set up API key"}</button></span></div>
-                <button className="primary-button generate-button" onClick={() => void generateConcepts()} disabled={Boolean(busy) || !hydrated}>{busy === "concepts" ? <span className="spinner" /> : <Sparkles size={17} />}{busy === "concepts" ? "Generating concepts..." : "Generate 3 concepts"}<ChevronRight size={17} /></button>
+                <button className="primary-button generate-button" onClick={() => void generateConcepts(true)} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "concepts" ? "Choosing the best concept…" : busy === "storyboard" ? "Building storyboard…" : "Auto: topic to storyboard"}</button>
+                <button className="secondary-button" onClick={() => void generateConcepts()} disabled={Boolean(busy) || !hydrated}>{busy === "concepts" ? <span className="spinner" /> : <Sparkles size={17} />}{busy === "concepts" ? "Generating concepts..." : "Generate 3 concepts"}<ChevronRight size={17} /></button>
               </div>
             </div>
           </section>
