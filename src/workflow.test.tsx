@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import "fake-indexeddb/auto";
 import JSZip from "jszip";
 import App from "./App";
-import { prepareAutomaticAssets, validateReferencePlan, flowSceneBundle } from "./lib/automaticAssets";
+import { prepareAutomaticAssets, validateReferencePlan, flowSceneBundle, referenceImagePrompt, referencePromptPack } from "./lib/automaticAssets";
 import { listGeminiModels } from "./lib/gemini";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
@@ -269,6 +269,7 @@ describe("automatic concept selection", () => {
     render(<App />);
     await waitFor(() => expect((screen.getByRole("button", { name: "Auto: topic to storyboard" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Coffee" } });
+    fireEvent.change(screen.getByLabelText("Reference preparation"), { target: { value: "api" } });
     fireEvent.click(screen.getByRole("button", { name: "Auto: topic to storyboard" }));
     await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(2));
     await waitFor(() => expect(screen.getByText(/Character and background references are ready/)).toBeTruthy());
@@ -313,4 +314,17 @@ describe("automatic character and background production", () => {
     expect(Object.keys(zip.files).filter((path) => path.endsWith(".png"))).toHaveLength(2);
     expect(await zip.file("scene-01/voiceover.txt")!.async("string")).toBe("Hello");
   });
+});
+
+
+it("prepares reusable Flow image prompts without calling the image API", async () => {
+  const current = board();
+  const value = { assets: [{ kind: "background", title: "Cafe", prompt: "Sunlit cafe with wooden tables, no people", sceneIds: ["one"] }] };
+  const request = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(value) }] } }] })));
+  const result = await prepareAutomaticAssets(current, form, "flow-only", "key", "model", () => {}, () => {}, () => false, true);
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(String(request.mock.calls[0][0])).not.toContain("interactions");
+  expect(result.board.scenes[0].assetIds).toBeUndefined();
+  expect(referenceImagePrompt(result.board.referencePlan![0], form)).toContain("No people, characters or silhouettes");
+  expect(referencePromptPack(result.board, form)).toContain("Use in scenes: 1 - one");
 });
