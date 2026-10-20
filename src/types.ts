@@ -23,7 +23,9 @@ export type Scene = {
   transition: string; referenceAssets: string[]; negativePrompt: string; openingFrame: string;
   finalFrame: string; handoff: "CUT" | "CONTINUATION";
 };
+export type ReferencePlanItem = { id: string; kind: "character" | "background"; title: string; prompt: string; sceneIds: string[] };
 export type Storyboard = {
+  referencePlan?: ReferencePlanItem[];
   projectTitle: string; logline: string; visualBible: string; continuityRules: string[];
   globalNegativePrompt: string; productionNotes: string[]; scenes: Scene[];
 };

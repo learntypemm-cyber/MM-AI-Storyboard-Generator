@@ -113,3 +113,11 @@ In Settings, paste your Gemini API key. The app loads Google’s model list and 
 ### Automatic concept selection
 
 Use **Auto: topic to storyboard** to generate concepts, ask Gemini to recommend the strongest one for the brief, then build that storyboard without another click. The manual concept-selection path remains available. If the recommendation is invalid or storyboard generation fails, generated concepts remain available for manual retry. Locked scenes cannot be replaced. This feature does not submit videos to Google Flow; browser automation remains unimplemented pending access to a working Flow session.
+
+### Automatic character and background references
+
+Auto: topic to storyboard now continues with a reusable reference plan and image generation using the existing Gemini Nano Banana 2.1 image API integration. It creates character portraits where needed and backgrounds, reuses each asset across its assigned scenes, and binds generated images by stable scene ID. The image API can incur usage charges; Google Flow video generation remains manual.
+
+Existing boards can use Create / retry character & background images. Completed images and the plan are saved incrementally; retry skips completed images, and Stop after current image avoids scheduling more requests. Locked scenes and existing manual reference assignments are preserved. Reference plans survive project ZIP backups and restores. Plans are bounded to twelve assets and three generated references per scene.
+
+Download Flow scene ZIP produces one folder per scene with prompt.txt, voiceover.txt and the linked image files. Incomplete planned images block this export so missing references are not silently omitted. Videos are not generated or included. Image-generation API docs: https://ai.google.dev/gemini-api/docs/image-generation
