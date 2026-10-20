@@ -6,7 +6,8 @@ import {
   LayoutDashboard, Lightbulb, MonitorPlay, Plus, RefreshCw, Save, Settings,
   Sparkles, Trash2, Upload, Volume2, Wand2, X, Zap, Clock3, ArrowUp, ArrowDown, Lock, Unlock, History,
 } from "lucide-react";
-import { generateJson, normalizeGeminiModelName, testGeminiModel } from "./lib/gemini";
+import type { GeminiModelOption } from "./lib/gemini";
+import { generateJson, listGeminiModels, testGeminiModel } from "./lib/gemini";
 import { assetAsReference, assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
 import { loadReferences, saveReferences } from "./lib/projectMedia";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
@@ -163,6 +164,12 @@ function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(STORAGE.key) ?? "");
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem(STORAGE.model) ?? GEMINI_DEFAULT);
+  const [modelDraft, setModelDraft] = useState(geminiModel);
+  const [modelOptions, setModelOptions] = useState<GeminiModelOption[]>([]);
+  const [modelListKey, setModelListKey] = useState("");
+  const [modelListError, setModelListError] = useState("");
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelRefresh, setModelRefresh] = useState(0);
   const [concepts, setConcepts] = useState<VideoConcept[]>([]);
   const [selectedConceptId, setSelectedConceptId] = useState("");
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
@@ -179,6 +186,29 @@ function App() {
   const [copied, setCopied] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [step, setStep] = useState<"brief" | "concepts" | "storyboard">("brief");
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    setModelDraft(geminiModel);
+  }, [settingsOpen]);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const controller = new AbortController();
+    const key = apiKeyDraft.trim();
+    setModelOptions([]); setModelListKey(""); setModelListError(""); setLoadingModels(Boolean(key));
+    if (!key) return;
+    const timer = window.setTimeout(() => {
+      void listGeminiModels(key, controller.signal).then((options) => {
+        if (controller.signal.aborted) return;
+        setModelOptions(options); setModelListKey(key);
+        setModelDraft((current) => options.some((item) => item.id === current) ? current : options.find((item) => /flash/i.test(item.id) && !/preview|exp/i.test(item.id))?.id || options[0].id);
+      }).catch((caught) => {
+        if (!controller.signal.aborted) setModelListError(caught instanceof Error ? caught.message : "Could not load models.");
+      }).finally(() => { if (!controller.signal.aborted) setLoadingModels(false); });
+    }, 500);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [settingsOpen, apiKeyDraft, modelRefresh]);
+  const validModelSelection = Boolean(apiKeyDraft.trim() && modelListKey === apiKeyDraft.trim() && modelOptions.some((item) => item.id === modelDraft) && !loadingModels);
 
   const refreshAssets = () => { void readAssets().then(setAssets).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load assets.")); };
   useEffect(() => { refreshAssets(); window.addEventListener("assets-changed", refreshAssets); return () => window.removeEventListener("assets-changed", refreshAssets); }, []);
@@ -495,7 +525,8 @@ function App() {
   };
 
   const testGeminiSettings = async () => {
-    const key = apiKeyDraft.trim() || apiKey.trim();
+    const key = apiKeyDraft.trim();
+    if (!validModelSelection) return;
     if (!key) {
       setGeminiTestResult({ ok: false, message: "Enter a Gemini API key before testing." });
       return;
@@ -503,8 +534,8 @@ function App() {
     setTestingGemini(true);
     setGeminiTestResult(null);
     try {
-      const result = await testGeminiModel(key, geminiModel || GEMINI_DEFAULT);
-      setGeminiModel(result.modelId);
+      const result = await testGeminiModel(key, modelDraft);
+      setModelDraft(result.modelId);
       setGeminiTestResult({ ok: true, message: "Connected: " + result.displayName + " (" + result.modelId + ") supports text generation." });
     } catch (caught) {
       setGeminiTestResult({ ok: false, message: caught instanceof Error ? caught.message : "Could not test Gemini. Check the key and model." });
@@ -515,13 +546,8 @@ function App() {
 
   const saveApiSettings = () => {
     const nextKey = apiKeyDraft.trim();
-    let model: string;
-    try {
-      model = normalizeGeminiModelName(geminiModel || GEMINI_DEFAULT);
-    } catch (caught) {
-      setGeminiTestResult({ ok: false, message: caught instanceof Error ? caught.message : "Invalid Gemini model name." });
-      return;
-    }
+    if (!validModelSelection) return;
+    const model = modelDraft;
     if (nextKey) { localStorage.setItem(STORAGE.key, nextKey); setApiKey(nextKey); }
     else { localStorage.removeItem(STORAGE.key); setApiKey(""); }
     localStorage.setItem(STORAGE.model, model);
@@ -767,10 +793,12 @@ function App() {
           <div className="modal-top"><div className="modal-icon"><KeyRound size={20} /></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={18} /></button></div>
           <h2 id="settings-title">Connect Gemini</h2><p className="modal-description">Your API key powers concept generation, storyboard creation, and scene improvements.</p>
           <Field label="Gemini API key" hint="Stored in this browser's localStorage. Never paste a production server key into a public website."><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => { setApiKeyDraft(event.target.value); setGeminiTestResult(null); }} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
-          <Field label="Gemini API model" hint="Enter the API model ID, e.g. gemini-3.8-flash. The app also normalizes models/<id> and full model URLs automatically."><input className="input" value={geminiModel} onChange={(event) => { setGeminiModel(event.target.value); setGeminiTestResult(null); }} placeholder={GEMINI_DEFAULT} /></Field>
+          <Field label="Gemini API model" hint="Choose a text model listed by Google for your key. Quota and generation access depend on your account."><select className="input" value={modelOptions.some((item) => item.id === modelDraft) ? modelDraft : ""} disabled={!modelOptions.length || loadingModels} onChange={(event) => { setModelDraft(event.target.value); setGeminiTestResult(null); }}><option value="" disabled>{loadingModels ? "Loading models…" : "Add a key to load models"}</option>{modelOptions.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.id}</option>)}</select></Field>
+          {modelListError && <div role="alert" className="gemini-test-result error">{modelListError}</div>}
+          <button className="quiet-button" disabled={!apiKeyDraft.trim() || loadingModels} onClick={() => setModelRefresh((value) => value + 1)}><RefreshCw size={15} /> {loadingModels ? "Loading models…" : "Refresh models"}</button>
           {geminiTestResult && <div className={"gemini-test-result " + (geminiTestResult.ok ? "success" : "error")} role="status"><span>{geminiTestResult.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span><span>{geminiTestResult.message}</span></div>}
           <div className="privacy-note"><AlertCircle size={16} /><span>This is a browser-only development app. The key is sent to Google's Gemini API from your browser and stored locally. For a public deployment, proxy requests through a secured backend.</span></div>
-          <div className="modal-actions"><button className="quiet-button" onClick={() => { setApiKeyDraft(""); localStorage.removeItem(STORAGE.key); setApiKey(""); setGeminiTestResult(null); setSettingsOpen(false); }}>Remove key</button><button className="secondary-button" onClick={() => void testGeminiSettings()} disabled={testingGemini}><Zap size={15} /> {testingGemini ? "Testing..." : "Test model"}</button><button className="primary-button" onClick={saveApiSettings}><Check size={16} /> Save settings</button></div>
+          <div className="modal-actions"><button className="quiet-button" onClick={() => { setApiKeyDraft(""); localStorage.removeItem(STORAGE.key); setApiKey(""); setGeminiTestResult(null); setSettingsOpen(false); }}>Remove key</button><button className="secondary-button" onClick={() => void testGeminiSettings()} disabled={testingGemini || !validModelSelection}><Zap size={15} /> {testingGemini ? "Testing..." : "Test model"}</button><button className="primary-button" onClick={saveApiSettings} disabled={!validModelSelection}><Check size={16} /> Save settings</button></div>
           <div className="modal-help">Get or manage your key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Google AI Studio <ChevronRight size={12} /></a></div>
         </section>
       </div>}

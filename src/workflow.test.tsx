@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import "fake-indexeddb/auto";
 import JSZip from "jszip";
 import App from "./App";
+import { listGeminiModels } from "./lib/gemini";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
 import { createArchive, readArchive } from "./lib/projectArchive";
@@ -199,5 +200,38 @@ describe("editor workflow", () => {
     fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Tea" } });
     fireEvent.change(screen.getByLabelText("Production preset"), { target: { value: preset.id } });
     expect((screen.getByLabelText(/What video do you want to make/) as HTMLTextAreaElement).value).toBe("Tea");
+  });
+});
+
+
+describe("Gemini model discovery", () => {
+  const model = (id: string) => ({ name: "models/" + id, displayName: id, supportedGenerationMethods: ["generateContent"] });
+  it("loads every page and excludes image/audio/embedding models", async () => {
+    const request = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [model("gemini-test-flash"), model("gemini-test-tts"), model("gemini-test-image"), { name: "models/embedding", supportedGenerationMethods: ["embedContent"] }], nextPageToken: "page 2" })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [model("gemini-test-pro"), model("gemini-test-flash")] })));
+    expect((await listGeminiModels("key")).map((item) => item.id)).toEqual(["gemini-test-flash", "gemini-test-pro"]);
+    expect(String(request.mock.calls[1][0])).toContain("pageToken=page+2");
+    expect(request.mock.calls[0][1]?.headers).toEqual({ "x-goog-api-key": "key" });
+  });
+  it("surfaces rejected keys and empty compatible lists", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "Invalid key" } }), { status: 403 })).mockResolvedValueOnce(new Response(JSON.stringify({ models: [] })));
+    await expect(listGeminiModels("bad")).rejects.toThrow("Invalid key");
+    await expect(listGeminiModels("empty")).rejects.toThrow("No compatible");
+  });
+  it("lets users choose a discovered model and saves it without typing an ID", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ models: [model("gemini-test-flash"), model("gemini-test-pro")] })));
+    render(<App />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Settings", exact: true })[0]);
+    fireEvent.change(screen.getByLabelText(/Gemini API key/), { target: { value: "test-key" } });
+    await waitFor(() => expect(screen.getByRole("option", { name: /gemini-test-pro/ })).toBeTruthy(), { timeout: 3000 });
+    fireEvent.change(screen.getByLabelText(/Gemini API model/), { target: { value: "gemini-test-pro" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    expect(localStorage.getItem("mm-storyboard-gemini-model")).toBe("gemini-test-pro");
+    fireEvent.click(screen.getAllByRole("button", { name: "Settings", exact: true })[0]);
+    await waitFor(() => expect(screen.getByRole("option", { name: /gemini-test-flash/ })).toBeTruthy(), { timeout: 3000 });
+    fireEvent.change(screen.getByLabelText(/Gemini API model/), { target: { value: "gemini-test-flash" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    expect(localStorage.getItem("mm-storyboard-gemini-model")).toBe("gemini-test-pro");
   });
 });

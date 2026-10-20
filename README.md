@@ -105,3 +105,7 @@ MIT. See LICENSE.
 ### Draft protection
 
 Starting a new project or opening another project saves the current draft and its reference images to My projects first. If browser storage fails, the current editor remains open. Opening the currently active saved project keeps its latest edits. Projects are not silently removed when the library exceeds 30 entries. Unlocking an approved scene returns it to Needs review. New briefs start with an empty topic and generic video settings.
+
+### Choose a Gemini model
+
+In Settings, paste your Gemini API key. The app loads Google’s model list and lets you select a Gemini text model from a dropdown; no model ID typing is needed. Refresh models retries discovery. Image, audio, live, and other specialized models are excluded from this storyboard selector. Listing does not guarantee generation quota or structured-output support. Selection is applied only with Save settings. API reference: https://ai.google.dev/api/models
