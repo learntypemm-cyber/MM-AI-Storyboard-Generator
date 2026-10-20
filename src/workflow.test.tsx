@@ -222,16 +222,17 @@ describe("Gemini model discovery", () => {
   it("lets users choose a discovered model and saves it without typing an ID", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ models: [model("gemini-test-flash"), model("gemini-test-pro")] })));
     render(<App />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Settings", exact: true })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[0]);
     fireEvent.change(screen.getByLabelText(/Gemini API key/), { target: { value: "test-key" } });
     await waitFor(() => expect(screen.getByRole("option", { name: /gemini-test-pro/ })).toBeTruthy(), { timeout: 3000 });
     fireEvent.change(screen.getByLabelText(/Gemini API model/), { target: { value: "gemini-test-pro" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     expect(localStorage.getItem("mm-storyboard-gemini-model")).toBe("gemini-test-pro");
-    fireEvent.click(screen.getAllByRole("button", { name: "Settings", exact: true })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[0]);
     await waitFor(() => expect(screen.getByRole("option", { name: /gemini-test-flash/ })).toBeTruthy(), { timeout: 3000 });
     fireEvent.change(screen.getByLabelText(/Gemini API model/), { target: { value: "gemini-test-flash" } });
     fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
     expect(localStorage.getItem("mm-storyboard-gemini-model")).toBe("gemini-test-pro");
   });
 });
+
