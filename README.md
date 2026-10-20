@@ -109,3 +109,7 @@ Starting a new project or opening another project saves the current draft and it
 ### Choose a Gemini model
 
 In Settings, paste your Gemini API key. The app loads Google’s model list and lets you select a Gemini text model from a dropdown; no model ID typing is needed. Refresh models retries discovery. Image, audio, live, and other specialized models are excluded from this storyboard selector. Listing does not guarantee generation quota or structured-output support. Selection is applied only with Save settings. API reference: https://ai.google.dev/api/models
+
+### Automatic concept selection
+
+Use **Auto: topic to storyboard** to generate concepts, ask Gemini to recommend the strongest one for the brief, then build that storyboard without another click. The manual concept-selection path remains available. If the recommendation is invalid or storyboard generation fails, generated concepts remain available for manual retry. Locked scenes cannot be replaced. This feature does not submit videos to Google Flow; browser automation remains unimplemented pending access to a working Flow session.
