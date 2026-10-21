@@ -151,6 +151,30 @@ function buildSceneRepairPrompt(form: VideoForm, concept: VideoConcept, scene: S
   ].join("\n");
 }
 
+function promptCompletenessIssues(scene: Scene): string[] {
+  const prompt = (scene.flowPrompt || "").trim();
+  const words = prompt.split(/\\s+/).filter(Boolean).length;
+  const ranges = prompt.match(/\\b\\d{2}:\\d{2}\\s*[-–]\\s*\\d{2}:\\d{2}\\b/g) || [];
+  const firstLine = prompt.split(/\\r?\\n/).map((line) => line.trim()).find(Boolean) || "";
+  const issues: string[] = [];
+  if (words < 80) issues.push("Flow prompt is too short");
+  if (!/^(NO TEXT IN THE IMAGE\\.|NO VISIBLE TEXT\\.|INTENTIONAL TEXT IN THE IMAGE:\\s*\\S)/i.test(firstLine)) issues.push("Missing first-line text policy");
+  if (!/opening frame|first frame/i.test(prompt)) issues.push("Missing opening-frame direction");
+  if (!/final frame|last frame/i.test(prompt)) issues.push("Missing final-frame direction");
+  if (ranges.length < 2 || !/00:00\\s*[-–]/.test(prompt)) issues.push("Missing chronological time-coded action beats");
+  const endTime = String(Math.floor(scene.durationSeconds / 60)).padStart(2, "0") + ":" + String(Math.floor(scene.durationSeconds % 60)).padStart(2, "0");
+  if (!prompt.includes(endTime)) issues.push("Time-coded action does not reach the clip end");
+  const required: Array<[string, string | undefined]> = [
+    ["title", scene.title], ["objective", scene.objective], ["visual description", scene.visualDescription],
+    ["shot size", scene.shotSize], ["camera movement", scene.cameraMovement], ["lighting", scene.lighting],
+    ["mood", scene.mood], ["action", scene.action], ["audio direction", scene.audioNotes],
+    ["opening frame", scene.openingFrame], ["final frame", scene.finalFrame], ["negative prompt", scene.negativePrompt],
+    ["sound effects direction", scene.sfx], ["background music direction", scene.backgroundMusic],
+  ];
+  for (const [label, value] of required) if (!value?.trim()) issues.push("Missing " + label);
+  return issues;
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return <label className="field"><span className="field-label">{label}</span>{children}{hint && <span className="field-hint">{hint}</span>}</label>;
 }
@@ -308,7 +332,7 @@ function App() {
     try {
       const result = await generateJson<Storyboard>(apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT, buildStoryboardPrompt(form, concept), form.referenceImages);
       if (!Array.isArray(result.scenes) || !result.scenes.length) throw new Error("The response didn't include scenes. Try again or shorten your brief.");
-      const scenes: Scene[] = result.scenes.map((scene, index) => ({
+      let scenes: Scene[] = result.scenes.map((scene, index) => ({
         ...scene, backgroundAngle: ["A", "B", "C", "D"].includes(scene.backgroundAngle || "") ? scene.backgroundAngle : "A", id: makeId(), sceneNumber: Number(scene.sceneNumber) || index + 1,
         title: scene.title || "Scene " + (index + 1), durationSeconds: Number(scene.durationSeconds) || form.clipDuration,
         objective: scene.objective || "", visualDescription: scene.visualDescription || "",
@@ -320,6 +344,31 @@ function App() {
         negativePrompt: scene.negativePrompt || "", openingFrame: scene.openingFrame || "",
         finalFrame: scene.finalFrame || "", handoff: scene.handoff === "CONTINUATION" ? "CONTINUATION" : "CUT",
       }));
+      const incomplete = scenes.filter((scene) => promptCompletenessIssues(scene).length > 0);
+      for (let index = 0; index < incomplete.length; index++) {
+        const scene = incomplete[index];
+        setNotice("Completing incomplete prompt for scene " + scene.sceneNumber + " (" + (index + 1) + " of " + incomplete.length + ")…");
+        const repaired = await generateJson<{ scene: Partial<Scene> }>(
+          apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT,
+          buildSceneRepairPrompt(form, concept, scene, { ...result, scenes } as Storyboard) +
+            "\\nThis is an automatic completeness repair. Fill every missing or weak field and return a fully detailed Flow prompt of 100-180 words with at least two chronological time ranges starting at 00:00 and ending at the clip duration. Populate sfx and backgroundMusic separately. Do not shorten or omit any required field.",
+          form.referenceImages,
+        );
+        if (!repaired.scene || typeof repaired.scene.flowPrompt !== "string") {
+          throw new Error("Scene " + scene.sceneNumber + " came back incomplete. Please regenerate that scene's prompt.");
+        }
+        const patch = sceneRepairPatch(repaired.scene);
+        const completedScene: Scene = {
+          ...scene, ...patch,
+          id: scene.id, sceneNumber: scene.sceneNumber,
+          referenceAssets: Array.isArray(repaired.scene.referenceAssets) ? repaired.scene.referenceAssets : scene.referenceAssets,
+        };
+        const remaining = promptCompletenessIssues(completedScene);
+        if (remaining.length) {
+          throw new Error("Scene " + scene.sceneNumber + " is still incomplete (" + remaining.join(", ") + "). Regenerate that scene's prompt or try a different Gemini model.");
+        }
+        scenes = scenes.map((item) => item.id === scene.id ? completedScene : item);
+      }
       const built: Storyboard = {
         ...result, scenes, referencePlan: undefined,
         continuityRules: Array.isArray(result.continuityRules) ? result.continuityRules : [],
@@ -328,7 +377,7 @@ function App() {
       setStoryboard(built);
       setStep("storyboard");
       await createReferences(built);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Couldn't build the storyboard. Please try again."); }
+    } catch (caught) { setNotice(""); setError(caught instanceof Error ? caught.message : "Couldn't build the storyboard. Please try again."); }
     finally { setBusy(null); }
   };
 
