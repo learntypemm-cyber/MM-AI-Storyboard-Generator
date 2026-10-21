@@ -127,12 +127,15 @@ export async function generateJson<T>(
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json" } }),
+    body: JSON.stringify({
+      contents: [{ role: "user", parts }],
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 16384 },
+    }),
     signal,
   });
   const payload = await response.json().catch(() => ({})) as {
     error?: { message?: string; status?: string };
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>;
   };
   if (!response.ok) {
     const message = payload.error?.message || ("Gemini request failed (" + response.status + ").");
@@ -140,7 +143,21 @@ export async function generateJson<T>(
     if (response.status === 401 || response.status === 403) throw new Error(message + " Check your Gemini API key and API access.");
     throw new Error(message);
   }
-  const output = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n");
-  if (!output) throw new Error("Gemini returned no text. Try again with a shorter topic.");
-  return extractJson(output) as T;
+  const candidate = payload.candidates?.[0];
+  if (candidate?.finishReason === "MAX_TOKENS") {
+    throw new Error("Gemini reached the output token limit before finishing the JSON. The app now allows up to 16,384 output tokens; try generating fewer scenes or choose a model with a larger output limit.");
+  }
+  const output = candidate?.content?.parts?.map((part) => part.text || "").join("\n");
+  if (!output) {
+    if (candidate?.finishReason === "SAFETY") throw new Error("Gemini blocked this response with its safety filter. Rephrase the topic or reference notes and try again.");
+    throw new Error("Gemini returned no text. Try again with a shorter topic.");
+  }
+  try {
+    return extractJson(output) as T;
+  } catch (error) {
+    if (error instanceof Error && /invalid JSON/i.test(error.message)) {
+      throw new Error("Gemini returned incomplete JSON, so the prompt package was not accepted. Try again or choose a model with a larger output limit.");
+    }
+    throw error;
+  }
 }
