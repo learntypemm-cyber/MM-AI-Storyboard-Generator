@@ -351,7 +351,7 @@ function App() {
         const repaired = await generateJson<{ scene: Partial<Scene> }>(
           apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT,
           buildSceneRepairPrompt(form, concept, scene, { ...result, scenes } as Storyboard) +
-            "\\nThis is an automatic completeness repair. Fill every missing or weak field and return a fully detailed Flow prompt of 100-180 words with at least two chronological time ranges starting at 00:00 and ending at the clip duration. Populate sfx and backgroundMusic separately. Do not shorten or omit any required field.",
+            "\nThis is an automatic completeness repair. Fill every missing or weak field and return a fully detailed Flow prompt of 100-180 words with at least two chronological time ranges starting at 00:00 and ending at the clip duration. Populate sfx and backgroundMusic separately. Do not shorten or omit any required field.",
           form.referenceImages,
         );
         if (!repaired.scene || typeof repaired.scene.flowPrompt !== "string") {
