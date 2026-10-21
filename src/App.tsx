@@ -9,7 +9,8 @@ import {
 import type { GeminiModelOption } from "./lib/gemini";
 import { generateJson, listGeminiModels, testGeminiModel } from "./lib/gemini";
 import { assetAsReference, assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
-import { prepareAutomaticAssets, flowSceneBundle, referenceImagePrompt, referencePromptPack } from "./lib/automaticAssets";
+import { prepareAutomaticAssets, referenceImagePrompt, referencePromptPack } from "./lib/automaticAssets";
+import { referenceCode, sceneReferenceList, scenePreparationMode, sceneImagePrompt, sceneVideoPrompt, sceneInstructions, completePromptText, promptPackageZip } from "./lib/promptPackage";
 import { loadReferences, saveReferences } from "./lib/projectMedia";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { createArchive, readArchive, presetSchema } from "./lib/projectArchive";
@@ -17,7 +18,7 @@ import ComfyUIStudio from "./components/ComfyUIStudio";
 import AssetStudio from "./components/AssetStudio";
 import { buildContactSheetPrompt } from "./lib/flowProduction";
 import { auditScene, auditStoryboard } from "./lib/audit";
-import { downloadText, fileSlug, flowPromptPack, storyboardMarkdown } from "./lib/export";
+import { downloadText, fileSlug, storyboardMarkdown } from "./lib/export";
 import type {
   BoardVersion, ImageAsset, ProductionPreset, FlowModel, GenerationMode, Language, Platform, ReferenceImage, SavedProject,
   Scene, Storyboard, VideoConcept, VideoForm, VisualStyle,
@@ -117,6 +118,7 @@ function buildStoryboardPrompt(form: VideoForm, concept: VideoConcept): string {
     "- Create a complete scene-by-scene plan for generating each clip separately in Google Flow. Target 4-8 scenes for short-form content, choosing the number that fits the target runtime. Each scene durationSeconds should match the desired clip length when practical; explain runtime difference in productionNotes. Never guarantee a model feature; tell the user to verify the active Flow UI.",
     "- Every scene prompt must stand alone: describe subject, action, environment, wardrobe/props, framing, camera motion, lighting, mood, audio, opening frame, and final frame. Never say 'same as before', 'as in previous scene', 'continuing from scene 1', or assume model memory.",
     "- Maintain continuity using a visualBible and continuityRules. Use canonical @PascalCase handles for recurring named people or locations, such as @Presenter or @TypingDesk. Avoid unnecessary characters.",
+    "- Keep character, wardrobe, location and recurring product descriptions precise and mutually consistent. Do not introduce new identities between scenes.",
     "- Each flowPrompt starts with exactly one policy: 'NO TEXT IN THE IMAGE.' or 'INTENTIONAL TEXT IN THE IMAGE: [exact short text]'. For accurate product UI and Burmese captions, use 'NO TEXT IN THE IMAGE.' and add real screen recordings/subtitles in post.",
     "- Each flowPrompt is detailed copy-paste English, ideally 100-180 words. Include a complete opening frame and final frame, plus audio direction. No markdown fences.",
     "- Use physically possible camera movement. Avoid conflicting actions. Do not put labels, timestamps, hex colors, scene numbers, prompt annotations or technical UI text inside the visual prompt.",
@@ -160,7 +162,6 @@ function App() {
   const [presets, setPresets] = useState<ProductionPreset[]>(() => readLocal<ProductionPreset[]>("mm-storyboard-presets", []).filter((item) => presetSchema.safeParse(item).success));
   const [hydrated, setHydrated] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
-  const [referenceMode, setReferenceMode] = useState<"flow" | "api">("flow");
   const stopAssets = useRef(false);
   const [assetProgress, setAssetProgress] = useState("");
   const lastEdit = useRef({ label: "", time: 0 });
@@ -332,10 +333,10 @@ function App() {
   const createReferences = async (board: Storyboard) => {
     stopAssets.current = false; setBusy("assets"); setError("");
     try {
-      const result = await prepareAutomaticAssets(board, form, projectId, apiKey.trim(), geminiModel, setStoryboard, setAssetProgress, () => stopAssets.current, referenceMode === "flow");
+      const result = await prepareAutomaticAssets(board, form, projectId, apiKey.trim(), geminiModel, setStoryboard, setAssetProgress, () => stopAssets.current, true);
       refreshAssets();
       if (result.failed.length) setError(result.failed.join("\n"));
-      setNotice(referenceMode === "flow" ? "Reference prompts are ready. Copy them into Flow to create your character and background images." : stopAssets.current ? "Stopped after the current image. Completed images are saved. Retry to continue." : result.failed.length ? "Some images failed. Retry creates only missing images." : "Character and background references are ready. Download the Flow scene ZIP.");
+      setNotice("Prompt package ready: create the reference images first, then follow the scene image and video instructions in Flow.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not prepare references."); }
     finally { setBusy(null); setAssetProgress(""); }
   };
@@ -348,11 +349,11 @@ function App() {
     if (!storyboard || busy) return;
     setBusy("flow-download");
     try {
-      const blob = await flowSceneBundle(storyboard, (await readAssets()).filter((asset) => asset.projectId === projectId));
+      const blob = await promptPackageZip(storyboard, form);
       const url = URL.createObjectURL(blob); const link = document.createElement("a");
       link.href = url; link.download = fileSlug(storyboard.projectTitle) + "-flow-scenes.zip"; link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNotice("Flow scene ZIP downloaded: each scene contains its prompt, voiceover and reference images.");
+      setNotice("Flow prompt package downloaded: references, scene images, video prompts and instructions.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Download failed."); }
     finally { setBusy(null); }
   };
@@ -523,7 +524,7 @@ function App() {
     } finally { setHydrated(true); }
   };
 
-  const boardForExport = (): Storyboard => ({ ...storyboard!, scenes: storyboard!.scenes.map((scene) => ({ ...scene, flowPrompt: promptWithReferences(scene, projectAssets), referenceAssets: [...scene.referenceAssets, ...sceneReferences(scene, projectAssets).map((asset) => assetHandle(asset) + " = " + asset.title)] })) });
+  const boardForExport = (): Storyboard => ({ ...storyboard!, scenes: storyboard!.scenes.map((scene) => ({ ...scene, flowPrompt: promptWithReferences({ ...scene, flowPrompt: sceneVideoPrompt(scene, storyboard!) }, projectAssets), referenceAssets: [...scene.referenceAssets, ...sceneReferences(scene, projectAssets).map((asset) => assetHandle(asset) + " = " + asset.title)] })) });
   const exportMarkdown = () => {
     if (!storyboard) { setError("Generate a storyboard before exporting."); return; }
     downloadText(fileSlug(storyboard.projectTitle) + ".md", storyboardMarkdown(form, selectedConcept, boardForExport()), "text/markdown;charset=utf-8");
@@ -531,7 +532,7 @@ function App() {
   };
   const exportPromptPack = () => {
     if (!storyboard) { setError("Generate a storyboard before exporting."); return; }
-    const pack = flowPromptPack(form, selectedConcept, boardForExport());
+    const pack = completePromptText(storyboard, form);
     downloadText(fileSlug(storyboard.projectTitle || form.topic) + "-google-flow-prompts.txt", pack, "text/plain;charset=utf-8");
     setNotice("Google Flow prompt pack downloaded.");
   };
@@ -711,8 +712,7 @@ function App() {
               </div>}
               <div className="brief-footer">
                 <div className="footer-info"><span className="secure-icon"><KeyRound size={14} /></span><span>{apiKey ? "Gemini API is configured" : "Set up a Gemini API key to start"} <button className="inline-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>{apiKey ? "Manage key" : "Set up API key"}</button></span></div>
-                <span className="field-hint">Auto prepares the storyboard and reference prompts. Choose API images only if you want this app to generate the pictures.</span>
-                <Field label="Reference preparation"><select className="input" value={referenceMode} disabled={Boolean(busy)} onChange={(event) => setReferenceMode(event.target.value as "flow" | "api")}><option value="flow">Flow: prepare image prompts only</option><option value="api">Gemini API: generate images (usage charges)</option></select></Field>
+                <span className="field-hint">Enter a topic. Get the story, reusable reference prompts, scene image prompts and video prompts. Create all media yourself in Flow.</span>
                 <button className="primary-button generate-button" onClick={() => void generateConcepts(true)} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "concepts" ? "Choosing the best concept…" : busy === "storyboard" ? "Building storyboard…" : busy === "assets" ? "Preparing references…" : "Auto: topic to storyboard"}</button>
                 <button className="secondary-button" onClick={() => void generateConcepts()} disabled={Boolean(busy) || !hydrated}>{busy === "concepts" ? <span className="spinner" /> : <Sparkles size={17} />}{busy === "concepts" ? "Generating concepts..." : "Generate 3 concepts"}<ChevronRight size={17} /></button>
               </div>
@@ -770,11 +770,11 @@ function App() {
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
             <div className="workflow-toolbar">
-              <button className="primary-button" disabled={Boolean(busy) || !hydrated} onClick={() => void retryReferences()}>{referenceMode === "flow" ? "Prepare character & background prompts" : "Create / retry character & background images"}</button>
-              <button className="secondary-button" disabled={Boolean(busy)} onClick={() => void downloadFlowScenes()}>Download Flow scene ZIP</button>
-              <span className="field-hint">Flow mode prepares prompts without image API requests. Generate reference images and videos manually in Flow. The scene ZIP requires images created or attached in this app.</span>
+              <button className="primary-button" disabled={Boolean(busy) || !hydrated} onClick={() => void retryReferences()}>Prepare reference prompts</button>
+              <button className="secondary-button" disabled={Boolean(busy)} onClick={() => void downloadFlowScenes()}>Download complete prompt ZIP</button>
+              <span className="field-hint">1. Create reusable references in Flow. 2. Follow each scene card to create its opening image if needed. 3. Use its video prompt. No images are required to download this package.</span>
               {Boolean(storyboard.referencePlan?.length) && <button className="secondary-button" onClick={() => { downloadText(fileSlug(storyboard.projectTitle) + "-reference-prompts.txt", referencePromptPack(storyboard, form), "text/plain;charset=utf-8"); }}>Download reference prompts</button>}
-              {storyboard.referencePlan?.map((item) => <details key={item.id} className="field"><summary>{item.kind === "character" ? "Character" : "Background"}: {item.title} · {projectAssets.some((asset) => asset.id === item.id) ? "Image ready" : "Prompt ready"}</summary><span>Use in scenes: {storyboard.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber).join(", ")}</span><textarea className="input" aria-label={"Reference image prompt: " + item.title} readOnly rows={6} value={referenceImagePrompt(item, form)} /><button className="secondary-button" onClick={() => void copyText(referenceImagePrompt(item, form), item.title + " image prompt")}><Copy size={14} /> Copy image prompt</button></details>)}
+              {storyboard.referencePlan?.map((item) => <details key={item.id} className="field"><summary>{referenceCode(item, storyboard)} · {item.kind}: {item.title} · {projectAssets.some((asset) => asset.id === item.id) ? "Image ready" : "Prompt ready"}</summary><span>Use in scenes: {storyboard.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber).join(", ")}</span><textarea className="input" aria-label={"Reference image prompt: " + item.title} readOnly rows={6} value={referenceImagePrompt(item, form)} /><button className="secondary-button" onClick={() => void copyText(referenceImagePrompt(item, form), item.title + " image prompt")}><Copy size={14} /> Copy image prompt</button></details>)}
               {assetProgress && <span role="status">{assetProgress}</span>}
               {busy === "assets" && <button className="secondary-button" onClick={() => { stopAssets.current = true; }}>Stop after current image</button>}
               <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={() => { remember("Saved version"); setNotice("Version saved in history."); }}><History size={15} /> Save version</button>
@@ -794,7 +794,7 @@ function App() {
                   <div className="scene-card-head">
                     <input type="checkbox" aria-label={"Select scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy) || !hydrated} checked={selectedSceneIds.includes(scene.id)} onChange={(event) => setSelectedSceneIds((ids) => event.target.checked ? [...ids, scene.id] : ids.filter((id) => id !== scene.id))} /><div className="scene-number">{String(scene.sceneNumber).padStart(2, "0")}</div>
                     <div className="scene-title-area"><input className="scene-title-input" disabled={scene.locked || Boolean(busy) || !hydrated} value={scene.title} onChange={(event) => updateScene(scene.id, { title: event.target.value })} aria-label="Scene title" /><div className="scene-tags"><span><Clock3 size={12} /> {scene.durationSeconds}s clip</span><span><Film size={12} /> {scene.shotSize || "Shot plan"}</span><span className={flags ? "quality-tag warn" : "quality-tag"}>{flags ? flags + " checks to review" : "Prompt checked"}</span></div></div>
-                    <button className="icon-button" onClick={() => void copyText(promptWithReferences(scene, projectAssets), "Scene " + scene.sceneNumber + " prompt")} title="Copy Flow prompt">{copied === "Scene " + scene.sceneNumber + " prompt" ? <Check size={16} /> : <Copy size={16} />}</button>
+                    <button className="icon-button" onClick={() => void copyText(promptWithReferences({ ...scene, flowPrompt: sceneVideoPrompt(scene, storyboard!) }, projectAssets), "Scene " + scene.sceneNumber + " prompt")} title="Copy Flow prompt">{copied === "Scene " + scene.sceneNumber + " prompt" ? <Check size={16} /> : <Copy size={16} />}</button>
                     <button className="icon-button" onClick={() => void regenerateScenes([scene.id])} disabled={Boolean(busy) || scene.locked} title="Regenerate scene"><RefreshCw className={busy === scene.id ? "spinning" : ""} size={16} /></button>
                   </div>
                   <div className="scene-controls">
@@ -808,6 +808,10 @@ function App() {
                     <Field label="Review notes"><input className="input" value={scene.reviewNotes || ""} onChange={(event) => updateScene(scene.id, { reviewNotes: event.target.value })} placeholder="Keep feedback with this scene…" /></Field>
                     <div className="scene-reference-picker"><strong>Character & location references</strong><label><input type="checkbox" checked={scene.assetIds === undefined} onChange={(event) => updateScene(scene.id, { assetIds: event.target.checked ? undefined : [] })} /> Use project reference set</label>{castAssets.map((asset) => <label key={asset.id}><input type="checkbox" checked={sceneReferences(scene, projectAssets).some((item) => item.id === asset.id)} onChange={(event) => { const ids = sceneReferences(scene, projectAssets).map((item) => item.id); if (event.target.checked && ids.length >= 4) { setError("A scene can use up to four reference assets."); return; } updateScene(scene.id, { assetIds: event.target.checked ? [...ids, asset.id] : ids.filter((id) => id !== asset.id) }); }} /><img src={assetAsReference(asset).previewUrl} alt="" />{asset.title}</label>)}{!castAssets.length && <span>Add a character or location in Asset Studio to reuse it here.</span>}</div>
                     <div className="scene-visual-details"><div className="scene-detail"><span>SCENE PURPOSE</span><p>{scene.objective}</p></div><div className="scene-detail"><span>VISUAL ACTION</span><p>{scene.visualDescription}</p></div><div className="scene-detail two-detail"><div><span>CAMERA</span><p>{scene.cameraMovement}</p></div><div><span>LIGHT / MOOD</span><p>{scene.lighting} · {scene.mood}</p></div></div><div className="scene-detail"><span>ACTION BEAT</span><p>{scene.action}</p></div></div>
+                    <div className="field"><strong>Flow steps · References: {sceneReferenceList(scene, storyboard)}</strong><p style={{ whiteSpace: "pre-line" }}>{sceneInstructions(scene, storyboard)}</p></div>
+                    <Field label={"Generation route scene " + scene.sceneNumber}><select className="input" value={scenePreparationMode(scene, storyboard)} onChange={(event) => updateScene(scene.id, { preparationMode: event.target.value as Scene["preparationMode"] })}><option value="image-to-video">Create opening image, then animate</option><option value="text-to-video">Direct text to video (image optional)</option></select></Field>
+                    <Field label={"Scene image prompt " + scene.sceneNumber} hint="Use for the opening still in Flow. Attach the reference images listed above."><textarea className="input" readOnly rows={6} value={sceneImagePrompt(scene, storyboard, form)} /></Field>
+                    <button className="secondary-button" onClick={() => void copyText(sceneImagePrompt(scene, storyboard, form), "Scene " + scene.sceneNumber + " image prompt")}>Copy scene image prompt</button>
                     <Field label="Google Flow prompt" hint="English prompt for the selected model. Copy this into Flow, then review its active settings."><textarea className="input prompt-editor" value={scene.flowPrompt} onChange={(event) => updateScene(scene.id, { flowPrompt: event.target.value })} rows={8} /></Field>
                     <div className="scene-edit-grid">
                       <Field label="Voiceover"><textarea className="input" value={scene.voiceover} onChange={(event) => updateScene(scene.id, { voiceover: event.target.value })} rows={3} /></Field>
@@ -824,12 +828,12 @@ function App() {
                       </div>
                       <div className="scene-audit-list">{sceneAudit.map((item) => <div className={item.ok ? "scene-audit-line" : "scene-audit-line flagged"} key={item.label}><span>{item.ok ? <Check size={12} /> : <AlertCircle size={12} />}</span><strong>{item.label}</strong><small>{item.detail}</small></div>)}</div>
                     </details>
-                    <div className="scene-card-foot"><span><Volume2 size={14} /> {scene.audioNotes || form.audioPolicy}</span><button className="copy-prompt-link" onClick={() => void copyText(promptWithReferences(scene, projectAssets), "Scene " + scene.sceneNumber + " prompt")}>{copied === "Scene " + scene.sceneNumber + " prompt" ? <Check size={14} /> : <Copy size={14} />} {copied === "Scene " + scene.sceneNumber + " prompt" ? "Copied" : "Copy Flow prompt"}</button></div>
+                    <div className="scene-card-foot"><span><Volume2 size={14} /> {scene.audioNotes || form.audioPolicy}</span><button className="copy-prompt-link" onClick={() => void copyText(promptWithReferences({ ...scene, flowPrompt: sceneVideoPrompt(scene, storyboard!) }, projectAssets), "Scene " + scene.sceneNumber + " prompt")}>{copied === "Scene " + scene.sceneNumber + " prompt" ? <Check size={14} /> : <Copy size={14} />} {copied === "Scene " + scene.sceneNumber + " prompt" ? "Copied" : "Copy Flow prompt"}</button></div>
                   </fieldset>
                 </article>;
               })}
             </div>
-            <div className="end-actions"><button className="secondary-button" onClick={() => setStep("concepts")}><ArrowLeft size={16} /> Change concept</button><button className="quiet-button" onClick={() => void copyText(storyboard.scenes.map((scene) => "SCENE " + scene.sceneNumber + "\n" + promptWithReferences(scene, projectAssets)).join("\n\n---\n\n"), "All scene prompts")}><Copy size={15} /> Copy all prompts</button><button className="primary-button" onClick={exportMarkdown}><Download size={16} /> Export complete storyboard <ChevronRight size={16} /></button></div>
+            <div className="end-actions"><button className="secondary-button" onClick={() => setStep("concepts")}><ArrowLeft size={16} /> Change concept</button><button className="quiet-button" onClick={() => void copyText(completePromptText(storyboard, form), "Complete prompt package")}><Copy size={15} /> Copy all prompts</button><button className="primary-button" onClick={exportMarkdown}><Download size={16} /> Export complete storyboard <ChevronRight size={16} /></button></div>
           </section>}
 
           <footer className="page-footer"><span>MM Storyboard Studio</span><span>Prompt generation only · Videos are created separately in Google Flow</span><button onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>API & privacy settings</button></footer>

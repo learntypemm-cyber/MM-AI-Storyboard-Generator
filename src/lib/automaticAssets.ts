@@ -6,9 +6,9 @@ import { generateImage } from "./imageGeneration";
 import { assetHandle, promptWithReferences, putAsset, readAssets, sceneReferences } from "./assetStore";
 
 const planSchema = z.object({ assets: z.array(z.object({
-  kind: z.enum(["character", "background"]), title: z.string().min(1).max(200),
+  kind: z.enum(["character", "background", "prop"]), title: z.string().min(1).max(200),
   prompt: z.string().min(20).max(10000), sceneIds: z.array(z.string()).min(1),
-})).min(1).max(12) });
+})).max(12) });
 
 export function validateReferencePlan(value: unknown, board: Storyboard): ReferencePlanItem[] {
   const plan = planSchema.parse(value).assets;
@@ -16,7 +16,7 @@ export function validateReferencePlan(value: unknown, board: Storyboard): Refere
   if (plan.some((item) => item.sceneIds.some((id) => !scenes.some((scene) => scene.id === id)))) throw new Error("Reference plan contains an unknown or protected scene.");
   for (const scene of scenes) {
     const linked = plan.filter((item) => item.sceneIds.includes(scene.id));
-    if (!linked.some((item) => item.kind === "background") || linked.length > 3) throw new Error("Each scene needs a background and at most three reference images.");
+    if (linked.length > 3) throw new Error("Each scene can use at most three reference images.");
   }
   return plan.map((item) => ({ ...item, id: crypto.randomUUID(), sceneIds: [...new Set(item.sceneIds)] }));
 }
@@ -27,7 +27,7 @@ export function referenceImagePrompt(item: ReferencePlanItem, form: VideoForm): 
     "Create a single image, not a written plan, collage, grid or storyboard.",
     "Reference: " + item.title + ". Type: " + item.kind + ".",
     item.prompt,
-    item.kind === "character" ? "Full-body character portrait on a neutral backdrop. Clearly show the face, hair, outfit, shoes and accessories. Preserve identity and wardrobe from any supplied reference image." : "Single full-frame environment plate. Preserve layout, materials, props, perspective and lighting. No people, characters or silhouettes.",
+    item.kind === "character" ? "Full-body character portrait on a neutral backdrop. Clearly show the face, hair, outfit, shoes and accessories. Preserve identity and wardrobe from any supplied reference image." : item.kind === "prop" ? "Single product or prop reference on a neutral backdrop. Preserve exact shape, material, color and defining details. No people or invented branding." : "Single full-frame environment plate. Preserve layout, materials, props, perspective and lighting. No people, characters or silhouettes.",
     "Visual style: " + form.visualStyle + ". Aspect ratio: " + (item.kind === "character" ? "9:16" : form.aspectRatio) + ".",
     "No captions, labels, watermarks, duplicate subjects or unrelated objects.",
     form.referenceNotes ? "User reference requirements: " + form.referenceNotes : "",
@@ -36,8 +36,8 @@ export function referenceImagePrompt(item: ReferencePlanItem, form: VideoForm): 
 
 export function referencePromptPack(board: Storyboard, form: VideoForm): string {
   if (!board.referencePlan?.length) throw new Error("Prepare reference prompts first.");
-  return "FLOW REFERENCE IMAGE PROMPTS\nGenerate these images in Flow, then reuse each image in the scenes listed below.\n\n" + board.referencePlan.map((item, index) =>
-    "REFERENCE " + (index + 1) + ": " + item.title + " (" + item.kind + ")\nUse in scenes: " + board.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber + " - " + scene.title).join(", ") + "\n\n" + referenceImagePrompt(item, form)
+  return "FLOW REFERENCE IMAGE PROMPTS\nGenerate these images in Flow, then reuse each image in the scenes listed below.\n\n" + board.referencePlan.map((item) =>
+    ({ character: "C", background: "B", prop: "P" }[item.kind]) + String(board.referencePlan!.filter((entry) => entry.kind === item.kind).findIndex((entry) => entry.id === item.id) + 1).padStart(2, "0") + ": " + item.title + " (" + item.kind + ")\nUse in scenes: " + board.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber + " - " + scene.title).join(", ") + "\n\n" + referenceImagePrompt(item, form)
   ).join("\n\n--------------------\n\n");
 }
 
@@ -49,8 +49,8 @@ export async function prepareAutomaticAssets(board: Storyboard, form: VideoForm,
   if (scenes.length) {
     onProgress("Planning recurring characters and locations…");
     const raw = await generateJson<unknown>(apiKey, model, [
-      "Plan reusable character portraits and background plates for this storyboard. Return JSON only: {assets:[{kind:'character'|'background',title,prompt,sceneIds:[exact scene ID]}]}.",
-      "Use at most 12 assets total and at most 3 per scene. Every scene needs a background. Include character references for visible recurring people; do not invent people for product-only or landscape shots. Reuse one asset across scenes for the same person/outfit or location. Describe face, hair, clothing, proportions for characters and geography, lighting and fixed props for backgrounds. Image prompts must be standalone English. Character portraits: full body, neutral backdrop. Backgrounds: no people. No text, labels, grids or watermark.",
+      "Plan reusable character portraits, important product/prop images and background plates for this storyboard. Return JSON only: {assets:[{kind:'character'|'background'|'prop',title,prompt,sceneIds:[exact scene ID]}]}.",
+      "Use at most 12 assets total and at most 3 per scene. Only create reusable references that are necessary for consistency. A simple standalone landscape or abstract shot can have no references. Use kind prop for important recurring products/objects; do not create a separate prop for every incidental object. Include character references for visible recurring people; do not invent people for product-only or landscape shots. Reuse one asset across scenes for the same person/outfit or location. Describe face, hair, clothing, proportions for characters and geography, lighting and fixed props for backgrounds. Image prompts must be standalone English. Character portraits: full body, neutral backdrop. Backgrounds: no people. No text, labels, grids or watermark.",
       "Preserve the user's reference identities and constraints: " + form.referenceNotes,
       JSON.stringify({ topic: form.topic, style: form.visualStyle, visualBible: board.visualBible, scenes }),
     ].join("\n"), form.referenceImages);

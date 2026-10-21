@@ -1,3 +1,4 @@
+import { completePromptText, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -269,11 +270,10 @@ describe("automatic concept selection", () => {
     render(<App />);
     await waitFor(() => expect((screen.getByRole("button", { name: "Auto: topic to storyboard" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Coffee" } });
-    fireEvent.change(screen.getByLabelText("Reference preparation"), { target: { value: "api" } });
     fireEvent.click(screen.getByRole("button", { name: "Auto: topic to storyboard" }));
     await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(2));
-    await waitFor(() => expect(screen.getByText(/Character and background references are ready/)).toBeTruthy());
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    await waitFor(() => expect(screen.getByText(/Prompt package ready/)).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("Best concept");
     expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).selectedConceptId).toBe("best");
   });
@@ -288,7 +288,7 @@ describe("automatic character and background production", () => {
   const textReply = (value: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(value) }] } }] }));
   it("rejects unknown scenes, missing backgrounds, and reference overload", () => {
     expect(() => validateReferencePlan({ assets: [{ ...planning.assets[1], sceneIds: ["wrong"] }] }, board())).toThrow("protected scene");
-    expect(() => validateReferencePlan({ assets: [planning.assets[0]] }, board())).toThrow("background");
+    expect(validateReferencePlan({ assets: [] }, board())).toEqual([]);
     expect(() => validateReferencePlan({ assets: [...planning.assets, ...planning.assets] }, board())).toThrow("at most three");
   });
   it("saves successes, retries only missing images, preserves locks, and packages scene files", async () => {
@@ -327,4 +327,30 @@ it("prepares reusable Flow image prompts without calling the image API", async (
   expect(result.board.scenes[0].assetIds).toBeUndefined();
   expect(referenceImagePrompt(result.board.referencePlan![0], form)).toContain("No people, characters or silhouettes");
   expect(referencePromptPack(result.board, form)).toContain("Use in scenes: 1 - one");
+});
+
+
+describe("complete manual Flow prompt package", () => {
+  it("exports reference, opening image and video prompts without generated pictures", async () => {
+    const current = board();
+    current.referencePlan = [
+      { id: "cast", kind: "character", title: "May", prompt: "Woman with short hair and a blue dress", sceneIds: ["one"] },
+      { id: "product", kind: "prop", title: "Cup", prompt: "One red ceramic coffee cup with a round handle", sceneIds: ["one"] },
+    ];
+    expect(referenceCode(current.referencePlan[0], current)).toBe("C01");
+    expect(referenceCode(current.referencePlan[1], current)).toBe("P01");
+    expect(scenePreparationMode(current.scenes[0], current)).toBe("image-to-video");
+    expect(scenePreparationMode(current.scenes[1], current)).toBe("text-to-video");
+    expect(sceneImagePrompt(current.scenes[0], current, form)).toContain("blue dress");
+    expect(sceneVideoPrompt(current.scenes[0], current)).toContain("red ceramic");
+    expect(completePromptText(current, form)).toContain("SCENE IMAGE PROMPT:");
+    const zip = await JSZip.loadAsync(await promptPackageZip(current, form));
+    expect(zip.file("references/C01.txt")).toBeTruthy();
+    expect(zip.file("references/P01.txt")).toBeTruthy();
+    expect(await zip.file("scene-01/instructions.txt")!.async("string")).toContain("C01");
+    expect(await zip.file("scene-02/instructions.txt")!.async("string")).toContain("optional");
+    expect(zip.file("scene-01/scene-image-prompt.txt")).toBeTruthy();
+    expect(zip.file("scene-01/video-prompt.txt")).toBeTruthy();
+    expect(scenePreparationMode({ ...current.scenes[0], preparationMode: "text-to-video" }, current)).toBe("text-to-video");
+  });
 });

@@ -125,3 +125,11 @@ Download Flow scene ZIP produces one folder per scene with prompt.txt, voiceover
 ### Create reference images in Flow
 
 Reference preparation defaults to **Flow: prepare image prompts only**. Auto prepares the storyboard and reusable character/background prompts without image-generation API requests. Expand each reference card to copy its standalone prompt and see its scene assignments, or Download reference prompts as a text pack. Generate the images in Flow and reuse them in the listed video scenes. Gemini API image generation remains an optional selection. Text planning still uses the configured Gemini text API.
+
+### Complete prompt-only Flow workflow
+
+The primary automatic workflow prepares prompts only. User supplies a topic; the app selects a concept, writes the storyboard, plans only needed recurring characters/backgrounds/products, and composes opening-image and video prompts with consistent reference descriptions. Generate all images and videos manually in Flow. Legacy Asset Studio remains an optional tool, separate from this workflow.
+
+References use C01/B01/P01 labels. Scene cards list their required references, opening-image prompt, video prompt and ordered instructions. Scenes with planned references default to opening-image then video; scenes without references default to direct text-to-video. The route can be changed per scene. Reference labels organize the package; users must attach the actual images in Flow.
+
+Download complete prompt ZIP works without any generated images and contains the complete text package, reference prompts, and each scene’s instructions, opening-image prompt, video prompt and voiceover. Flow .txt also exports the complete package. No image-generation API is called by the primary workflow; Gemini text planning still uses API access.

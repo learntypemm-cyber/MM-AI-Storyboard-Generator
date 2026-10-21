@@ -15,6 +15,7 @@ export type VideoConcept = {
   whyItWorks: string; storyArc: string[]; estimatedDuration: number;
 };
 export type Scene = {
+  preparationMode?: "text-to-video" | "image-to-video";
   locked?: boolean; reviewStatus?: "draft" | "review" | "approved"; reviewNotes?: string;
   assetIds?: string[];
   id: string; sceneNumber: number; title: string; durationSeconds: number; objective: string;
@@ -23,7 +24,7 @@ export type Scene = {
   transition: string; referenceAssets: string[]; negativePrompt: string; openingFrame: string;
   finalFrame: string; handoff: "CUT" | "CONTINUATION";
 };
-export type ReferencePlanItem = { id: string; kind: "character" | "background"; title: string; prompt: string; sceneIds: string[] };
+export type ReferencePlanItem = { id: string; kind: "character" | "background" | "prop"; title: string; prompt: string; sceneIds: string[] };
 export type Storyboard = {
   referencePlan?: ReferencePlanItem[];
   projectTitle: string; logline: string; visualBible: string; continuityRules: string[];
@@ -37,7 +38,7 @@ export type SavedProject = {
 export type BoardVersion = { id: string; label: string; createdAt: string; storyboard: Storyboard; concept?: VideoConcept; form?: Omit<VideoForm, "referenceImages"> };
 export type ImageAsset = {
   handle?: string;
-  id: string; kind: "character" | "background" | "scene"; title: string; prompt: string;
+  id: string; kind: "character" | "background" | "prop" | "scene"; title: string; prompt: string;
   mimeType: string; data: string; createdAt: string; useAsReference: boolean;
   projectId?: string; sceneId?: string; sceneNumber?: number;
 };
