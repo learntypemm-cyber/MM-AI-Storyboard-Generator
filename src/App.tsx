@@ -324,8 +324,7 @@ function App() {
       };
       setStoryboard(built);
       setStep("storyboard");
-      if (fromConcepts) await createReferences(built);
-      else setNotice("Storyboard created. Use Create character & background images to prepare Flow references.");
+      await createReferences(built);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Couldn't build the storyboard. Please try again."); }
     finally { setBusy(null); }
   };
@@ -342,7 +341,7 @@ function App() {
   };
   const retryReferences = async () => {
     if (!storyboard || busy || !hydrated || !requireKey()) return;
-    remember("Before creating reference images");
+    remember("Before preparing reference prompts");
     await createReferences(storyboard);
   };
   const downloadFlowScenes = async () => {
@@ -770,13 +769,16 @@ function App() {
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
             <div className="workflow-toolbar">
-              <button className="primary-button" disabled={Boolean(busy) || !hydrated} onClick={() => void retryReferences()}>Prepare reference prompts</button>
+              <button className="primary-button" disabled={Boolean(busy) || !hydrated} onClick={() => void retryReferences()}>Prepare / recheck character & background prompts</button>
               <button className="secondary-button" disabled={Boolean(busy)} onClick={() => void downloadFlowScenes()}>Download complete prompt ZIP</button>
               <span className="field-hint">1. Create reusable references in Flow. 2. Follow each scene card to create its opening image if needed. 3. Use its video prompt. No images are required to download this package.</span>
               {Boolean(storyboard.referencePlan?.length) && <button className="secondary-button" onClick={() => { downloadText(fileSlug(storyboard.projectTitle) + "-reference-prompts.txt", referencePromptPack(storyboard, form), "text/plain;charset=utf-8"); }}>Download reference prompts</button>}
-              {storyboard.referencePlan?.map((item) => <details key={item.id} className="field"><summary>{referenceCode(item, storyboard)} · {item.kind}: {item.title} · {projectAssets.some((asset) => asset.id === item.id) ? "Image ready" : "Prompt ready"}</summary><span>Use in scenes: {storyboard.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber).join(", ")}</span><textarea className="input" aria-label={"Reference image prompt: " + item.title} readOnly rows={6} value={referenceImagePrompt(item, form)} /><button className="secondary-button" onClick={() => void copyText(referenceImagePrompt(item, form), item.title + " image prompt")}><Copy size={14} /> Copy image prompt</button></details>)}
+              {(["character", "background", "prop"] as const).map((kind) => <section key={kind} style={{ width: "100%" }} aria-label={kind + " prompts"}>
+                <h3>{kind === "character" ? "Character prompts · ဇာတ်ကောင်ပုံထုတ်ရန်" : kind === "background" ? "Background prompts" : "Prop / product prompts"} ({storyboard.referencePlan?.filter((item) => item.kind === kind).length || 0})</h3>
+                {!storyboard.referencePlan?.some((item) => item.kind === kind) && <p className="field-hint">{busy === "assets" ? "Preparing reference prompts…" : kind === "character" ? "Character prompt မရှိသေးပါ။ Scene ထဲမှာ ဇာတ်ကောင်ပါလျှင် အပေါ်က Prepare / recheck ခလုတ်ကိုနှိပ်ပါ။ ဇာတ်ကောင်မပါတဲ့ video အတွက် မလိုပါ။" : "No prompts prepared for this reference type."}</p>}
+                {storyboard.referencePlan?.filter((item) => item.kind === kind).map((item) => <details key={item.id} className="field" open={item.kind === "character"}><summary>{referenceCode(item, storyboard)} · {item.kind}: {item.title} · {projectAssets.some((asset) => asset.id === item.id) ? "Image ready" : "Prompt ready"}</summary><span>Use in scenes: {storyboard.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber).join(", ")}</span><textarea className="input" aria-label={"Reference image prompt: " + item.title} readOnly rows={6} value={referenceImagePrompt(item, form)} /><button className="secondary-button" onClick={() => void copyText(referenceImagePrompt(item, form), item.title + " image prompt")}><Copy size={14} /> Copy image prompt</button></details>)}
+              </section>)}
               {assetProgress && <span role="status">{assetProgress}</span>}
-              {busy === "assets" && <button className="secondary-button" onClick={() => { stopAssets.current = true; }}>Stop after current image</button>}
               <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={() => { remember("Saved version"); setNotice("Version saved in history."); }}><History size={15} /> Save version</button>
               <select className="input" aria-label="Storyboard version" value={versionId} onChange={(event) => setVersionId(event.target.value)}><option value="">Choose an earlier version…</option>{history.map((version) => <option value={version.id} key={version.id}>{new Date(version.createdAt).toLocaleString()} · {version.label}</option>)}</select>
               <button className="secondary-button" disabled={!versionId || Boolean(busy)} onClick={restoreVersion}>Restore version</button>
