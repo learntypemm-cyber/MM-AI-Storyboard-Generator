@@ -278,9 +278,20 @@ describe("automatic concept selection", () => {
   it.each([false, true])("prepares visible character prompts after storyboard creation (manual: %s)", async (manual) => {
     localStorage.setItem("mm-storyboard-gemini-key", "test-key");
     const reply = (data: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }] }));
+    const generatedBoard = board();
+    const completeFlowPrompt = [
+      "NO TEXT IN THE IMAGE.",
+      "(00:00-00:04) [Camera shot] Medium close-up at the wooden table. [Action] The named subject reaches for the ceramic cup with a relaxed, deliberate movement. [Background] Cafe A / front view. Keep the subject, cup, table and warm daylight clearly visible.",
+      "(00:04-00:08) [Camera shot] Gentle slow push-in, no jump cut. [Action] The subject lifts the cup naturally, pauses, and brings it toward their face while keeping the same grip and cup shape. [Background] Cafe A / front view, unchanged.",
+      "Opening frame: the cup rests on the table in front of the subject. Final frame: the subject holds the cup steadily at chest height. Preserve realistic hand anatomy, stable props, consistent wardrobe, natural movement, warm daylight and a clean cinematic composition. Audio is quiet cafe ambience with subtle room tone. Do not add logos, extra characters, captions, timestamps or visible production labels."
+    ].join("\\n");
+    generatedBoard.scenes = generatedBoard.scenes.map((item) => ({
+      ...item, locked: false, flowPrompt: completeFlowPrompt,
+      sfx: "Quiet ceramic cup movement", backgroundMusic: "Soft understated instrumental music",
+    }));
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(reply({ concepts: [concept, { ...concept, id: "best", title: "Best concept" }, { ...concept, id: "third" }], recommendedConceptIndex: 1 }))
-      .mockResolvedValueOnce(reply(board()))
+      .mockResolvedValueOnce(reply(generatedBoard))
       .mockImplementationOnce(async (_url, init) => {
         const prompt = JSON.parse(String(init?.body)).contents[0].parts[0].text as string;
         const brief = JSON.parse(prompt.split("\n").at(-1)!);
