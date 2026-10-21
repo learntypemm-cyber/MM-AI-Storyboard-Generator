@@ -21,8 +21,28 @@ export function validateReferencePlan(value: unknown, board: Storyboard): Refere
   return plan.map((item) => ({ ...item, id: crypto.randomUUID(), sceneIds: [...new Set(item.sceneIds)] }));
 }
 
+export function referenceImagePrompt(item: ReferencePlanItem, form: VideoForm): string {
+  return [
+    "GENERATE ONE FINISHED REFERENCE IMAGE NOW. NO TEXT IN THE IMAGE.",
+    "Create a single image, not a written plan, collage, grid or storyboard.",
+    "Reference: " + item.title + ". Type: " + item.kind + ".",
+    item.prompt,
+    item.kind === "character" ? "Full-body character portrait on a neutral backdrop. Clearly show the face, hair, outfit, shoes and accessories. Preserve identity and wardrobe from any supplied reference image." : "Single full-frame environment plate. Preserve layout, materials, props, perspective and lighting. No people, characters or silhouettes.",
+    "Visual style: " + form.visualStyle + ". Aspect ratio: " + (item.kind === "character" ? "9:16" : form.aspectRatio) + ".",
+    "No captions, labels, watermarks, duplicate subjects or unrelated objects.",
+    form.referenceNotes ? "User reference requirements: " + form.referenceNotes : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+export function referencePromptPack(board: Storyboard, form: VideoForm): string {
+  if (!board.referencePlan?.length) throw new Error("Prepare reference prompts first.");
+  return "FLOW REFERENCE IMAGE PROMPTS\nGenerate these images in Flow, then reuse each image in the scenes listed below.\n\n" + board.referencePlan.map((item, index) =>
+    "REFERENCE " + (index + 1) + ": " + item.title + " (" + item.kind + ")\nUse in scenes: " + board.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber + " - " + scene.title).join(", ") + "\n\n" + referenceImagePrompt(item, form)
+  ).join("\n\n--------------------\n\n");
+}
+
 export async function prepareAutomaticAssets(board: Storyboard, form: VideoForm, projectId: string, apiKey: string, model: string,
-  onBoard: (board: Storyboard) => void, onProgress: (message: string) => void, stopped: () => boolean): Promise<{ board: Storyboard; failed: string[] }> {
+  onBoard: (board: Storyboard) => void, onProgress: (message: string) => void, stopped: () => boolean, promptsOnly = false): Promise<{ board: Storyboard; failed: string[] }> {
   let current = structuredClone(board);
   let plan = current.referencePlan;
   const scenes = current.scenes.filter((scene) => !scene.locked && !scene.assetIds?.length && !plan?.some((item) => item.sceneIds.includes(scene.id)));
@@ -38,6 +58,7 @@ export async function prepareAutomaticAssets(board: Storyboard, form: VideoForm,
     if (plan.length > 12) throw new Error("This board already has twelve planned references. Reuse existing assets for additional scenes in Asset Studio.");
     current = { ...current, referencePlan: plan }; onBoard(current);
   }
+  if (promptsOnly) return { board: current, failed: [] };
   plan = plan || [];
   const stored = await readAssets();
   const ready = new Set(stored.filter((asset) => asset.projectId === projectId && asset.data).map((asset) => asset.id));
@@ -48,7 +69,7 @@ export async function prepareAutomaticAssets(board: Storyboard, form: VideoForm,
     if (!ready.has(item.id)) {
       onProgress("Creating " + item.kind + ": " + item.title);
       try {
-        const prompt = "GENERATE ONE REFERENCE IMAGE NOW. NO TEXT IN THE IMAGE.\n" + item.prompt + "\nVisual style: " + form.visualStyle;
+        const prompt = referenceImagePrompt(item, form);
         const image = await generateImage(apiKey, prompt, item.kind === "character" ? "9:16" : form.aspectRatio, form.referenceImages);
         await putAsset({ ...image, id: item.id, kind: item.kind, title: item.title, prompt, projectId, createdAt: new Date().toISOString(), useAsReference: false });
         ready.add(item.id);

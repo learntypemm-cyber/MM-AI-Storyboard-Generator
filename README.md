@@ -121,3 +121,7 @@ Auto: topic to storyboard now continues with a reusable reference plan and image
 Existing boards can use Create / retry character & background images. Completed images and the plan are saved incrementally; retry skips completed images, and Stop after current image avoids scheduling more requests. Locked scenes and existing manual reference assignments are preserved. Reference plans survive project ZIP backups and restores. Plans are bounded to twelve assets and three generated references per scene.
 
 Download Flow scene ZIP produces one folder per scene with prompt.txt, voiceover.txt and the linked image files. Incomplete planned images block this export so missing references are not silently omitted. Videos are not generated or included. Image-generation API docs: https://ai.google.dev/gemini-api/docs/image-generation
+
+### Create reference images in Flow
+
+Reference preparation defaults to **Flow: prepare image prompts only**. Auto prepares the storyboard and reusable character/background prompts without image-generation API requests. Expand each reference card to copy its standalone prompt and see its scene assignments, or Download reference prompts as a text pack. Generate the images in Flow and reuse them in the listed video scenes. Gemini API image generation remains an optional selection. Text planning still uses the configured Gemini text API.
