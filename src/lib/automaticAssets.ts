@@ -45,16 +45,27 @@ export async function prepareAutomaticAssets(board: Storyboard, form: VideoForm,
   onBoard: (board: Storyboard) => void, onProgress: (message: string) => void, stopped: () => boolean, promptsOnly = false): Promise<{ board: Storyboard; failed: string[] }> {
   let current = structuredClone(board);
   let plan = current.referencePlan;
-  const scenes = current.scenes.filter((scene) => !scene.locked && !scene.assetIds?.length && !plan?.some((item) => item.sceneIds.includes(scene.id)));
+  // Prompt planning does not change scene text, locks, or bound images.
+  const scenes = promptsOnly ? current.scenes.map((scene) => ({ ...scene, locked: false, assetIds: [] })) : current.scenes.filter((scene) => !scene.locked && !scene.assetIds?.length && !plan?.some((item) => item.sceneIds.includes(scene.id)));
   if (scenes.length) {
     onProgress("Planning recurring characters and locations…");
     const raw = await generateJson<unknown>(apiKey, model, [
       "Plan reusable character portraits, important product/prop images and background plates for this storyboard. Return JSON only: {assets:[{kind:'character'|'background'|'prop',title,prompt,sceneIds:[exact scene ID]}]}.",
-      "Use at most 12 assets total and at most 3 per scene. Only create reusable references that are necessary for consistency. A simple standalone landscape or abstract shot can have no references. Use kind prop for important recurring products/objects; do not create a separate prop for every incidental object. Include character references for visible recurring people; do not invent people for product-only or landscape shots. Reuse one asset across scenes for the same person/outfit or location. Describe face, hair, clothing, proportions for characters and geography, lighting and fixed props for backgrounds. Image prompts must be standalone English. Character portraits: full body, neutral backdrop. Backgrounds: no people. No text, labels, grids or watermark.",
+      "Use at most 12 assets total and at most 3 per scene. Only create reusable references that are necessary for consistency. A simple standalone landscape or abstract shot can have no references. Use kind prop for important recurring products/objects; do not create a separate prop for every incidental object. Inspect every scene visualDescription, action and flowPrompt for visible characters, including people, animals and fictional characters. Include a character reference for each distinct visible character even if they appear in only one scene; do not invent people for product-only or landscape shots. Reuse one asset across scenes for the same person/outfit or location. Describe face, hair, clothing, proportions for characters and geography, lighting and fixed props for backgrounds. Image prompts must be standalone English. Character portraits: full body, neutral backdrop. Backgrounds: no people. No text, labels, grids or watermark.",
       "Preserve the user's reference identities and constraints: " + form.referenceNotes,
+      "Existing references must be preserved. Return only missing references or additional scene links for an existing reference, using its exact kind, title and identity. Do not rename or duplicate an existing character. Existing references: " + JSON.stringify(plan || []),
       JSON.stringify({ topic: form.topic, style: form.visualStyle, visualBible: board.visualBible, scenes }),
     ].join("\n"), form.referenceImages);
-    plan = [...(plan || []), ...validateReferencePlan(raw, { ...current, scenes })];
+    const additions = validateReferencePlan(raw, { ...current, scenes });
+    plan = structuredClone(plan || []);
+    for (const item of additions) {
+      const existing = plan.find((entry) => entry.kind === item.kind && entry.title.trim().toLowerCase() === item.title.trim().toLowerCase());
+      if (existing) existing.sceneIds = [...new Set([...existing.sceneIds, ...item.sceneIds])];
+      else plan.push(item);
+    }
+    for (const scene of scenes) {
+      if (plan.filter((item) => item.sceneIds.includes(scene.id)).length > 3) throw new Error("Each scene can use at most three reference images. Existing prompts were preserved; reduce references before retrying.");
+    }
     if (plan.length > 12) throw new Error("This board already has twelve planned references. Reuse existing assets for additional scenes in Asset Studio.");
     current = { ...current, referencePlan: plan }; onBoard(current);
   }

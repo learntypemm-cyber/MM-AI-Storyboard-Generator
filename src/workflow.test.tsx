@@ -255,7 +255,7 @@ describe("automatic concept selection", () => {
     expect(screen.getAllByRole("button", { name: /Build this storyboard/ })).toHaveLength(2);
   });
 
-  it("builds the recommended concept without a manual selection", async () => {
+  it.each([false, true])("prepares visible character prompts after storyboard creation (manual: %s)", async (manual) => {
     localStorage.setItem("mm-storyboard-gemini-key", "test-key");
     const reply = (data: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }] }));
     const fetchMock = vi.spyOn(globalThis, "fetch")
@@ -264,16 +264,21 @@ describe("automatic concept selection", () => {
       .mockImplementationOnce(async (_url, init) => {
         const prompt = JSON.parse(String(init?.body)).contents[0].parts[0].text as string;
         const brief = JSON.parse(prompt.split("\n").at(-1)!);
-        return reply({ assets: [{ kind: "background", title: "Cafe", prompt: "A warm cafe without people, no visible text", sceneIds: brief.scenes.map((item: Scene) => item.id) }] });
+        return reply({ assets: [{ kind: "character", title: "May", prompt: "A woman with short hair and blue clothing, neutral backdrop", sceneIds: brief.scenes.map((item: Scene) => item.id) }] });
       })
       .mockResolvedValueOnce(new Response(JSON.stringify({ output_image: { data: "aGVsbG8=", mime_type: "image/png" } })));
     render(<App />);
     await waitFor(() => expect((screen.getByRole("button", { name: "Auto: topic to storyboard" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Coffee" } });
-    fireEvent.click(screen.getByRole("button", { name: "Auto: topic to storyboard" }));
+    fireEvent.click(screen.getByRole("button", { name: manual ? "Generate 3 concepts" : "Auto: topic to storyboard" }));
+    if (manual) {
+      await waitFor(() => expect(screen.getAllByRole("button", { name: /Build this storyboard/ })).toHaveLength(3));
+      fireEvent.click(screen.getAllByRole("button", { name: /Build this storyboard/ })[1]);
+    }
     await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(2));
     await waitFor(() => expect(screen.getByText(/Prompt package ready/)).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(screen.getByLabelText("Reference image prompt: May").closest("details")?.open).toBe(true);
     expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("Best concept");
     expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).selectedConceptId).toBe("best");
   });
@@ -353,4 +358,23 @@ describe("complete manual Flow prompt package", () => {
     expect(zip.file("scene-01/video-prompt.txt")).toBeTruthy();
     expect(scenePreparationMode({ ...current.scenes[0], preparationMode: "text-to-video" }, current)).toBe("text-to-video");
   });
+});
+
+
+it("rechecks characters in scenes already covered by backgrounds without changing locks or images", async () => {
+  const current = board();
+  current.scenes[0].assetIds = ["saved-image"];
+  current.referencePlan = [{ id: "location", kind: "background", title: "Cafe", prompt: "Sunlit cafe with wooden tables, no people", sceneIds: ["one", "two"] }];
+  const assets = [
+    { kind: "character", title: "May", prompt: "Woman with short hair and a blue dress, neutral backdrop", sceneIds: ["one", "two"] },
+    { kind: "background", title: "Cafe", prompt: "A replacement description must not overwrite saved prompts", sceneIds: ["one"] },
+  ];
+  const request = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ assets }) }] } }] })));
+  const first = await prepareAutomaticAssets(current, form, "recheck", "key", "model", () => {}, () => {}, () => false, true);
+  expect(first.board.referencePlan).toHaveLength(2);
+  expect(first.board.referencePlan![0]).toEqual(current.referencePlan[0]);
+  expect(first.board.scenes).toEqual(current.scenes);
+  const second = await prepareAutomaticAssets(first.board, form, "recheck", "key", "model", () => {}, () => {}, () => false, true);
+  expect(second.board.referencePlan).toEqual(first.board.referencePlan);
+  expect(request).toHaveBeenCalledTimes(2);
 });
