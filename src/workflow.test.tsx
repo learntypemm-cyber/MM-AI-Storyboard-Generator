@@ -7,7 +7,7 @@ import "fake-indexeddb/auto";
 import JSZip from "jszip";
 import App from "./App";
 import { prepareAutomaticAssets, validateReferencePlan, flowSceneBundle, referenceImagePrompt, referencePromptPack } from "./lib/automaticAssets";
-import { listGeminiModels } from "./lib/gemini";
+import { generateJson, listGeminiModels } from "./lib/gemini";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
 import { createArchive, readArchive } from "./lib/projectArchive";
@@ -207,6 +207,26 @@ describe("editor workflow", () => {
   });
 });
 
+
+describe("Gemini JSON generation", () => {
+  it("allows larger storyboard responses and rejects token-truncated JSON clearly", async () => {
+    const request = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: '{"scenes":[' }] } }],
+      })),
+    );
+    await expect(generateJson("key", "gemini-test-flash", "Return a complete storyboard JSON object")).rejects.toThrow(/output token limit/i);
+    const body = JSON.parse(String(request.mock.calls[0][1]?.body));
+    expect(body.generationConfig.maxOutputTokens).toBe(16384);
+  });
+
+  it("does not accept malformed partial JSON as a generated prompt package", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"scenes":[' }] } }] })),
+    );
+    await expect(generateJson("key", "gemini-test-flash", "Return JSON")).rejects.toThrow(/incomplete JSON/i);
+  });
+});
 
 describe("Gemini model discovery", () => {
   const model = (id: string) => ({ name: "models/" + id, displayName: id, supportedGenerationMethods: ["generateContent"] });
