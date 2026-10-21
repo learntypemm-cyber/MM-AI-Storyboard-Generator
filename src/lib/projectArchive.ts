@@ -6,13 +6,14 @@ const text = z.string().max(100_000);
 const id = z.string().min(1).max(200);
 const image = z.object({ name: text, mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/i), data: z.string().max(30_000_000).regex(/^[A-Za-z0-9+/]*={0,2}$/) });
 const scene = z.object({
+  preparationMode: z.enum(["text-to-video", "image-to-video"]).optional(),
   id, sceneNumber: z.number().int().positive(), title: text, durationSeconds: z.number().positive().max(600), objective: text,
   visualDescription: text, shotSize: text, cameraMovement: text, lighting: text, mood: text, action: text, flowPrompt: text,
   voiceover: text, onscreenText: text, audioNotes: text, transition: text, referenceAssets: z.array(text).max(100),
   negativePrompt: text, openingFrame: text, finalFrame: text, handoff: z.enum(["CUT", "CONTINUATION"]),
   locked: z.boolean().optional(), reviewStatus: z.enum(["draft", "review", "approved"]).optional(), reviewNotes: text.optional(), assetIds: z.array(id).max(4).optional(),
 });
-const board = z.object({ referencePlan: z.array(z.object({ id, kind: z.enum(["character", "background"]), title: text, prompt: text, sceneIds: z.array(id).max(200) })).max(12).optional(), projectTitle: text, logline: text, visualBible: text, continuityRules: z.array(text), globalNegativePrompt: text, productionNotes: z.array(text), scenes: z.array(scene).max(200) });
+const board = z.object({ referencePlan: z.array(z.object({ id, kind: z.enum(["character", "background", "prop"]), title: text, prompt: text, sceneIds: z.array(id).max(200) })).max(12).optional(), projectTitle: text, logline: text, visualBible: text, continuityRules: z.array(text), globalNegativePrompt: text, productionNotes: z.array(text), scenes: z.array(scene).max(200) });
 export const presetSettingsSchema = z.object({
   goal: text, platform: z.enum(["TikTok", "Facebook Reels", "YouTube Shorts", "YouTube"]), targetDuration: z.number().positive().max(7200),
   language: z.enum(["Burmese", "English", "Burmese + English"]), audience: text,
@@ -31,7 +32,7 @@ const projectSchema = z.object({
 });
 const assetSchema = z.object({
   handle: z.string().regex(/^@[A-Z][A-Za-z0-9]*$/).optional(),
-  id, kind: z.enum(["character", "background", "scene"]), title: text, prompt: text, mimeType: image.shape.mimeType,
+  id, kind: z.enum(["character", "background", "prop", "scene"]), title: text, prompt: text, mimeType: image.shape.mimeType,
   data: image.shape.data, createdAt: text, useAsReference: z.boolean(), projectId: id.optional(), sceneId: id.optional(), sceneNumber: z.number().int().positive().optional(),
 });
 const archiveSchema = z.object({ format: z.literal("mm-storyboard"), version: z.literal(1), project: projectSchema, references: z.array(image).max(4), assets: z.array(assetSchema).max(500), presets: z.array(presetSchema).max(50) });

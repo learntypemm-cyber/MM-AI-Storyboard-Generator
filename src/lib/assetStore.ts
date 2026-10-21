@@ -51,6 +51,6 @@ export function promptWithReferences(scene: Scene, assets: ImageAsset[]): string
   const references = sceneReferences(scene, assets);
   if (!references.length) return scene.flowPrompt;
   return scene.flowPrompt + "\n\nVisual references (upload and bind these assets in Flow):\n" + references.map((asset) =>
-    `${assetHandle(asset)}: ${asset.title}. Use the attached ${asset.kind} image as the source of truth; preserve ${asset.kind === "character" ? "identity, face, hair, proportions and wardrobe" : "layout, materials, props and lighting"}.`
+    `${assetHandle(asset)}: ${asset.title}. Use the attached ${asset.kind} image as the source of truth; preserve ${asset.kind === "character" ? "identity, face, hair, proportions and wardrobe" : asset.kind === "prop" ? "shape, color, materials and product details" : "layout, materials, props and lighting"}.`
   ).join("\n");
 }
