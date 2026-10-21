@@ -17,6 +17,12 @@ import type { ImageAsset, Scene, Storyboard, VideoForm } from "./types";
 const scene = (id: string, locked = false): Scene => ({ id, locked, sceneNumber: id === "one" ? 1 : 2, title: id, durationSeconds: 8, objective: "Show the product", visualDescription: "A table", shotSize: "Close up", cameraMovement: "Static", lighting: "Daylight", mood: "Warm", action: "Lift cup", flowPrompt: "NO TEXT IN THE IMAGE. Opening frame: a cup. Final frame: a cup raised.", voiceover: "Hello", onscreenText: "", audioNotes: "Quiet", transition: "Cut", referenceAssets: [], negativePrompt: "No text", openingFrame: "A cup", finalFrame: "A cup raised", handoff: "CUT" });
 const board = (): Storyboard => ({ projectTitle: "Coffee", logline: "A coffee story", visualBible: "Warm", continuityRules: [], globalNegativePrompt: "No fake UI", productionNotes: [], scenes: [scene("one"), scene("two", true)] });
 const form: VideoForm = { topic: "Coffee", goal: "Promote", platform: "TikTok", targetDuration: 16, language: "Burmese", audience: "Coffee fans", visualStyle: "Cinematic live action", aspectRatio: "9:16", flowModel: "Veo 3.1 Fast", generationMode: "Text to Video", clipDuration: 8, audioPolicy: "Quiet", textPolicy: "No text", referenceNotes: "", referenceImages: [] };
+const completeRegeneratedFlowPrompt = [
+  "NO TEXT IN THE IMAGE.",
+  "(00:00-00:04) [Camera shot] Medium close-up at the wooden table. [Action] May reaches for the ceramic cup with a relaxed, deliberate movement, keeping both hands natural and the cup shape stable. [Background] Cafe A / front view. The warm window light, table grain and muted cafe details stay consistent.",
+  "(00:04-00:08) [Camera shot] Gentle slow push-in with no jump cut. [Action] May lifts the cup naturally, pauses, and brings it toward her face while keeping the same grip, wardrobe and position. [Background] Cafe A / front view, unchanged.",
+  "Opening frame: the cup rests on the table in front of May. Final frame: May holds the cup steadily at chest height. Preserve realistic hand anatomy, stable props, consistent clothing, natural motion, warm daylight and a clean cinematic composition. Audio direction: quiet cafe ambience. SFX: subtle ceramic movement. Background music: soft understated instrumental music. Do not add logos, extra characters, captions, timestamps or production labels."
+].join("\n");
 const asset: ImageAsset = { id: "character1", kind: "character", title: "May", prompt: "A woman", mimeType: "image/png", data: "aGVsbG8=", createdAt: "2026-10-15", useAsReference: true, projectId: "test-project" };
 const concept = { id: "concept", title: "Coffee time", style: "Cinema", hook: "Wake up", summary: "Morning coffee", visualDirection: "Warm", whyItWorks: "Simple", storyArc: ["Wake", "Drink"], estimatedDuration: 16 };
 
@@ -168,7 +174,7 @@ describe("editor workflow", () => {
   });
   it("regenerates only selected unlocked prompts and preserves locked content", async () => {
     localStorage.setItem("mm-storyboard-gemini-key", "test-key");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ scene: { title: "Repaired", flowPrompt: "NO TEXT IN THE IMAGE. Repaired prompt", locked: false, id: "bad-id" } }) }] } }] }), { status: 200 }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ scene: { title: "Repaired", flowPrompt: completeRegeneratedFlowPrompt, sfx: "Quiet ceramic cup movement", backgroundMusic: "Soft understated instrumental music", locked: false, id: "bad-id" } }) }] } }] }), { status: 200 }));
     await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Select unlocked" }));
     fireEvent.click(screen.getByRole("button", { name: "Regenerate selected prompts" }));
@@ -180,7 +186,7 @@ describe("editor workflow", () => {
   });
   it("generates only missing prompts without rebuilding completed scenes", async () => {
     localStorage.setItem("mm-storyboard-gemini-key", "test-key");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ scene: { flowPrompt: "NO TEXT IN THE IMAGE. Newly generated." } }) }] } }] }), { status: 200 }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ scene: { title: "Completed scene", objective: "Show May lifting the cup", visualDescription: "May sits at a wooden table in a sunlit cafe", shotSize: "Medium close-up", cameraMovement: "Slow push-in", lighting: "Warm daylight", mood: "Calm and welcoming", action: "May lifts a ceramic cup", flowPrompt: completeRegeneratedFlowPrompt, audioNotes: "Quiet cafe ambience", negativePrompt: "No text, logos, flicker or extra hands", openingFrame: "The cup rests on the table", finalFrame: "May holds the cup at chest height", sfx: "Quiet ceramic cup movement", backgroundMusic: "Soft understated instrumental music" } }) }] } }] }), { status: 200 }));
     await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Add scene" }));
     fireEvent.click(screen.getByRole("button", { name: "Generate missing prompts" }));
