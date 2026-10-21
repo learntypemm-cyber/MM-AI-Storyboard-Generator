@@ -438,11 +438,30 @@ function App() {
         const linked = sceneReferences(scene, projectAssets);
         const refs = [...linked.map(assetAsReference), ...form.referenceImages];
         if (refs.length > 4) throw new Error("Choose at most four references for this scene.");
-        const result = await generateJson<{ scene: Partial<Scene> }>(apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT,
-          buildSceneRepairPrompt(form, selectedConcept, scene, storyboard) + "\nReference registry: " + linked.map((asset) => assetHandle(asset) + " = " + asset.title).join("; "), refs);
-        if (!result.scene || typeof result.scene.flowPrompt !== "string" || !result.scene.flowPrompt.trim()) throw new Error("No updated scene prompt returned.");
-        const content = sceneRepairPatch(result.scene);
-        setStoryboard((current) => current ? patchScene(current, scene.id, { ...content, reviewStatus: "draft" }) : current);
+        let candidate = scene;
+        let remaining: string[] = [];
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const prompt = buildSceneRepairPrompt(form, selectedConcept, candidate, storyboard) +
+            "\nCompleteness requirements: Return a standalone English Flow prompt with 100-180 words, the required first-line text policy, at least two chronological time ranges beginning at 00:00 and reaching the full clip duration, clear opening and final frames, complete camera/action/background instructions, audio direction, SFX and background music. Fill all scene fields. Do not return a partial object." +
+            "\nIssues identified after the previous attempt: " + (remaining.length ? remaining.join(", ") : "None identified yet; follow every requirement carefully.") +
+            "\nReference registry: " + linked.map((asset) => assetHandle(asset) + " = " + asset.title).join("; ");
+          const result = await generateJson<{ scene: Partial<Scene> }>(
+            apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT, prompt, refs,
+          );
+          if (!result.scene || typeof result.scene.flowPrompt !== "string" || !result.scene.flowPrompt.trim()) {
+            throw new Error("No updated scene prompt returned.");
+          }
+          candidate = {
+            ...candidate, ...sceneRepairPatch(result.scene),
+            id: scene.id, sceneNumber: scene.sceneNumber,
+          };
+          remaining = promptCompletenessIssues(candidate);
+          if (!remaining.length) break;
+        }
+        if (remaining.length) {
+          throw new Error("Prompt remains incomplete after two attempts: " + remaining.join(", "));
+        }
+        setStoryboard((current) => current ? patchScene(current, scene.id, { ...candidate, reviewStatus: "draft" }) : current);
       } catch (caught) { failed++; setError("Scene " + scene.sceneNumber + ": " + (caught instanceof Error ? caught.message : "Generation failed.")); }
     }
     setBusy(null); setNotice((queue.length - failed) + " scene(s) updated; " + failed + " failed. Locked scenes were preserved.");
