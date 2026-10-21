@@ -22,15 +22,34 @@ export function validateReferencePlan(value: unknown, board: Storyboard): Refere
 }
 
 export function referenceImagePrompt(item: ReferencePlanItem, form: VideoForm): string {
+  const style = form.visualStyle === "3D animation" ? "3D Pixar/Disney animation style, warm color palette, high-detail smooth glossy 3D render, expressive skin and hair" : form.visualStyle;
+  const requirements = form.referenceNotes ? "User reference requirements: " + form.referenceNotes : "";
+  const description = "Subject design: " + item.prompt + "\nUse the description for identity and appearance only; the sheet layout and label rules below take precedence over any older layout or no-label instructions in that description.";
+  if (item.kind === "character") return [
+    "GENERATE ONE FINISHED CHARACTER REFERENCE SHEET. Aspect ratio: 16:9.",
+    "Visual style: " + style + ". Cinematic soft lighting.",
+    "Character: " + item.title + ". " + description,
+    "Character sheet layout: full-body turnaround showing front view, 3/4 view, side view, and back view. Separate head close-ups showing four facial expressions: happy, surprised, thoughtful, and neutral.",
+    "Keep the exact same face, hairstyle, outfit, body proportions and colors consistent across every angle and expression. These are multiple views of ONE character, not different characters. Preserve identity and wardrobe from supplied references.",
+    'Place exactly "Name: ' + item.title + '" in the upper-right corner in bold black text on a yellow rectangular background, outside the character drawings. No other text or watermark.',
+    "Clean neutral light-grey studio background, soft even studio lighting with no harsh shadows. Character centered within each view, professional model-sheet composition. Show the complete body, shoes and accessories without cropping.",
+    requirements,
+  ].filter(Boolean).join("\n\n");
+  if (item.kind === "background") return [
+    "GENERATE ONE FINISHED ENVIRONMENT REFERENCE SHEET. Aspect ratio: 16:9. A 2x2 grid of four framed panels showing ONE consistent location.",
+    "Visual style: " + style + ". Warm cinematic lighting.",
+    "LOCATION: " + item.title + ". " + description,
+    "No people, characters or silhouettes. Empty environment only.",
+    "Show the exact same location from four camera angles. Keep the same space, furniture, props, colors, materials and lighting direction across all four panels. Objects naturally reappear between panels. Do not invent a different place in any panel.",
+    "Panel A (top left): wide front view. Panel B (top right): right-side view. Panel C (bottom left): back / reverse view. Panel D (bottom right): left-side view.",
+    "Put each panel in its own framed box. Place each label on a clean solid bar directly below its panel, OUTSIDE the artwork: A / FRONT VIEW, B / RIGHT VIEW, C / BACK VIEW, D / LEFT VIEW. No other text or watermark.",
+    requirements,
+  ].filter(Boolean).join("\n\n");
   return [
-    "GENERATE ONE FINISHED REFERENCE IMAGE NOW. NO TEXT IN THE IMAGE.",
-    "Create a single image, not a written plan, collage, grid or storyboard.",
-    "Reference: " + item.title + ". Type: " + item.kind + ".",
-    item.prompt,
-    item.kind === "character" ? "Full-body character portrait on a neutral backdrop. Clearly show the face, hair, outfit, shoes and accessories. Preserve identity and wardrobe from any supplied reference image." : item.kind === "prop" ? "Single product or prop reference on a neutral backdrop. Preserve exact shape, material, color and defining details. No people or invented branding." : "Single full-frame environment plate. Preserve layout, materials, props, perspective and lighting. No people, characters or silhouettes.",
-    "Visual style: " + form.visualStyle + ". Aspect ratio: " + (item.kind === "character" ? "9:16" : form.aspectRatio) + ".",
-    "No captions, labels, watermarks, duplicate subjects or unrelated objects.",
-    form.referenceNotes ? "User reference requirements: " + form.referenceNotes : "",
+    "GENERATE ONE FINISHED PRODUCT OR PROP REFERENCE IMAGE. NO TEXT IN THE IMAGE.",
+    "Reference: " + item.title + ". " + item.prompt,
+    "Single product or prop on a neutral backdrop. Preserve exact shape, material, color and defining details. No people, invented branding, collage, labels or watermark.",
+    "Visual style: " + style + ". Aspect ratio: " + form.aspectRatio + ".", requirements,
   ].filter(Boolean).join("\n\n");
 }
 
@@ -51,7 +70,7 @@ export async function prepareAutomaticAssets(board: Storyboard, form: VideoForm,
     onProgress("Planning recurring characters and locations…");
     const raw = await generateJson<unknown>(apiKey, model, [
       "Plan reusable character portraits, important product/prop images and background plates for this storyboard. Return JSON only: {assets:[{kind:'character'|'background'|'prop',title,prompt,sceneIds:[exact scene ID]}]}.",
-      "Use at most 12 assets total and at most 3 per scene. Only create reusable references that are necessary for consistency. A simple standalone landscape or abstract shot can have no references. Use kind prop for important recurring products/objects; do not create a separate prop for every incidental object. Inspect every scene visualDescription, action and flowPrompt for visible characters, including people, animals and fictional characters. Include a character reference for each distinct visible character even if they appear in only one scene; do not invent people for product-only or landscape shots. Reuse one asset across scenes for the same person/outfit or location. Describe face, hair, clothing, proportions for characters and geography, lighting and fixed props for backgrounds. Image prompts must be standalone English. Character portraits: full body, neutral backdrop. Backgrounds: no people. No text, labels, grids or watermark.",
+      "Use at most 12 assets total and at most 3 per scene. Only create reusable references that are necessary for consistency. A simple standalone landscape or abstract shot can have no references. Use kind prop for important recurring products/objects; do not create a separate prop for every incidental object. Inspect every scene visualDescription, action and flowPrompt for visible characters, including people, animals and fictional characters. Include a character reference for each distinct visible character even if they appear in only one scene; do not invent people for product-only or landscape shots. Reuse one asset across scenes for the same person/outfit or location. Describe face, hair, clothing, proportions for characters and geography, lighting and fixed props for backgrounds. Image prompts must be standalone English. Return subject design descriptions only, without layout commands or prohibitions on text/grids; the app adds the reference-sheet layout. Give each character a short recognizable name as title. Characters will use a 16:9 turnaround with four expressions and a name label; backgrounds will use a 16:9 four-angle A/B/C/D sheet. Backgrounds: no people.",
       "Preserve the user's reference identities and constraints: " + form.referenceNotes,
       "Existing references must be preserved. Return only missing references or additional scene links for an existing reference, using its exact kind, title and identity. Do not rename or duplicate an existing character. Existing references: " + JSON.stringify(plan || []),
       JSON.stringify({ topic: form.topic, style: form.visualStyle, visualBible: board.visualBible, scenes }),
@@ -81,7 +100,7 @@ export async function prepareAutomaticAssets(board: Storyboard, form: VideoForm,
       onProgress("Creating " + item.kind + ": " + item.title);
       try {
         const prompt = referenceImagePrompt(item, form);
-        const image = await generateImage(apiKey, prompt, item.kind === "character" ? "9:16" : form.aspectRatio, form.referenceImages);
+        const image = await generateImage(apiKey, prompt, item.kind === "prop" ? form.aspectRatio : "16:9", form.referenceImages);
         await putAsset({ ...image, id: item.id, kind: item.kind, title: item.title, prompt, projectId, createdAt: new Date().toISOString(), useAsReference: false });
         ready.add(item.id);
       } catch (error) { failed.push(item.title + ": " + (error instanceof Error ? error.message : "Image generation failed")); }

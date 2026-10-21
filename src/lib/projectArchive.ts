@@ -6,6 +6,7 @@ const text = z.string().max(100_000);
 const id = z.string().min(1).max(200);
 const image = z.object({ name: text, mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/i), data: z.string().max(30_000_000).regex(/^[A-Za-z0-9+/]*={0,2}$/) });
 const scene = z.object({
+  backgroundAngle: z.enum(["A", "B", "C", "D"]).optional(), sfx: text.optional(), backgroundMusic: text.optional(),
   preparationMode: z.enum(["text-to-video", "image-to-video"]).optional(),
   id, sceneNumber: z.number().int().positive(), title: text, durationSeconds: z.number().positive().max(600), objective: text,
   visualDescription: text, shotSize: text, cameraMovement: text, lighting: text, mood: text, action: text, flowPrompt: text,
