@@ -153,15 +153,15 @@ function buildSceneRepairPrompt(form: VideoForm, concept: VideoConcept, scene: S
 
 function promptCompletenessIssues(scene: Scene): string[] {
   const prompt = (scene.flowPrompt || "").trim();
-  const words = prompt.split(/\\s+/).filter(Boolean).length;
-  const ranges = prompt.match(/\\b\\d{2}:\\d{2}\\s*[-–]\\s*\\d{2}:\\d{2}\\b/g) || [];
-  const firstLine = prompt.split(/\\r?\\n/).map((line) => line.trim()).find(Boolean) || "";
+  const words = prompt.split(/\s+/).filter(Boolean).length;
+  const ranges = prompt.match(/\b\d{2}:\d{2}\s*[-–]\s*\d{2}:\d{2}\b/g) || [];
+  const firstLine = prompt.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || "";
   const issues: string[] = [];
   if (words < 80) issues.push("Flow prompt is too short");
-  if (!/^(NO TEXT IN THE IMAGE\\.|NO VISIBLE TEXT\\.|INTENTIONAL TEXT IN THE IMAGE:\\s*\\S)/i.test(firstLine)) issues.push("Missing first-line text policy");
+  if (!/^(NO TEXT IN THE IMAGE\.|NO VISIBLE TEXT\.|INTENTIONAL TEXT IN THE IMAGE:\s*\S)/i.test(firstLine)) issues.push("Missing first-line text policy");
   if (!/opening frame|first frame/i.test(prompt)) issues.push("Missing opening-frame direction");
   if (!/final frame|last frame/i.test(prompt)) issues.push("Missing final-frame direction");
-  if (ranges.length < 2 || !/00:00\\s*[-–]/.test(prompt)) issues.push("Missing chronological time-coded action beats");
+  if (ranges.length < 2 || !/00:00\s*[-–]/.test(prompt)) issues.push("Missing chronological time-coded action beats");
   const endTime = String(Math.floor(scene.durationSeconds / 60)).padStart(2, "0") + ":" + String(Math.floor(scene.durationSeconds % 60)).padStart(2, "0");
   if (!prompt.includes(endTime)) issues.push("Time-coded action does not reach the clip end");
   const required: Array<[string, string | undefined]> = [
