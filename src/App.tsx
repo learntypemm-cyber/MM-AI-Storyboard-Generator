@@ -630,9 +630,10 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "Concept selection" : "Storyboard editor"}</strong></div>
           <div className="topbar-actions">
+            <button className="primary-button small-primary" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={15} /> Save project</button>
             <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
             <label className="quiet-button archive-upload">Import ZIP<input type="file" accept=".zip" disabled={Boolean(busy) || !hydrated} onChange={(event) => { void importZip(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
-            <button className="quiet-button" onClick={() => setLibraryOpen(true)}><FolderOpen size={16} /> My projects</button>
+            <button className="secondary-button" onClick={() => setLibraryOpen(true)}><FolderOpen size={16} /> My projects</button>
             <button className="settings-button" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}><Settings size={16} /> Settings</button>
             <div className={apiKey ? "avatar-dot online" : "avatar-dot"}>M</div>
           </div>
