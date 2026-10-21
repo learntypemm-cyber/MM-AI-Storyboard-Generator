@@ -133,3 +133,12 @@ The primary automatic workflow prepares prompts only. User supplies a topic; the
 References use C01/B01/P01 labels. Scene cards list their required references, opening-image prompt, video prompt and ordered instructions. Scenes with planned references default to opening-image then video; scenes without references default to direct text-to-video. The route can be changed per scene. Reference labels organize the package; users must attach the actual images in Flow.
 
 Download complete prompt ZIP works without any generated images and contains the complete text package, reference prompts, and each scene’s instructions, opening-image prompt, video prompt and voiceover. Flow .txt also exports the complete package. No image-generation API is called by the primary workflow; Gemini text planning still uses API access.
+
+
+### Manual Flow prompt package
+
+The primary workflow produces prompts, not media. Generate character sheets (four body views and four expressions), background sheets (A front / B right / C reverse / D left), and a single opening image for each scene before animating in Flow. Reference sheets are 16:9; scene images retain the project's aspect ratio. Select 3D animation for the Pixar/Disney-inspired template, or retain another project style.
+
+Each scene has an opening background angle, separate SFX/music directions and an outgoing Cut/Continue choice. Continue instructs the following scene to reuse the actual final frame of the previous clip. Review continuity after reordering scenes. New AI storyboard prompts request timed camera/action/background beats; older untimed prompts receive one full-duration action interval when exported. Review generated timing and supported settings in Flow.
+
+Download complete prompt ZIP includes START-HERE-MM.txt, reusable reference prompts, scene instructions in Burmese, opening-image/video prompts, audio, voiceover and captions. No generated images or videos are included. Existing reference descriptions automatically use the new sheet layout when copied or exported; use Prepare / recheck for missing characters or locations.

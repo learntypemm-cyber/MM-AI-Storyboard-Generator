@@ -1,4 +1,4 @@
-import { completePromptText, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
+import { sceneInstructions, sceneBackground, completePromptText, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -377,4 +377,56 @@ it("rechecks characters in scenes already covered by backgrounds without changin
   const second = await prepareAutomaticAssets(first.board, form, "recheck", "key", "model", () => {}, () => {}, () => false, true);
   expect(second.board.referencePlan).toEqual(first.board.referencePlan);
   expect(request).toHaveBeenCalledTimes(2);
+});
+
+
+describe("multi-view Flow reference sheets", () => {
+  it("creates labeled 16:9 character turnarounds and four-angle backgrounds", async () => {
+    const current = board();
+    current.referencePlan = [
+      { id: "leo", kind: "character", title: "Leo", prompt: "Boy with curly brown hair, blue shirt and red shoes", sceneIds: ["one"] },
+      { id: "park", kind: "background", title: "Park", prompt: "A park with an oak tree beside a wooden bench", sceneIds: ["one"] },
+    ];
+    const animated = { ...form, visualStyle: "3D animation" as const };
+    const character = referenceImagePrompt(current.referencePlan[0], animated);
+    expect(character).toContain("3D Pixar/Disney animation style");
+    expect(character).toContain("Aspect ratio: 16:9");
+    expect(character).toContain("front view, 3/4 view, side view, and back view");
+    expect(character).toContain("happy, surprised, thoughtful, and neutral");
+    expect(character).toContain('"Name: Leo"');
+    expect(character).toContain("bold black text on a yellow");
+    expect(character).not.toContain("NO TEXT IN THE IMAGE");
+    const background = referenceImagePrompt(current.referencePlan[1], animated);
+    expect(background).toContain("2x2 grid");
+    expect(background).toContain("D / LEFT VIEW");
+    expect(background).toContain("No people, characters or silhouettes");
+    expect(background).not.toContain("--ar");
+    expect(sceneVideoPrompt(current.scenes[0], current)).toContain("B01 (Park) angle key");
+    expect(sceneImagePrompt(current.scenes[0], current, animated)).toContain("never a turnaround, grid, name tag");
+    const zip = await JSZip.loadAsync(await promptPackageZip(current, animated));
+    expect(await zip.file("references/C01.txt")!.async("string")).toContain(character);
+    expect(await zip.file("references/B01.txt")!.async("string")).toContain(background);
+    expect(referenceImagePrompt(current.referencePlan[0], form)).toContain("Cinematic live action");
+  });
+});
+
+
+it("packages Burmese steps, named angles, audio and continuation start frames", async () => {
+  const current = board();
+  current.scenes[0].handoff = "CONTINUATION";
+  current.scenes[1].backgroundAngle = "C";
+  current.scenes[1].sfx = "Footsteps";
+  current.scenes[1].backgroundMusic = "Soft piano";
+  current.referencePlan = [{ id: "park", kind: "background", title: "Park", prompt: "A green park with one bench and a stone path", sceneIds: ["two"] }];
+  expect(sceneBackground(current.scenes[1], current)).toContain("B01 — Park — C / back");
+  expect(sceneVideoPrompt(current.scenes[1], current)).toContain("actual final frame of the preceding clip");
+  expect(sceneVideoPrompt(current.scenes[1], current)).toContain("(00:00-00:08)");
+  expect(sceneInstructions(current.scenes[1], current)).toContain("Scene 1 clip");
+  expect(sceneVideoPrompt(current.scenes[0], current)).not.toContain("actual final frame of the preceding clip");
+  const zip = await JSZip.loadAsync(await promptPackageZip(current, form));
+  expect(await zip.file("START-HERE-MM.txt")!.async("string")).toContain("Flow မှာလုပ်ရန်");
+  expect(await zip.file("scene-02/audio.txt")!.async("string")).toBe("SFX: Footsteps\nBackground Music: Soft piano");
+  expect(zip.file("scene-02/caption.txt")).toBeTruthy();
+  current.scenes[0].handoff = "CUT";
+  expect(sceneVideoPrompt(current.scenes[1], current)).not.toContain("actual final frame of the preceding clip");
 });

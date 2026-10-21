@@ -15,6 +15,8 @@ export type VideoConcept = {
   whyItWorks: string; storyArc: string[]; estimatedDuration: number;
 };
 export type Scene = {
+  backgroundAngle?: "A" | "B" | "C" | "D";
+  sfx?: string; backgroundMusic?: string;
   preparationMode?: "text-to-video" | "image-to-video";
   locked?: boolean; reviewStatus?: "draft" | "review" | "approved"; reviewNotes?: string;
   assetIds?: string[];

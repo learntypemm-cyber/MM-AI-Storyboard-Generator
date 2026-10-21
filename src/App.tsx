@@ -10,7 +10,7 @@ import type { GeminiModelOption } from "./lib/gemini";
 import { generateJson, listGeminiModels, testGeminiModel } from "./lib/gemini";
 import { assetAsReference, assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
 import { prepareAutomaticAssets, referenceImagePrompt, referencePromptPack } from "./lib/automaticAssets";
-import { referenceCode, sceneReferenceList, scenePreparationMode, sceneImagePrompt, sceneVideoPrompt, sceneInstructions, completePromptText, promptPackageZip } from "./lib/promptPackage";
+import { workflowGuideMM, sceneBackground, referenceCode, sceneReferenceList, scenePreparationMode, sceneImagePrompt, sceneVideoPrompt, sceneInstructions, completePromptText, promptPackageZip } from "./lib/promptPackage";
 import { loadReferences, saveReferences } from "./lib/projectMedia";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { createArchive, readArchive, presetSchema } from "./lib/projectArchive";
@@ -32,7 +32,7 @@ const DEFAULT_FORM: VideoForm = {
   topic: "",
   goal: "Turn the topic into a clear, engaging short video",
   platform: "Facebook Reels", targetDuration: 30, language: "Burmese",
-  audience: "Myanmar-speaking viewers", visualStyle: "Cinematic live action",
+  audience: "Myanmar-speaking viewers", visualStyle: "3D animation",
   aspectRatio: "9:16", flowModel: "Veo 3.1 Fast", generationMode: "Text to Video",
   clipDuration: 8,
   audioPolicy: "Natural Burmese voiceover, subtle upbeat background music, scene-appropriate sound effects",
@@ -118,17 +118,19 @@ function buildStoryboardPrompt(form: VideoForm, concept: VideoConcept): string {
     "- Create a complete scene-by-scene plan for generating each clip separately in Google Flow. Target 4-8 scenes for short-form content, choosing the number that fits the target runtime. Each scene durationSeconds should match the desired clip length when practical; explain runtime difference in productionNotes. Never guarantee a model feature; tell the user to verify the active Flow UI.",
     "- Every scene prompt must stand alone: describe subject, action, environment, wardrobe/props, framing, camera motion, lighting, mood, audio, opening frame, and final frame. Never say 'same as before', 'as in previous scene', 'continuing from scene 1', or assume model memory.",
     "- Maintain continuity using a visualBible and continuityRules. Use canonical @PascalCase handles for recurring named people or locations, such as @Presenter or @TypingDesk. Avoid unnecessary characters.",
+    "- Include backgroundAngle (A/B/C/D) for the opening shot, sfx and backgroundMusic as separate strings. The first timed beat must use backgroundAngle. handoff describes the transition TO THE NEXT scene: CONTINUATION only for uninterrupted action in the same space; otherwise CUT. Make each next openingFrame match the preceding finalFrame for continuation. Do not force cuts every two seconds.",
     "- Keep character, wardrobe, location and recurring product descriptions precise and mutually consistent. Do not introduce new identities between scenes.",
     "- Each flowPrompt starts with exactly one policy: 'NO TEXT IN THE IMAGE.' or 'INTENTIONAL TEXT IN THE IMAGE: [exact short text]'. For accurate product UI and Burmese captions, use 'NO TEXT IN THE IMAGE.' and add real screen recordings/subtitles in post.",
     "- Each flowPrompt is detailed copy-paste English, ideally 100-180 words. Include a complete opening frame and final frame, plus audio direction. No markdown fences.",
-    "- Use physically possible camera movement. Avoid conflicting actions. Do not put labels, timestamps, hex colors, scene numbers, prompt annotations or technical UI text inside the visual prompt.",
+    "- Structure each flowPrompt into chronological time ranges from 00:00 to its durationSeconds, usually 2-second beats with a shorter final beat if needed. Each beat specifies [Camera shot], named character action, and [Background] location name plus A (front), B (right), C (back/reverse), or D (left). These letters refer to the four views of ONE location reference sheet. Reuse an angle when appropriate; do not force cuts or a new camera position for every beat. Never refer to an unmentioned location. Close with separate SFX and Background Music directions based on the audio policy.",
+    "- Use physically possible camera movement and clear cuts when positions change. Avoid conflicting actions. Timestamps, panel letters and field labels are production directions only: never render them, reference-sheet grids, name tags or borders in the video. Each video frame is a single full-screen shot.",
     "- Don't ask the model to draw website UI unless the user supplied a relevant screenshot. For website tutorials, use authentic screen recordings for any actual click-through.",
     "- Voiceover must be in " + form.language + ". On-screen text is exact caption copy for editing, not for the video model. Use empty string if no caption is needed.",
     "- Negative prompts should prevent malformed hands, unstable keyboards, illegible text, layout drift, flicker, extra fingers, artificial logos, fake website UI, duplicate objects, and watermarks where relevant.",
     "- Avoid copyrighted characters, celebrity likenesses, and misleading claims. JSON only, no prose outside it.",
     "",
     "Return this JSON structure:",
-    '{"projectTitle":"string","logline":"string","visualBible":"string","continuityRules":["string"],"globalNegativePrompt":"string","productionNotes":["string"],"scenes":[{"sceneNumber":1,"title":"string","durationSeconds":8,"objective":"string","visualDescription":"string","shotSize":"string","cameraMovement":"string","lighting":"string","mood":"string","action":"string","flowPrompt":"string","voiceover":"string","onscreenText":"string","audioNotes":"string","transition":"string","referenceAssets":["string"],"negativePrompt":"string","openingFrame":"string","finalFrame":"string","handoff":"CUT"}]}',
+    '{"projectTitle":"string","logline":"string","visualBible":"string","continuityRules":["string"],"globalNegativePrompt":"string","productionNotes":["string"],"scenes":[{"sceneNumber":1,"title":"string","durationSeconds":8,"objective":"string","visualDescription":"string","shotSize":"string","cameraMovement":"string","lighting":"string","mood":"string","action":"string","flowPrompt":"string","voiceover":"string","onscreenText":"string","audioNotes":"string","transition":"string","referenceAssets":["string"],"negativePrompt":"string","openingFrame":"string","finalFrame":"string","handoff":"CUT","backgroundAngle":"A","sfx":"string","backgroundMusic":"string"}]}',
     "Total planned runtime should be as close as possible to " + form.targetDuration + " seconds. If the clip length prevents an exact match, explain the arithmetic in productionNotes. These are prompts for manual use in Flow, not direct video generation."
   ].join("\n");
 }
@@ -144,7 +146,8 @@ function buildSceneRepairPrompt(form: VideoForm, concept: VideoConcept, scene: S
     "Reference notes: " + form.referenceNotes,
     "Current scene JSON: " + JSON.stringify(scene),
     'Retain the same scene number and core story purpose, but fix ambiguity and generic actions. Create an English standalone flowPrompt starting exactly with "NO TEXT IN THE IMAGE." unless specific short intentional text is essential. Include full opening and final frames. Never refer to other scenes, never tell Flow to draw captions, and never invent website UI. Voiceover stays in ' + form.language + '.',
-    'Return the full Scene fields: sceneNumber,title,durationSeconds,objective,visualDescription,shotSize,cameraMovement,lighting,mood,action,flowPrompt,voiceover,onscreenText,audioNotes,transition,referenceAssets,negativePrompt,openingFrame,finalFrame,handoff. Shape: {"scene":{...}}.'
+    "Keep flowPrompt time-coded from 00:00 to durationSeconds with camera, named action and named background / A-D angle per beat. Include backgroundAngle for the first beat, sfx, backgroundMusic and an outgoing handoff to the next scene. Keep timing feasible; no forced cuts. Labels and timestamps must not appear in the rendered video.",
+    'Return the full Scene fields: sceneNumber,title,durationSeconds,objective,visualDescription,shotSize,cameraMovement,lighting,mood,action,flowPrompt,voiceover,onscreenText,audioNotes,transition,referenceAssets,negativePrompt,openingFrame,finalFrame,handoff,backgroundAngle,sfx,backgroundMusic. Shape: {"scene":{...}}.'
   ].join("\n");
 }
 
@@ -306,7 +309,7 @@ function App() {
       const result = await generateJson<Storyboard>(apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT, buildStoryboardPrompt(form, concept), form.referenceImages);
       if (!Array.isArray(result.scenes) || !result.scenes.length) throw new Error("The response didn't include scenes. Try again or shorten your brief.");
       const scenes: Scene[] = result.scenes.map((scene, index) => ({
-        ...scene, id: makeId(), sceneNumber: Number(scene.sceneNumber) || index + 1,
+        ...scene, backgroundAngle: ["A", "B", "C", "D"].includes(scene.backgroundAngle || "") ? scene.backgroundAngle : "A", id: makeId(), sceneNumber: Number(scene.sceneNumber) || index + 1,
         title: scene.title || "Scene " + (index + 1), durationSeconds: Number(scene.durationSeconds) || form.clipDuration,
         objective: scene.objective || "", visualDescription: scene.visualDescription || "",
         shotSize: scene.shotSize || "", cameraMovement: scene.cameraMovement || "",
@@ -768,6 +771,7 @@ function App() {
               <div className="audit-grid">{allAudits.map((item) => <div className="audit-item" key={item.label}><span className={item.ok ? "audit-check ok" : "audit-check issue"}>{item.ok ? <Check size={12} /> : <AlertCircle size={12} />}</span><div><strong>{item.label}</strong><p>{item.detail}</p></div></div>)}</div>
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
+            <details className="field" open><summary>Flow လုပ်ဆောင်ရန် လမ်းညွှန် · ၆ ဆင့်</summary><p style={{ whiteSpace: "pre-line" }}>{workflowGuideMM()}</p></details>
             <div className="workflow-toolbar">
               <button className="primary-button" disabled={Boolean(busy) || !hydrated} onClick={() => void retryReferences()}>Prepare / recheck character & background prompts</button>
               <button className="secondary-button" disabled={Boolean(busy)} onClick={() => void downloadFlowScenes()}>Download complete prompt ZIP</button>
@@ -775,6 +779,7 @@ function App() {
               {Boolean(storyboard.referencePlan?.length) && <button className="secondary-button" onClick={() => { downloadText(fileSlug(storyboard.projectTitle) + "-reference-prompts.txt", referencePromptPack(storyboard, form), "text/plain;charset=utf-8"); }}>Download reference prompts</button>}
               {(["character", "background", "prop"] as const).map((kind) => <section key={kind} style={{ width: "100%" }} aria-label={kind + " prompts"}>
                 <h3>{kind === "character" ? "Character prompts · ဇာတ်ကောင်ပုံထုတ်ရန်" : kind === "background" ? "Background prompts" : "Prop / product prompts"} ({storyboard.referencePlan?.filter((item) => item.kind === kind).length || 0})</h3>
+                {kind !== "prop" && <p className="field-hint">{kind === "character" ? "16:9 reference sheet · 4 body views + 4 expressions · name label" : "16:9 reference sheet · A front / B right / C back / D left"}. Style: {form.visualStyle}. Copy this prompt into Flow to create the sheet.</p>}
                 {!storyboard.referencePlan?.some((item) => item.kind === kind) && <p className="field-hint">{busy === "assets" ? "Preparing reference prompts…" : kind === "character" ? "Character prompt မရှိသေးပါ။ Scene ထဲမှာ ဇာတ်ကောင်ပါလျှင် အပေါ်က Prepare / recheck ခလုတ်ကိုနှိပ်ပါ။ ဇာတ်ကောင်မပါတဲ့ video အတွက် မလိုပါ။" : "No prompts prepared for this reference type."}</p>}
                 {storyboard.referencePlan?.filter((item) => item.kind === kind).map((item) => <details key={item.id} className="field" open={item.kind === "character"}><summary>{referenceCode(item, storyboard)} · {item.kind}: {item.title} · {projectAssets.some((asset) => asset.id === item.id) ? "Image ready" : "Prompt ready"}</summary><span>Use in scenes: {storyboard.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber).join(", ")}</span><textarea className="input" aria-label={"Reference image prompt: " + item.title} readOnly rows={6} value={referenceImagePrompt(item, form)} /><button className="secondary-button" onClick={() => void copyText(referenceImagePrompt(item, form), item.title + " image prompt")}><Copy size={14} /> Copy image prompt</button></details>)}
               </section>)}
@@ -812,10 +817,14 @@ function App() {
                     <div className="scene-visual-details"><div className="scene-detail"><span>SCENE PURPOSE</span><p>{scene.objective}</p></div><div className="scene-detail"><span>VISUAL ACTION</span><p>{scene.visualDescription}</p></div><div className="scene-detail two-detail"><div><span>CAMERA</span><p>{scene.cameraMovement}</p></div><div><span>LIGHT / MOOD</span><p>{scene.lighting} · {scene.mood}</p></div></div><div className="scene-detail"><span>ACTION BEAT</span><p>{scene.action}</p></div></div>
                     <div className="field"><strong>Flow steps · References: {sceneReferenceList(scene, storyboard)}</strong><p style={{ whiteSpace: "pre-line" }}>{sceneInstructions(scene, storyboard)}</p></div>
                     <Field label={"Generation route scene " + scene.sceneNumber}><select className="input" value={scenePreparationMode(scene, storyboard)} onChange={(event) => updateScene(scene.id, { preparationMode: event.target.value as Scene["preparationMode"] })}><option value="image-to-video">Create opening image, then animate</option><option value="text-to-video">Direct text to video (image optional)</option></select></Field>
+                    <Field label={"Background angle scene " + scene.sceneNumber}><select className="input" value={scene.backgroundAngle || "A"} onChange={(event) => updateScene(scene.id, { backgroundAngle: event.target.value as Scene["backgroundAngle"] })}><option value="A">A · ရှေ့</option><option value="B">B · ညာဘက်</option><option value="C">C · နောက်ဘက်</option><option value="D">D · ဘယ်ဘက်</option></select><span>{sceneBackground(scene, storyboard)}</span><span className="field-hint">Angle ပြောင်းပြီးလျှင် video prompt ထဲက ပထမ camera angle ကိုလည်း ကိုက်ညီအောင် ပြင်ပါ။</span></Field>
+                    <Field label={"Next scene connection " + scene.sceneNumber}><select className="input" value={scene.handoff} onChange={(event) => updateScene(scene.id, { handoff: event.target.value as Scene["handoff"] })}><option value="CUT">Cut · နောက် scene သီးသန့်စမယ်</option><option value="CONTINUATION">Continue · နောက်ဆုံး frame မှ ဆက်မယ်</option></select></Field>
                     <Field label={"Scene image prompt " + scene.sceneNumber} hint="Use for the opening still in Flow. Attach the reference images listed above."><textarea className="input" readOnly rows={6} value={sceneImagePrompt(scene, storyboard, form)} /></Field>
                     <button className="secondary-button" onClick={() => void copyText(sceneImagePrompt(scene, storyboard, form), "Scene " + scene.sceneNumber + " image prompt")}>Copy scene image prompt</button>
                     <Field label="Google Flow prompt" hint="English prompt for the selected model. Copy this into Flow, then review its active settings."><textarea className="input prompt-editor" value={scene.flowPrompt} onChange={(event) => updateScene(scene.id, { flowPrompt: event.target.value })} rows={8} /></Field>
                     <div className="scene-edit-grid">
+                      <Field label="SFX"><textarea className="input" value={scene.sfx ?? ""} onChange={(event) => updateScene(scene.id, { sfx: event.target.value })} rows={2} placeholder="အသံအကျိုးသက်ရောက်မှု" /></Field>
+                      <Field label="Background music"><textarea className="input" value={scene.backgroundMusic ?? ""} onChange={(event) => updateScene(scene.id, { backgroundMusic: event.target.value })} rows={2} placeholder="နောက်ခံတေးဂီတ" /></Field>
                       <Field label="Voiceover"><textarea className="input" value={scene.voiceover} onChange={(event) => updateScene(scene.id, { voiceover: event.target.value })} rows={3} /></Field>
                       <Field label="On-screen caption (add in editor)"><textarea className="input" value={scene.onscreenText} onChange={(event) => updateScene(scene.id, { onscreenText: event.target.value })} rows={3} placeholder="No caption needed..." /></Field>
                     </div>
