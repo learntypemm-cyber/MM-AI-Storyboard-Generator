@@ -383,6 +383,37 @@ describe("screenplay approval workflow", () => {
     expect(screenplaySceneCount(short)).toBe(1);
     expect(screenplayCompletenessIssues(short, { targetDuration: 90, clipDuration: 8 })[0]).toContain("exactly 12 numbered clip-scenes");
   });
+  it("normalizes Gemini screenplay arrays into valid screenplay strings", () => {
+    const lineArray = screenplayChoicesSchema.parse({
+      choices: [1, 2, 3].map((n) => ({
+        title: "Draft " + n,
+        screenplay: [
+          "၁။ INT. BEDROOM - DAY",
+          "မေမီသည် စာအုပ်ကိုဖွင့်ပြီး စိတ်ဝင်စားစွာ ဖတ်သည်။",
+          "မေမီ: ဒီနေ့ ပြန်လေ့ကျင့်မယ်။",
+          "၂။ INT. CLASSROOM - DAY",
+          "မေမီသည် မေးခွန်းများကို ယုံကြည်မှုရှိရှိ ဖြေဆိုသည်။",
+          "မေမီ: အဖြေကို မှတ်မိပြီ။",
+        ],
+      })),
+    });
+    expect(typeof lineArray.choices[0].screenplay).toBe("string");
+    expect(screenplaySceneCount(lineArray.choices[0].screenplay)).toBe(2);
+    expect(lineArray.choices[0].screenplay).toContain("မေမီ: ဒီနေ့ ပြန်လေ့ကျင့်မယ်။");
+
+    const objectArray = screenplayChoicesSchema.parse({
+      choices: [1, 2, 3].map((n) => ({
+        title: "Structured " + n,
+        screenplay: [
+          { sceneNumber: 1, location: "INT. BEDROOM - DAY", action: "မေမီသည် စာအုပ်ကိုဖွင့်သည်။", dialogue: "ဒီနေ့ ပြန်လေ့ကျင့်မယ်။" },
+          { sceneNumber: 2, location: "INT. CLASSROOM - DAY", action: "မေမီသည် စာမေးပွဲကို ဖြေဆိုသည်။", dialogue: [{ speaker: "မေမီ", line: "အဖြေကို မှတ်မိပြီ။" }] },
+        ],
+      })),
+    });
+    expect(screenplaySceneCount(objectArray.choices[0].screenplay)).toBe(2);
+    expect(objectArray.choices[0].screenplay).toContain("1. INT. BEDROOM - DAY");
+    expect(objectArray.choices[0].screenplay).toContain("မေမီ: အဖြေကို မှတ်မိပြီ။");
+  });
   it("requires exactly three complete screenplay choices", () => {
     expect(() => screenplayWorkflowSchema.parse({ choices: [], selectedId: "" })).toThrow();
     expect(() => screenplayChoicesSchema.parse({ choices: [1, 2].map(n => ({ title: String(n), screenplay: "Draft" })) })).toThrow();
