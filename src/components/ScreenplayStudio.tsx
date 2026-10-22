@@ -28,7 +28,7 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
     const raw = await generateJson<unknown>(
       apiKey,
       model,
-      "Polish this user-edited Burmese screenplay while preserving its plot, ending, cast, scene count and intended dialogue. Keep exactly " + expectedSceneCount + " numbered clip-scenes for a " + form.targetDuration + "-second video with " + form.clipDuration + "-second source clips. Do not summarize or remove scenes. Improve Burmese prose, filmable action, dialogue and transitions only. Return JSON {screenplay:string}.\\n" + selected.screenplay,
+      "Polish this user-edited Burmese screenplay while preserving its plot, ending, cast, scene count and intended dialogue. Keep exactly " + expectedSceneCount + " numbered clip-scenes for a " + form.targetDuration + "-second video with " + form.clipDuration + "-second source clips. Do not summarize or remove scenes. Improve Burmese prose, filmable action, dialogue and transitions only. Return JSON {screenplay:string}.\n" + selected.screenplay,
     );
     const result = z.object({ screenplay: z.string().trim().min(1).max(100000) }).parse(raw);
     const issues = screenplayCompletenessIssues(result.screenplay, form);
