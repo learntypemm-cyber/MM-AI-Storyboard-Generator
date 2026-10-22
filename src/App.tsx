@@ -1,3 +1,5 @@
+import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
+import { draftSource, translationPrompt, validateTranslation } from "./lib/draftTranslation";
 import { sceneDetailRequirements } from "./lib/promptGuidance";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -92,6 +94,7 @@ function buildConceptPrompt(form: VideoForm): string {
     "REFERENCE NOTES: " + form.referenceNotes,
     "",
     "For a product or website tutorial, never invent website buttons, page layout, statistics, features, or navigation. Use provided reference images as evidence, not as a license to fabricate details. If images are provided, study them and recommend where real screen recordings should be inserted. Voiceover must be in the selected language. Put exact Burmese captions in a separate field for editing, never ask a video model to render complex Burmese text.",
+    "Write concept titles, hooks, summaries and explanations in Burmese for user review. Keep JSON keys unchanged.",
     "The three concepts must have distinct creative approaches: (1) accurate, clean tutorial demonstration; (2) fast hook and social-first visual storytelling; (3) memorable cinematic or animated visual metaphor.",
     "For each concept include id (short unique slug), title, style, hook (first 1-3 seconds), summary, visualDirection, whyItWorks, storyArc (array of 4-6 short beats), and estimatedDuration (number of seconds near the target).",
     "Make each concept specific to this brief and practical to generate as short clips. Return JSON matching this shape:",
@@ -334,7 +337,7 @@ function App() {
     if (!requireKey()) return;
     setBusy("storyboard"); setSelectedConceptId(concept.id);
     try {
-      const result = await generateJson<Storyboard>(apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT, buildStoryboardPrompt(form, concept), form.referenceImages);
+      const result = await generateJson<Storyboard>(apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT, buildStoryboardPrompt(form, concept) + "\nDRAFT REVIEW MODE: Override English-output instructions above. Write ALL descriptive scene fields and flowPrompt in Burmese so the user can edit them first. Keep JSON keys, IDs, enum values and timestamps unchanged. Keep voiceover in the requested spoken language. Do not translate to English yet.", form.referenceImages);
       if (!Array.isArray(result.scenes) || !result.scenes.length) throw new Error("The response didn't include scenes. Try again or shorten your brief.");
       let scenes: Scene[] = result.scenes.map((scene, index) => ({
         ...scene, backgroundAngle: ["A", "B", "C", "D"].includes(scene.backgroundAngle || "") ? scene.backgroundAngle : "A", id: makeId(), sceneNumber: Number(scene.sceneNumber) || index + 1,
@@ -348,33 +351,8 @@ function App() {
         negativePrompt: scene.negativePrompt || "", openingFrame: scene.openingFrame || "",
         finalFrame: scene.finalFrame || "", handoff: scene.handoff === "CONTINUATION" ? "CONTINUATION" : "CUT",
       }));
-      const incomplete = scenes.filter((scene) => promptCompletenessIssues(scene).length > 0);
-      for (let index = 0; index < incomplete.length; index++) {
-        const scene = incomplete[index];
-        setNotice("Completing incomplete prompt for scene " + scene.sceneNumber + " (" + (index + 1) + " of " + incomplete.length + ")…");
-        const repaired = await generateJson<{ scene: Partial<Scene> }>(
-          apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT,
-          buildSceneRepairPrompt(form, concept, scene, { ...result, scenes } as Storyboard) +
-            "\nThis is an automatic completeness repair. Fill every missing or weak field and return a fully detailed Flow prompt of 100-180 words with at least two chronological time ranges starting at 00:00 and ending at the clip duration. Populate sfx and backgroundMusic separately. Do not shorten or omit any required field.",
-          form.referenceImages,
-        );
-        if (!repaired.scene || typeof repaired.scene.flowPrompt !== "string") {
-          throw new Error("Scene " + scene.sceneNumber + " came back incomplete. Please regenerate that scene's prompt.");
-        }
-        const patch = sceneRepairPatch(repaired.scene);
-        const completedScene: Scene = {
-          ...scene, ...patch,
-          id: scene.id, sceneNumber: scene.sceneNumber,
-          referenceAssets: Array.isArray(repaired.scene.referenceAssets) ? repaired.scene.referenceAssets : scene.referenceAssets,
-        };
-        const remaining = promptCompletenessIssues(completedScene);
-        if (remaining.length) {
-          throw new Error("Scene " + scene.sceneNumber + " is still incomplete (" + remaining.join(", ") + "). Regenerate that scene's prompt or try a different Gemini model.");
-        }
-        scenes = scenes.map((item) => item.id === scene.id ? completedScene : item);
-      }
       const built: Storyboard = {
-        ...result, scenes, referencePlan: undefined,
+        ...result, scenes, referencePlan: undefined, promptLanguage: "my", englishJson: undefined, englishSource: undefined,
         continuityRules: Array.isArray(result.continuityRules) ? result.continuityRules : [],
         productionNotes: Array.isArray(result.productionNotes) ? result.productionNotes : [],
       };
@@ -385,13 +363,36 @@ function App() {
     finally { setBusy(null); }
   };
 
+  const makeBurmeseDraft = async () => {
+    if (!storyboard || busy || !requireKey()) return;
+    setBusy("translation"); setError("");
+    try {
+      const raw = await generateJson<unknown>(apiKey.trim(), geminiModel, "Translate all descriptive fields of this storyboard and reference prompts into Burmese for editing. Return the entire same JSON structure. Preserve IDs, scene order, timing, technical enum values, exact dialogue/voiceover/captions and reference links. Do not add or remove content.\n" + JSON.stringify(storyboard));
+      const draft = validateTranslation(raw, storyboard);
+      remember("Before Burmese draft conversion");
+      setStoryboard({ ...draft, promptLanguage: "my" });
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not create Burmese draft."); }
+    finally { setBusy(null); }
+  };
+  const translateDraft = async () => {
+    if (!storyboard || busy || !hydrated || !requireKey()) return;
+    const draft = storyboard;
+    setBusy("translation"); setError("");
+    try {
+      const raw = await generateJson<unknown>(apiKey.trim(), geminiModel, translationPrompt(draft));
+      const english = validateTranslation(raw, draft);
+      setStoryboard({ ...draft, englishJson: JSON.stringify(english), englishSource: draftSource(draft, form) });
+      setNotice("English prompt ပြောင်းပြီးပါပြီ။ Copy / ZIP download လုပ်နိုင်ပါပြီ။");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Translation failed. Your Burmese draft is preserved."); }
+    finally { setBusy(null); }
+  };
   const createReferences = async (board: Storyboard) => {
     stopAssets.current = false; setBusy("assets"); setError("");
     try {
       const result = await prepareAutomaticAssets(board, form, projectId, apiKey.trim(), geminiModel, setStoryboard, setAssetProgress, () => stopAssets.current, true);
       refreshAssets();
       if (result.failed.length) setError(result.failed.join("\n"));
-      setNotice("Prompt package ready: create the reference images first, then follow the scene image and video instructions in Flow.");
+      setNotice(board.promptLanguage === "my" ? "မြန်မာမူကြမ်းရပါပြီ။ စစ်ပြီးပြင်ပါ။ စိတ်ကြိုက်ဖြစ်မှ English ပြောင်းပါ။" : "Prompt package ready: create the reference images first, then follow the scene image and video instructions in Flow.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not prepare references."); }
     finally { setBusy(null); setAssetProgress(""); }
   };
@@ -838,11 +839,12 @@ function App() {
           </section>}
 
           {!storyboard && history.length > 0 && <div className="workflow-toolbar"><label className="field"><span className="field-label">Previous storyboard versions</span><select className="input" value={versionId} onChange={(event) => setVersionId(event.target.value)}><option value="">Choose a version…</option>{history.map((version) => <option key={version.id} value={version.id}>{version.label} · {new Date(version.createdAt).toLocaleString()}</option>)}</select></label><button className="secondary-button" disabled={!versionId || Boolean(busy)} onClick={restoreVersion}>Restore version</button></div>}
-          {storyboard && step === "storyboard" && <section className="storyboard-section">
+          {storyboard?.promptLanguage === "my" && step === "storyboard" && <BurmeseDraftEditor board={storyboard} form={form} busy={Boolean(busy) || !hydrated} onChange={setStoryboard} onTranslate={() => void translateDraft()} onSave={() => void saveProject()} onRetryReferences={() => void retryReferences()} />}
+          {storyboard && storyboard.promptLanguage !== "my" && step === "storyboard" && <section className="storyboard-section">
             <div className="section-heading results-heading">
               <div className="section-icon green"><Clapperboard size={18} /></div>
               <div><h2>Your storyboard</h2><p>Edit the prompts and narration before moving each clip into Google Flow.</p></div>
-              <div className="storyboard-actions"><button className="quiet-button" onClick={saveProject}><Save size={15} /> Save</button><button className="quiet-button" onClick={exportPromptPack}><Download size={15} /> Flow .txt</button><button className="quiet-button" onClick={exportJson}><Download size={15} /> JSON</button><button className="primary-button small-primary" onClick={exportMarkdown}><Download size={15} /> Export .md</button></div>
+              <div className="storyboard-actions"><button className="primary-button" disabled={Boolean(busy)} onClick={() => void makeBurmeseDraft()}>မြန်မာမူကြမ်းအဖြစ်ပြောင်းရန်</button><button className="quiet-button" onClick={saveProject}><Save size={15} /> Save</button><button className="quiet-button" onClick={exportPromptPack}><Download size={15} /> Flow .txt</button><button className="quiet-button" onClick={exportJson}><Download size={15} /> JSON</button><button className="primary-button small-primary" onClick={exportMarkdown}><Download size={15} /> Export .md</button></div>
             </div>
             <div className="storyboard-overview">
               <div className="overview-main"><div className="overview-eyebrow">SELECTED CONCEPT</div><h3>{storyboard.projectTitle || selectedConcept?.title || form.topic}</h3><p>{storyboard.logline}</p><div className="overview-meta"><span><Film size={14} /> {storyboard.scenes.length} scenes</span><span><Clock3 size={14} /> {storyboard.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)}s planned</span><span><MonitorPlay size={14} /> {form.aspectRatio}</span></div></div>
