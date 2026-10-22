@@ -10,7 +10,7 @@ import "fake-indexeddb/auto";
 import JSZip from "jszip";
 import App from "./App";
 import { prepareAutomaticAssets, validateReferencePlan, flowSceneBundle, referenceImagePrompt, referencePromptPack } from "./lib/automaticAssets";
-import { generateJson, listGeminiModels } from "./lib/gemini";
+import { generateJson, listGeminiModels, probeGeminiModel } from "./lib/gemini";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
 import { createArchive, readArchive } from "./lib/projectArchive";
@@ -255,6 +255,17 @@ describe("Gemini model discovery", () => {
     expect((await listGeminiModels("key")).map((item) => item.id)).toEqual(["gemini-test-flash", "gemini-test-pro"]);
     expect(String(request.mock.calls[1][0])).toContain("pageToken=page+2");
     expect(request.mock.calls[0][1]?.headers).toEqual({ "x-goog-api-key": "key" });
+  });
+  it("checks live generation access and recognizes quota limits", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "OK" }] } }] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "Quota exceeded", status: "RESOURCE_EXHAUSTED" } }), { status: 429 }));
+    const ready = await probeGeminiModel("key", "gemini-test-flash");
+    const quota = await probeGeminiModel("key", "gemini-test-pro");
+    expect(ready.status).toBe("ready");
+    expect(ready.message).toContain("Live text-generation test succeeded");
+    expect(quota.status).toBe("quota");
+    expect(quota.message).toContain("Quota");
   });
   it("surfaces rejected keys and empty compatible lists", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "Invalid key" } }), { status: 403 })).mockResolvedValueOnce(new Response(JSON.stringify({ models: [] })));
