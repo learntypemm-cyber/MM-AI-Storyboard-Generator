@@ -35,7 +35,7 @@ const projectSchema = z.object({
 });
 const assetSchema = z.object({
   handle: z.string().regex(/^@[A-Z][A-Za-z0-9]*$/).optional(),
-  id, kind: z.enum(["character", "background", "prop", "scene"]), title: text, prompt: text, mimeType: image.shape.mimeType,
+  id, kind: z.enum(["character", "background", "prop", "scene"]), title: text, prompt: text, promptMy: text.optional(), promptEn: text.optional(), mimeType: image.shape.mimeType,
   data: image.shape.data, createdAt: text, useAsReference: z.boolean(), projectId: id.optional(), sceneId: id.optional(), sceneNumber: z.number().int().positive().optional(),
 });
 const archiveSchema = z.object({ format: z.literal("mm-storyboard"), version: z.literal(1), project: projectSchema, references: z.array(image).max(4), assets: z.array(assetSchema).max(500), presets: z.array(presetSchema).max(50) });
