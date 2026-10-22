@@ -65,38 +65,84 @@ export async function listGeminiModels(apiKey: string, signal?: AbortSignal): Pr
   return result;
 }
 
+export type GeminiModelCheckStatus = "ready" | "quota" | "unavailable" | "key-error" | "error";
+
+export type GeminiModelCheck = {
+  modelId: string;
+  displayName: string;
+  status: GeminiModelCheckStatus;
+  message: string;
+  durationMs: number;
+};
+
+// Model-list metadata does not prove that generation works right now.
+// Probe with a deliberately tiny live generation request.
+export async function probeGeminiModel(apiKey: string, modelInput: string): Promise<GeminiModelCheck> {
+  const startedAt = Date.now();
+  let modelId = modelInput;
+  let displayName = modelInput;
+  try {
+    const key = apiKey.trim();
+    if (!key) {
+      return { modelId, displayName, status: "key-error", message: "Enter your Gemini API key first.", durationMs: Date.now() - startedAt };
+    }
+    modelId = normalizeGeminiModelName(modelInput);
+    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelId) + ":generateContent";
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: "Reply with exactly OK." }] }],
+        generationConfig: { maxOutputTokens: 8, temperature: 0 },
+      }),
+    });
+    const payload = await response.json().catch(() => ({})) as {
+      error?: { message?: string; status?: string; code?: number };
+      candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const rawMessage = payload.error?.message || ("Gemini model test failed (" + response.status + ").");
+    const lowerMessage = rawMessage.toLowerCase();
+    const keyRejected = response.status === 401
+      || /api[_ ]key.*(invalid|not valid|rejected)|invalid.*api[_ ]key|api_key_invalid/.test(lowerMessage);
+    displayName = modelId;
+
+    if (!response.ok) {
+      if (keyRejected) {
+        return { modelId, displayName, status: "key-error", message: rawMessage + " Check that the key is copied completely and is enabled for the Gemini API.", durationMs: Date.now() - startedAt };
+      }
+      if (response.status === 429 || payload.error?.status === "RESOURCE_EXHAUSTED" || /quota|rate.?limit|resource exhausted/i.test(rawMessage)) {
+        return { modelId, displayName, status: "quota", message: "Quota or rate limit reached for this request. Try again later; this model cannot be confirmed as usable right now. " + rawMessage, durationMs: Date.now() - startedAt };
+      }
+      if ([400, 403, 404].includes(response.status)) {
+        return { modelId, displayName, status: "unavailable", message: rawMessage + " This model may not be available to generate content with this key.", durationMs: Date.now() - startedAt };
+      }
+      return { modelId, displayName, status: "error", message: rawMessage, durationMs: Date.now() - startedAt };
+    }
+
+    const candidate = payload.candidates?.[0];
+    const generatedText = candidate?.content?.parts?.map((part) => part.text || "").join("").trim();
+    if (generatedText) {
+      return { modelId, displayName, status: "ready", message: "Live text-generation test succeeded.", durationMs: Date.now() - startedAt };
+    }
+    if (candidate?.finishReason === "SAFETY") {
+      return { modelId, displayName, status: "error", message: "The test prompt was blocked by a safety filter. This does not necessarily mean the model is unavailable.", durationMs: Date.now() - startedAt };
+    }
+    return { modelId, displayName, status: "error", message: "The API responded, but returned no text for this test request.", durationMs: Date.now() - startedAt };
+  } catch (error) {
+    return {
+      modelId,
+      displayName,
+      status: "error",
+      message: error instanceof Error ? error.message : "Could not test this model.",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+}
+
 export async function testGeminiModel(apiKey: string, modelInput: string): Promise<{ modelId: string; displayName: string }> {
-  const key = apiKey.trim();
-  if (!key) throw new Error("Enter your Gemini API key first.");
-  const modelId = normalizeGeminiModelName(modelInput);
-  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelId);
-  const response = await fetch(endpoint, {
-    method: "GET",
-    headers: { "x-goog-api-key": key }
-  });
-  const payload = await response.json().catch(() => ({})) as {
-    error?: { message?: string; status?: string };
-    name?: string;
-    displayName?: string;
-    supportedGenerationMethods?: string[];
-  };
-
-  if (!response.ok) {
-    const message = payload.error?.message || ("Gemini model check failed (" + response.status + ").");
-    if (response.status === 400 || response.status === 404) {
-      throw new Error('Model "' + modelId + '" was not found for this API key. Open Settings and refresh the model list.');
-    }
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(message + " Check the key was copied completely and that it is a current Gemini API auth key with access to the Generative Language API.");
-    }
-    throw new Error(message);
-  }
-
-  const methods = payload.supportedGenerationMethods;
-  if (Array.isArray(methods) && !methods.includes("generateContent")) {
-    throw new Error('Model "' + modelId + '" is available but does not support generateContent.');
-  }
-  return { modelId, displayName: payload.displayName || payload.name || modelId };
+  const result = await probeGeminiModel(apiKey, modelInput);
+  if (result.status !== "ready") throw new Error(result.message);
+  return { modelId: result.modelId, displayName: result.displayName };
 }
 
 function extractJson(text: string): unknown {
