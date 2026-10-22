@@ -15,7 +15,7 @@ export function requiredScreenplaySceneCount(form: Pick<VideoForm, "targetDurati
   return Math.max(1, Math.ceil(runtime / clipLength));
 }
 
-const SCREENPLAY_HEADING = /^[ \\t]*(?:(?:[၀-၉0-9]{1,3}[ \\t]*[။.)])|(?:SCENE|SHOT)[ \\t]+\\d+[ \\t]*[:.)-])[ \\t]*\\S.*$/gim;
+const SCREENPLAY_HEADING = /^[ \t]*(?:(?:[၀-၉0-9]{1,3}[ \t]*[။.)])|(?:SCENE|SHOT)[ \t]+\d+[ \t]*[:.)-])[ \t]*\S.*$/gim;
 
 export function screenplaySceneCount(screenplay: string): number {
   return [...screenplay.matchAll(SCREENPLAY_HEADING)].length;
@@ -24,7 +24,7 @@ export function screenplaySceneCount(screenplay: string): number {
 function screenplaySceneBodies(screenplay: string): string[] {
   const matches = [...screenplay.matchAll(SCREENPLAY_HEADING)];
   return matches.map((match, index) => {
-    const headingEnd = screenplay.indexOf("\\n", (match.index ?? 0) + match[0].length);
+    const headingEnd = screenplay.indexOf("\n", (match.index ?? 0) + match[0].length);
     if (headingEnd < 0) return "";
     const bodyStart = headingEnd + 1;
     const nextHeading = matches[index + 1]?.index ?? screenplay.length;
@@ -39,7 +39,7 @@ export function screenplayCompletenessIssues(screenplay: string, form: Pick<Vide
   if (actual !== expected) issues.push("Expected exactly " + expected + " numbered clip-scenes for " + form.targetDuration + "s at " + form.clipDuration + "s per clip, but found " + actual + ".");
   if (actual > 0) {
     const shortScenes = screenplaySceneBodies(screenplay)
-      .filter(body => Array.from(body.replace(/\\s/g, "")).length < 100).length;
+      .filter(body => Array.from(body.replace(/\s/g, "")).length < 100).length;
     if (shortScenes) issues.push(shortScenes + " scene(s) have less than 100 non-space characters of action/dialogue.");
   }
   return issues;
@@ -94,7 +94,7 @@ export function screenplayRequest(form: VideoForm): string {
     "",
     "USER BRIEF (preserve these settings):",
     JSON.stringify(brief),
-  ].join("\\n");
+  ].join("\n");
 }
 
 export function screenplayRepairRequest(
@@ -118,12 +118,12 @@ export function screenplayRepairRequest(
     "For every repair, copy its original zero-based index and title exactly. Include every requested index exactly once.",
     "BRIEF: " + JSON.stringify({ topic: form.topic, goal: form.goal, targetDuration: form.targetDuration, clipDuration: form.clipDuration, language: form.language, audience: form.audience, visualStyle: form.visualStyle, platform: form.platform, audioPolicy: form.audioPolicy, referenceNotes: form.referenceNotes }),
     "DRAFTS TO REPAIR: " + JSON.stringify(drafts),
-  ].join("\\n");
+  ].join("\n");
 }
 
 export function inventoryRequest(w: ScreenplayWorkflow, form: VideoForm): string {
   const count = requiredScreenplaySceneCount(form);
-  return "Extract a production inventory ONLY from this approved Burmese screenplay. JSON {references:[{id,kind:'character'|'background'|'prop',title,description}],scenes:[{id,title,location,action,dialogue,durationSeconds,referenceIds:[]} ]}. Write descriptions in Burmese. Use unique short IDs; reuse one reference for each identity/outfit and location. Include visible single-scene characters, important props and environments, no invented extra cast. Character description: face/hair/build, complete wardrobe, palette and identifying details; location: spatial layout, fixed objects, materials, light direction. IMPORTANT: produce EXACTLY " + count + " inventory scenes, one for each numbered screenplay scene in the same order. Never merge two numbered scenes into one inventory scene, never split one numbered scene into multiple scenes, and never omit a numbered scene. Set each durationSeconds to " + form.clipDuration + " to match the requested Google Flow clip length; final editing can trim the combined clips to the target " + form.targetDuration + " seconds. Copy exact dialogue into dialogue; do not paraphrase or omit it. Each shot links at most 3 needed reference IDs; at most 12 references total. No video prompts yet.\\n" + scriptSource(w, form);
+  return "Extract a production inventory ONLY from this approved Burmese screenplay. JSON {references:[{id,kind:'character'|'background'|'prop',title,description}],scenes:[{id,title,location,action,dialogue,durationSeconds,referenceIds:[]} ]}. Write descriptions in Burmese. Use unique short IDs; reuse one reference for each identity/outfit and location. Include visible single-scene characters, important props and environments, no invented extra cast. Character description: face/hair/build, complete wardrobe, palette and identifying details; location: spatial layout, fixed objects, materials, light direction. IMPORTANT: produce EXACTLY " + count + " inventory scenes, one for each numbered screenplay scene in the same order. Never merge two numbered scenes into one inventory scene, never split one numbered scene into multiple scenes, and never omit a numbered scene. Set each durationSeconds to " + form.clipDuration + " to match the requested Google Flow clip length; final editing can trim the combined clips to the target " + form.targetDuration + " seconds. Copy exact dialogue into dialogue; do not paraphrase or omit it. Each shot links at most 3 needed reference IDs; at most 12 references total. No video prompts yet.\n" + scriptSource(w, form);
 }
 export function approvedSceneRequest(w: ScreenplayWorkflow, form: VideoForm): string {
   return "Generate a Burmese storyboard ONLY from the approved screenplay AND edited inventory below. Return JSON {projectTitle,logline,visualBible,continuityRules:[],globalNegativePrompt,productionNotes:[],scenes:[{id,sceneNumber,title,durationSeconds,objective,visualDescription,shotSize,cameraMovement,lighting,mood,action,flowPrompt,voiceover,onscreenText,audioNotes,transition,referenceAssets:[],negativePrompt,openingFrame,finalFrame,handoff:'CUT'|'CONTINUATION',backgroundAngle:'A'|'B'|'C'|'D',sfx,backgroundMusic}]}. One scene per inventory scene, same IDs, order, duration and exact dialogue. Do not invent characters, wardrobe, locations, props, dialogue or events. Refer to approved reference IDs/names; full identity descriptions must match the registry. Technical keys/enums stay English. Override English-output language in the guidance: ALL descriptions and flowPrompt must be Burmese for review.\n" + sceneDetailRequirements + "\nAPPROVED SOURCE:\n" + inventorySource(w, form);
