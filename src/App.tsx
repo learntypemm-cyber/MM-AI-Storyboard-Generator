@@ -651,7 +651,8 @@ function App() {
     try {
       // Test one model at a time to reduce burst requests on Free-tier accounts.
       for (const option of modelOptions) {
-        const result = await probeGeminiModel(key, option.id);
+        const probe = await probeGeminiModel(key, option.id);
+        const result = { ...probe, displayName: option.displayName };
         results.push(result);
         setModelChecks([...results]);
         setModelCheckProgress(results.length);
@@ -985,11 +986,11 @@ function App() {
         <section className="modal-card settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <div className="modal-top"><div className="modal-icon"><KeyRound size={20} /></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={18} /></button></div>
           <h2 id="settings-title">Connect Gemini</h2><p className="modal-description">Your API key writes screenplay choices, polishes your edits, prepares approved scenes and translates prompts only when you request each step.</p>
-          <Field label="Gemini API key" hint="Key ထည့်တာနဲ့ ဒီ browser ထဲ အလိုအလျောက်သိမ်းပါတယ်။ Website address သို့မဟုတ် browser ပြောင်းရင် ပြန်ထည့်ရန်လိုပါတယ်။"><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => { setApiKeyDraft(event.target.value); setGeminiTestResult(null); persistApiKey(event.target.value); }} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
+          <Field label="Gemini API key" hint="Key ထည့်တာနဲ့ ဒီ browser ထဲ အလိုအလျောက်သိမ်းပါတယ်။ Website address သို့မဟုတ် browser ပြောင်းရင် ပြန်ထည့်ရန်လိုပါတယ်။"><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => { setApiKeyDraft(event.target.value); setGeminiTestResult(null); setModelChecks([]); setModelCheckProgress(0); persistApiKey(event.target.value); }} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
           <Field label="Gemini API model" hint="Choose a text model listed by Google for your key. Quota and generation access depend on your account."><select className="input" value={modelOptions.some((item) => item.id === modelDraft) ? modelDraft : ""} disabled={!modelOptions.length || loadingModels} onChange={(event) => { setModelDraft(event.target.value); setGeminiTestResult(null); }}><option value="" disabled>{loadingModels ? "Loading models…" : "Add a key to load models"}</option>{modelOptions.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.id}</option>)}</select></Field>
           {modelListError && <div role="alert" className="gemini-test-result error">{modelListError}</div>}
           {apiKeyDraft.trim() && apiKeyDraft.trim() === apiKey && <p role="status">API key saved in this browser · Refresh လုပ်ပြီးလည်း ပြန်သုံးနိုင်ပါတယ်။</p>}
-          <button className="quiet-button" disabled={!apiKeyDraft.trim() || loadingModels} onClick={() => setModelRefresh((value) => value + 1)}><RefreshCw size={15} /> {loadingModels ? "Loading models…" : "Refresh models"}</button>
+          <button className="quiet-button" disabled={!apiKeyDraft.trim() || loadingModels} onClick={() => { setModelChecks([]); setModelCheckProgress(0); setModelRefresh((value) => value + 1); }}><RefreshCw size={15} /> {loadingModels ? "Loading models…" : "Refresh models"}</button>
           <button className="secondary-button model-scan-button" disabled={!apiKeyDraft.trim() || loadingModels || checkingModels || !modelOptions.length || modelListKey !== apiKeyDraft.trim()} onClick={() => void checkGeminiModelAvailability()}><Zap size={15} /> {checkingModels ? "Testing models " + modelCheckProgress + "/" + modelOptions.length + "…" : "Check which models work"}</button>
           <p className="field-hint">Runs one small live generation request per listed model. This may use some Free-tier quota. Results reflect access at the time of the test, not future quota availability.</p>
           {checkingModels && <div className="model-scan-progress" role="status">Testing {modelCheckProgress} of {modelOptions.length} models sequentially to reduce burst requests.</div>}
