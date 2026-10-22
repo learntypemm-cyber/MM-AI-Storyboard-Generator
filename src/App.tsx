@@ -197,9 +197,9 @@ function App() {
   const [assetProgress, setAssetProgress] = useState("");
   const lastEdit = useRef({ label: "", time: 0 });
   const [form, setForm] = useState<VideoForm>(DEFAULT_FORM);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(STORAGE.key) ?? "");
+  const [apiKey, setApiKey] = useState(() => { try { return localStorage.getItem(STORAGE.key) ?? ""; } catch { return ""; } });
   const [apiKeyDraft, setApiKeyDraft] = useState("");
-  const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem(STORAGE.model) ?? GEMINI_DEFAULT);
+  const [geminiModel, setGeminiModel] = useState(() => { try { return localStorage.getItem(STORAGE.model) ?? GEMINI_DEFAULT; } catch { return GEMINI_DEFAULT; } });
   const [modelDraft, setModelDraft] = useState(geminiModel);
   const [modelOptions, setModelOptions] = useState<GeminiModelOption[]>([]);
   const [modelListKey, setModelListKey] = useState("");
@@ -659,17 +659,36 @@ function App() {
     }
   };
 
+  const persistApiKey = (value: string): boolean => {
+    const key = value.trim();
+    if (!key) return false; // Clearing the input is not a request to remove the saved key.
+    try {
+      localStorage.setItem(STORAGE.key, key);
+      setApiKey(key);
+      return true;
+    } catch {
+      setGeminiTestResult({ ok: false, message: "API key could not be saved in this browser. Browser storage may be full or blocked. Keep this window open and enable browser storage before retrying." });
+      return false;
+    }
+  };
+  const removeApiKey = () => {
+    try {
+      localStorage.removeItem(STORAGE.key);
+      setApiKeyDraft(""); setApiKey(""); setGeminiTestResult(null); setSettingsOpen(false);
+      setNotice("API key removed from this browser.");
+    } catch { setGeminiTestResult({ ok: false, message: "Could not remove the saved key. Check browser storage settings and retry." }); }
+  };
   const saveApiSettings = () => {
-    const nextKey = apiKeyDraft.trim();
-    if (!validModelSelection) return;
-    const model = modelDraft;
-    if (nextKey) { localStorage.setItem(STORAGE.key, nextKey); setApiKey(nextKey); }
-    else { localStorage.removeItem(STORAGE.key); setApiKey(""); }
-    localStorage.setItem(STORAGE.model, model);
-    setGeminiModel(model);
-    setSettingsOpen(false);
-    setGeminiTestResult(null);
-    setNotice(nextKey ? "Gemini settings saved in this browser." : "API key removed from this browser.");
+    if (!persistApiKey(apiKeyDraft)) return;
+    try {
+      // Model discovery must not prevent saving a key, including when offline.
+      if (validModelSelection) {
+        localStorage.setItem(STORAGE.model, modelDraft);
+        setGeminiModel(modelDraft);
+      }
+      setSettingsOpen(false); setGeminiTestResult(null);
+      setNotice("API key saved in this browser. Use the same website address and browser to keep it after refresh.");
+    } catch { setGeminiTestResult({ ok: false, message: "API key saved, but the model setting could not be saved. Please retry." }); }
   };
 
   return (
@@ -932,13 +951,14 @@ function App() {
         <section className="modal-card settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <div className="modal-top"><div className="modal-icon"><KeyRound size={20} /></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={18} /></button></div>
           <h2 id="settings-title">Connect Gemini</h2><p className="modal-description">Your API key powers concept generation, storyboard creation, and scene improvements.</p>
-          <Field label="Gemini API key" hint="Stored in this browser's localStorage. Never paste a production server key into a public website."><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => { setApiKeyDraft(event.target.value); setGeminiTestResult(null); }} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
+          <Field label="Gemini API key" hint="Key ထည့်တာနဲ့ ဒီ browser ထဲ အလိုအလျောက်သိမ်းပါတယ်။ Website address သို့မဟုတ် browser ပြောင်းရင် ပြန်ထည့်ရန်လိုပါတယ်။"><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => { setApiKeyDraft(event.target.value); setGeminiTestResult(null); persistApiKey(event.target.value); }} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
           <Field label="Gemini API model" hint="Choose a text model listed by Google for your key. Quota and generation access depend on your account."><select className="input" value={modelOptions.some((item) => item.id === modelDraft) ? modelDraft : ""} disabled={!modelOptions.length || loadingModels} onChange={(event) => { setModelDraft(event.target.value); setGeminiTestResult(null); }}><option value="" disabled>{loadingModels ? "Loading models…" : "Add a key to load models"}</option>{modelOptions.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.id}</option>)}</select></Field>
           {modelListError && <div role="alert" className="gemini-test-result error">{modelListError}</div>}
+          {apiKeyDraft.trim() && apiKeyDraft.trim() === apiKey && <p role="status">API key saved in this browser · Refresh လုပ်ပြီးလည်း ပြန်သုံးနိုင်ပါတယ်။</p>}
           <button className="quiet-button" disabled={!apiKeyDraft.trim() || loadingModels} onClick={() => setModelRefresh((value) => value + 1)}><RefreshCw size={15} /> {loadingModels ? "Loading models…" : "Refresh models"}</button>
           {geminiTestResult && <div className={"gemini-test-result " + (geminiTestResult.ok ? "success" : "error")} role="status"><span>{geminiTestResult.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span><span>{geminiTestResult.message}</span></div>}
           <div className="privacy-note"><AlertCircle size={16} /><span>This is a browser-only development app. The key is sent to Google's Gemini API from your browser and stored locally. For a public deployment, proxy requests through a secured backend.</span></div>
-          <div className="modal-actions"><button className="quiet-button" onClick={() => { setApiKeyDraft(""); localStorage.removeItem(STORAGE.key); setApiKey(""); setGeminiTestResult(null); setSettingsOpen(false); }}>Remove key</button><button className="secondary-button" onClick={() => void testGeminiSettings()} disabled={testingGemini || !validModelSelection}><Zap size={15} /> {testingGemini ? "Testing..." : "Test model"}</button><button className="primary-button" onClick={saveApiSettings} disabled={!validModelSelection}><Check size={16} /> Save settings</button></div>
+          <div className="modal-actions"><button className="quiet-button" onClick={removeApiKey}>Remove key</button><button className="secondary-button" onClick={() => void testGeminiSettings()} disabled={testingGemini || !validModelSelection}><Zap size={15} /> {testingGemini ? "Testing..." : "Test model"}</button><button className="primary-button" onClick={saveApiSettings} disabled={!apiKeyDraft.trim()}><Check size={16} /> Save settings</button></div>
           <div className="modal-help">Get or manage your key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Google AI Studio <ChevronRight size={12} /></a></div>
         </section>
       </div>}

@@ -484,3 +484,34 @@ it("includes existing visual details and constraints in the copied/exported vide
   const zip = await JSZip.loadAsync(await promptPackageZip(current, form));
   expect(await zip.file("scene-01/video-prompt.txt")!.async("string")).toBe(prompt);
 });
+
+
+it("persists a pasted key immediately and restores it after remount without model discovery", async () => {
+  vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Offline"));
+  const app = render(<App />);
+  fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[0]);
+  fireEvent.change(screen.getByLabelText(/Gemini API key/), { target: { value: "  persisted-test-key  " } });
+  expect(localStorage.getItem("mm-storyboard-gemini-key")).toBe("persisted-test-key");
+  expect((screen.getByRole("button", { name: "Save settings" }) as HTMLButtonElement).disabled).toBe(false);
+  app.unmount();
+  render(<App />);
+  fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[0]);
+  expect((screen.getByLabelText(/Gemini API key/) as HTMLInputElement).value).toBe("persisted-test-key");
+  fireEvent.change(screen.getByLabelText(/Gemini API key/), { target: { value: "" } });
+  expect(localStorage.getItem("mm-storyboard-gemini-key")).toBe("persisted-test-key");
+  fireEvent.click(screen.getByRole("button", { name: "Remove key" }));
+  expect(localStorage.getItem("mm-storyboard-gemini-key")).toBeNull();
+});
+
+it("reports blocked key storage instead of claiming that the key was saved", () => {
+  render(<App />);
+  fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[0]);
+  const original = Storage.prototype.setItem;
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
+    if (key === "mm-storyboard-gemini-key") throw new Error("Blocked");
+    return original.call(this, key, value);
+  });
+  fireEvent.change(screen.getByLabelText(/Gemini API key/), { target: { value: "unsaved-test-key" } });
+  expect(screen.getByText(/API key could not be saved/)).toBeTruthy();
+  expect(localStorage.getItem("mm-storyboard-gemini-key")).toBeNull();
+});
