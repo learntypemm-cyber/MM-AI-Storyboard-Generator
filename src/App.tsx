@@ -1009,7 +1009,7 @@ function App() {
         </div>
       </main>
 
-      {assetStudioOpen && <AssetStudio protectedAssetIds={Array.from(new Set([storyboard, ...history.map((item) => item.storyboard), ...savedProjects.flatMap((project) => [project.storyboard, ...(project.history || []).map((item) => item.storyboard)])].flatMap((board) => board?.scenes.flatMap((scene) => scene.assetIds || []) || [])))} projectId={projectId} onAssetsChanged={refreshAssets} open={assetStudioOpen} onClose={() => setAssetStudioOpen(false)} apiKey={apiKey} projectTitle={storyboard?.projectTitle || selectedConcept?.title || form.topic} topic={form.topic} visualStyle={form.visualStyle} aspectRatio={form.aspectRatio} projectReferences={form.referenceImages} storyboard={storyboard} />}
+      {assetStudioOpen && <AssetStudio protectedAssetIds={Array.from(new Set([storyboard, ...history.map((item) => item.storyboard), ...savedProjects.flatMap((project) => [project.storyboard, ...(project.history || []).map((item) => item.storyboard)])].flatMap((board) => board?.scenes.flatMap((scene) => scene.assetIds || []) || [])))} projectId={projectId} onAssetsChanged={refreshAssets} open={assetStudioOpen} onClose={() => setAssetStudioOpen(false)} apiKey={apiKey} projectTitle={storyboard?.projectTitle || selectedConcept?.title || form.topic} topic={form.topic} visualStyle={form.visualStyle} aspectRatio={form.aspectRatio} projectReferences={form.referenceImages} storyboard={storyboard} model={geminiModel} />}
 
       {settingsOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
         <section className="modal-card settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
