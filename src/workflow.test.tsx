@@ -1,4 +1,4 @@
-import { screenplayChoicesSchema, scriptSource, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema } from "./lib/screenplayWorkflow";
+import { screenplayChoicesSchema, scriptSource, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema, screenplayRequest, requiredScreenplaySceneCount, screenplaySceneCount, screenplayCompletenessIssues } from "./lib/screenplayWorkflow";
 import { draftSource, translatedBoard, validateTranslation } from "./lib/draftTranslation";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
 import { sceneInstructions, sceneBackground, completePromptText, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
@@ -293,12 +293,41 @@ describe("Gemini model discovery", () => {
 
 describe("screenplay approval workflow", () => {
   const reply = (data: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }] }));
+  const fullScreenplay = (tag = "") => [
+    "၁။ INT. BEDROOM - DAY",
+    "မေမီသည် စာအုပ်များကို တစ်အုပ်ချင်းလှန်ဖတ်ပြီး မနေ့ကမှတ်ထားသော စာကြောင်းကို ပြန်ရှာသည်။ သူမမျက်နှာပေါ်က စိုးရိမ်မှုကို မြင်ရပြီး ခဲတံဖြင့် အရေးကြီးသော စကားလုံးများကို အောက်မျဉ်းသားလိုက်သည်။ " + tag,
+    "မေမီ: ဒီလောက်ကြိုးစားတာတောင် ဘာလို့ အလွယ်တကူ မေ့နေရတာလဲ။",
+    "SFX: စာမျက်နှာလှန်သံနှင့် ခဲတံစားပွဲပေါ်တင်သံ။",
+    "၂။ INT. BEDROOM - LATER",
+    "မေမီသည် ရှုပ်နေသော စာအုပ်များကို ဘေးဖယ်ပြီး မှတ်စုကတ်လေးများကို အစီအစဉ်တကျချထားသည်။ သူမက မေးခွန်းတစ်ခုကို ဖတ်ပြီး အဖြေကို မကြည့်ဘဲ ကိုယ်တိုင်ပြန်စဉ်းစားကာ မှန်ကန်သောကတ်ကို ရွေးလိုက်သည်။",
+    "မေမီ: အဖြေကို ဖုံးထားပြီး ကိုယ်တိုင်ပြန်မှတ်ကြည့်ရမယ်။",
+    "SFX: ကတ်ပြားများကို စားပွဲပေါ်ရွှေ့သံ။",
+    "၃။ INT. BEDROOM - EVENING",
+    "နံရံက နာရီလက်တံရွေ့နေစဉ် မေမီသည် ကတ်များကို နေ့စွဲအလိုက် ခွဲထားသည်။ သူမက ယနေ့၊ မနက်ဖြန်နှင့် နောက်ရက်များအတွက် ပြန်လည်လေ့ကျင့်မည့်အချိန်ကို မှတ်စုစာအုပ်ထဲ ရေးမှတ်လိုက်သည်။",
+    "မေမီ: အချိန်ခွဲပြီး ပြန်လေ့ကျင့်ရင် ပိုမှတ်မိလာမှာပဲ။",
+    "SFX: နာရီတိတ်တိတ်မြည်သံနှင့် စာရေးသံ။",
+    "၄။ INT. EXAM ROOM - DAY",
+    "စာမေးပွဲခန်းမထဲတွင် မေမီသည် မေးခွန်းကို တည်ငြိမ်စွာဖတ်ပြီး အဖြေကို အစဉ်လိုက်ရေးသည်။ သူမမျက်နှာမှ စိတ်ပူပန်မှု ပျောက်ကွယ်သွားပြီး နောက်ဆုံးစာကြောင်းကို စစ်ဆေးကာ ယုံကြည်မှုရှိစွာ ပြုံးလိုက်သည်။",
+    "မေမီ: အခုတော့ မှတ်မိနေပြီ။ ပြန်လေ့ကျင့်ခဲ့တာ အကျိုးရှိတယ်။",
+    "SFX: ခဲတံရေးသံရပ်သွားပြီး ခန်းမထဲ တိတ်ဆိတ်သွားသည်။",
+  ].join("\n");
   it("waits for screenplay and reference approval, preserves edits and invalidates old prompts", async () => {
     localStorage.setItem("mm-storyboard-gemini-key", "test-key");
     const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(reply({ choices: [1, 2, 3].map(n => ({ title: "ဇာတ်လမ်း " + n, screenplay: "အတွင်း။ ကော်ဖီဆိုင် — နေ့\nမေသည် ကော်ဖီသောက်သည်။ မေ: မင်္ဂလာပါ။" })) }))
-      .mockResolvedValueOnce(reply({ screenplay: "ချောရေးမူ။ မေသည် ကော်ဖီခွက်ကို မလိုက်သည်။ မေ: မင်္ဂလာပါ။" }))
-      .mockResolvedValueOnce(reply({ references: [{ id: "may", kind: "character", title: "မေ", description: "ဆံပင်တို၊ အပြာရောင်ဝတ်စုံ" }, { id: "cafe", kind: "background", title: "ကော်ဖီဆိုင်", description: "သစ်သားစားပွဲနှင့် ပြတင်းပေါက်" }], scenes: [{ id: "shot", title: "ကော်ဖီသောက်ချိန်", location: "ကော်ဖီဆိုင်", action: "မေသည်ခွက်ကိုမလိုက်သည်", dialogue: "မင်္ဂလာပါ", durationSeconds: 8, referenceIds: ["may", "cafe"] }] }))
+      .mockResolvedValueOnce(reply({ choices: [1, 2, 3].map(n => ({ title: "ဇာတ်လမ်း " + n, screenplay: fullScreenplay() })) }))
+      .mockResolvedValueOnce(reply({ screenplay: fullScreenplay("ချောရေးမူ") }))
+      .mockResolvedValueOnce(reply({
+        references: [
+          { id: "may", kind: "character", title: "မေ", description: "ဆံပင်တို၊ အပြာရောင်ဝတ်စုံ" },
+          { id: "cafe", kind: "background", title: "ကော်ဖီဆိုင်", description: "သစ်သားစားပွဲနှင့် ပြတင်းပေါက်" },
+        ],
+        scenes: [1, 2, 3, 4].map(n => ({
+          id: "shot-" + n, title: "ကော်ဖီသောက်ချိန် " + n, location: "ကော်ဖီဆိုင်",
+          action: n === 1 ? "မေသည်ခွက်ကိုမလိုက်သည်" : "မေသည်ကတ်များကိုပြန်လေ့ကျင့်သည်",
+          dialogue: n === 1 ? "မင်္ဂလာပါ" : "ပြန်လေ့ကျင့်မယ်",
+          durationSeconds: 8, referenceIds: ["may", "cafe"],
+        })),
+      }))
       .mockImplementationOnce(async (_url, init) => {
         const prompt = JSON.parse(String(init?.body)).contents[0].parts[0].text as string;
         const approved = JSON.parse(prompt.split("\n").at(-1)!);
@@ -345,6 +374,14 @@ describe("screenplay approval workflow", () => {
     await waitFor(() => expect((screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement).value).toBe("အသစ်ပြင်ထားသောဇာတ်လမ်း"));
     expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+  it("calculates screenplay clip count from target runtime and validates under-length scripts", () => {
+    expect(requiredScreenplaySceneCount({ targetDuration: 60, clipDuration: 8 })).toBe(8);
+    expect(requiredScreenplaySceneCount({ targetDuration: 90, clipDuration: 8 })).toBe(12);
+    expect(screenplayRequest({ ...form, targetDuration: 90, clipDuration: 8 })).toContain("EXACTLY 12 numbered scene headings");
+    const short = "၁။ INT. ROOM - DAY\\nမေမီသည် စာအုပ်ကိုဖတ်ပြီး မှတ်စုများကို စားပွဲပေါ်တွင် စီထားသည်။ သူမက ခေါင်းညိတ်ပြီး အဖြေကို ပြန်ပြောသည်။ ဒီနေ့မှာ ပြန်လေ့ကျင့်ဖို့ ဆုံးဖြတ်လိုက်သည်။";
+    expect(screenplaySceneCount(short)).toBe(1);
+    expect(screenplayCompletenessIssues(short, { targetDuration: 90, clipDuration: 8 })[0]).toContain("exactly 12 numbered clip-scenes");
   });
   it("requires exactly three complete screenplay choices", () => {
     expect(() => screenplayWorkflowSchema.parse({ choices: [], selectedId: "" })).toThrow();
