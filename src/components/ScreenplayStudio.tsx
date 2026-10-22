@@ -2,7 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 import type { ImageAsset, ScreenplayWorkflow, Storyboard, VideoForm } from "../types";
 import { generateJson } from "../lib/gemini";
-import { scriptSource, scriptApproved, inventorySource, inventoryCurrent, inventoryApproved, scriptInventorySchema, inventoryRequest, approvedSceneRequest, bindApprovedBoard, pipelineCurrent } from "../lib/screenplayWorkflow";
+import { scriptSource, scriptApproved, inventorySource, inventoryCurrent, inventoryApproved, scriptInventorySchema, inventoryRequest, approvedSceneRequest, bindApprovedBoard, pipelineCurrent, requiredScreenplaySceneCount, screenplaySceneCount, screenplayCompletenessIssues } from "../lib/screenplayWorkflow";
 import { storyboardSchema } from "../lib/projectArchive";
 import { referenceImagePrompt } from "../lib/automaticAssets";
 import { putAsset, assetAsReference } from "../lib/assetStore";
@@ -12,6 +12,9 @@ type Props = { value: ScreenplayWorkflow; form: VideoForm; board: Storyboard | n
 export default function ScreenplayStudio({ value, form, board, projectId, assets, busy, apiKey, model, requireKey, onChange, onBoard, onBusy, onError }: Props) {
   const [message, setMessage] = useState("");
   const selected = value.choices.find(c => c.id === value.selectedId);
+  const expectedSceneCount = requiredScreenplaySceneCount(form);
+  const selectedSceneCount = selected ? screenplaySceneCount(selected.screenplay) : 0;
+  const selectedScriptIssues = selected ? screenplayCompletenessIssues(selected.screenplay, form) : [];
   const current = inventoryCurrent(value, form);
   const approved = inventoryApproved(value, form);
   const run = async (label: string, action: () => Promise<void>) => {
@@ -22,16 +25,29 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
   const editChoice = (patch: Partial<NonNullable<typeof selected>>) => { if (!selected) return; onChange({ ...value, choices: value.choices.map(c => c.id === selected.id ? { ...c, ...patch } : c) }); };
   const polish = () => run("polish", async () => {
     if (!selected?.screenplay.trim()) return;
-    const raw = await generateJson<unknown>(apiKey, model, "Polish this user-edited Burmese screenplay. Preserve its plot, ending, cast, events and exact intended dialogue meaning. Improve Burmese prose, screenplay formatting and transitions only. Do not invent new scenes or people. Keep it performable within " + form.targetDuration + " seconds. Return JSON {screenplay:string}.\n" + selected.screenplay);
+    const raw = await generateJson<unknown>(
+      apiKey,
+      model,
+      "Polish this user-edited Burmese screenplay while preserving its plot, ending, cast, scene count and intended dialogue. Keep exactly " + expectedSceneCount + " numbered clip-scenes for a " + form.targetDuration + "-second video with " + form.clipDuration + "-second source clips. Do not summarize or remove scenes. Improve Burmese prose, filmable action, dialogue and transitions only. Return JSON {screenplay:string}.\\n" + selected.screenplay,
+    );
     const result = z.object({ screenplay: z.string().trim().min(1).max(100000) }).parse(raw);
+    const issues = screenplayCompletenessIssues(result.screenplay, form);
+    if (issues.length) throw new Error("ချောရေးမူက မပြည့်စုံသေးပါ။ " + issues.join(" "));
     editChoice({ polishCandidate: result.screenplay, polishFor: selected.screenplay });
   });
   const extract = () => run("inventory", async () => {
     if (!selected?.screenplay.trim() || current) return;
+    const screenplayIssues = screenplayCompletenessIssues(selected.screenplay, form);
+    if (screenplayIssues.length) {
+      throw new Error("ဇာတ်ညွှန်းမပြည့်စုံသေးပါ။ Expected " + expectedSceneCount + " scenes, found " + screenplaySceneCount(selected.screenplay) + ". " + screenplayIssues.join(" "));
+    }
     const next = { ...value, approvedScript: scriptSource(value, form) };
     onChange(next);
     const raw = await generateJson<unknown>(apiKey, model, inventoryRequest(next, form), form.referenceImages);
     const parsed = scriptInventorySchema.parse(raw);
+    if (parsed.scenes.length !== expectedSceneCount) {
+      throw new Error("Scene စာရင်းက " + parsed.scenes.length + " ခုပဲ ရလာပါတယ်။ ဒီ video အတွက် " + expectedSceneCount + " ခုလိုအပ်ပါတယ်။ ပြန်စမ်းကြည့်ပါ။");
+    }
     const ids = new Map(parsed.references.map(r => [r.id, crypto.randomUUID()]));
     onChange({ ...next, approvedInventory: undefined, inventory: { source: scriptSource(next, form), references: parsed.references.map(r => ({ id: ids.get(r.id)!, title: r.title, kind: r.kind, description: r.description })), scenes: parsed.scenes.map(s => ({ ...s, id: crypto.randomUUID(), referenceIds: s.referenceIds.map(id => ids.get(id)!) })) } });
   });
@@ -66,8 +82,8 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
   };
   return <section className="storyboard-section screenplay-studio">
     <h2>၁။ မြန်မာဇာတ်ညွှန်း ၃ မျိုးထဲမှ ရွေးပါ</h2>
-    <p>ဗီဒီယိုမှာ ဖြစ်လာမည့်ဇာတ်လမ်းကို အရင်ဖတ်ပါ။ ရွေးချယ်ခြင်းနှင့် ကိုယ်တိုင် edit လုပ်ခြင်းက API မသုံးပါ။</p>
-    <div className="concept-grid">{value.choices.map((c, i) => <article className="concept-card" key={c.id}><h3>{i + 1}. {c.title}</h3><details><summary>ဇာတ်ညွှန်းအပြည့် ဖတ်ရန်</summary><pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", padding: 16 }}>{c.screenplay}</pre></details><button className="primary-button" disabled={busy} aria-pressed={value.selectedId === c.id} onClick={() => onChange({ ...value, selectedId: c.id })}>ဇာတ်ညွှန်း {i + 1} ရွေးမယ်</button></article>)}</div>
+    <p>ဗီဒီယိုမှာ ဖြစ်လာမည့်ဇာတ်လမ်းကို အရင်ဖတ်ပါ။ ရွေးချယ်ခြင်းနှင့် ကိုယ်တိုင် edit လုပ်ခြင်းက API မသုံးပါ။ Target {form.targetDuration}s ÷ {form.clipDuration}s per clip = <strong>{expectedSceneCount} scenes per screenplay</strong> ဖြစ်ရပါမယ်။ Scene တစ်ခုက Flow clip တစ်ခုစီ ဖြစ်ပါတယ်။</p>
+    <div className="concept-grid">{value.choices.map((c, i) => <article className="concept-card" key={c.id}><h3>{i + 1}. {c.title}</h3><p>Scene အရေအတွက်: <strong>{screenplaySceneCount(c.screenplay)} / {expectedSceneCount}</strong> {screenplayCompletenessIssues(c.screenplay, form).length ? "· မပြည့်စုံသေး" : "· ပြည့်စုံ"}</p><details><summary>ဇာတ်ညွှန်းအပြည့် ဖတ်ရန်</summary><pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", padding: 16 }}>{c.screenplay}</pre></details><button className="primary-button" disabled={busy} aria-pressed={value.selectedId === c.id} onClick={() => onChange({ ...value, selectedId: c.id })}>ဇာတ်ညွှန်း {i + 1} ရွေးမယ်</button></article>)}</div>
     {selected && <>
       <h3>၂။ ရွေးထားသောဇာတ်ညွှန်းကို ပြင် / ချောရေးပါ</h3>
       <fieldset className="scene-fieldset" disabled={busy}>
@@ -79,6 +95,7 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
         {selected.polishCandidate && selected.polishFor === selected.screenplay && <div className="field"><strong>ချောရေးထားသော မူသစ် — မူရင်းကို မအစားထိုးရသေးပါ</strong><textarea className="input" readOnly rows={16} value={selected.polishCandidate} /><button className="primary-button" onClick={() => editChoice({ screenplay: selected.polishCandidate!, versions: [selected.screenplay, ...selected.versions].slice(0, 20), polishCandidate: undefined, polishFor: undefined })}>ချောရေးမူကို လက်ခံမယ်</button><button className="secondary-button" onClick={() => editChoice({ polishCandidate: undefined, polishFor: undefined })}>မူရင်းကိုပဲ ဆက်သုံးမယ်</button></div>}
       </fieldset>
       <p role="status">{scriptApproved(value, form) ? "ဇာတ်ညွှန်း အတည်ပြုပြီးပါပြီ။" : "လက်ရှိဇာတ်ညွှန်း အတည်မပြုရသေးပါ။ အောက်ကခလုတ်နှိပ်မှ နောက်အဆင့်ဆက်ပါမယ်။"}</p>
+      {selectedScriptIssues.length > 0 && <p role="alert">ဇာတ်ညွှန်းစစ်ဆေးချက်: {selectedSceneCount}/{expectedSceneCount} scenes. {selectedScriptIssues.join(" ")}</p>}
       <button className="primary-button" disabled={busy || !selected.screenplay.trim() || current} onClick={() => void extract()}>ဇာတ်ညွှန်းအတည်ပြုပြီး Character / Background စာရင်းထုတ်မယ်</button>
     </>}
     {value.inventory && !current && <p role="alert">ဇာတ်ညွှန်း သို့မဟုတ် brief ပြောင်းထားပါတယ်။ Reference နှင့် scene prompt အဟောင်းများကို ပြန်အတည်ပြုမပြီးမချင်း အသုံးမပြုနိုင်ပါ။</p>}
