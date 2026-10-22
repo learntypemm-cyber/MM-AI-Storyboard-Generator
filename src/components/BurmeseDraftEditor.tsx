@@ -4,9 +4,9 @@ import { translatedBoard } from "../lib/draftTranslation";
 import { completePromptText, promptPackageZip } from "../lib/promptPackage";
 import { downloadText, fileSlug } from "../lib/export";
 
-type Props = { board: Storyboard; form: VideoForm; busy: boolean; onChange: (board: Storyboard) => void; onTranslate: () => void; onSave: () => void; onRetryReferences: () => void };
+type Props = { referencesLocked?: boolean; board: Storyboard; form: VideoForm; busy: boolean; onChange: (board: Storyboard) => void; onTranslate: () => void; onSave: () => void; onRetryReferences: () => void };
 const sceneFields: Array<[keyof Scene, string]> = [["title", "Scene ခေါင်းစဉ်"], ["objective", "ရည်ရွယ်ချက်"], ["visualDescription", "နေရာနှင့် မြင်ကွင်း"], ["action", "ဇာတ်ကောင် လှုပ်ရှားမှု"], ["shotSize", "ရိုက်ကွက် အရွယ်အစား"], ["cameraMovement", "Camera လှုပ်ရှားမှု"], ["lighting", "အလင်း"], ["mood", "ခံစားချက်"], ["flowPrompt", "မြန်မာ video prompt"], ["openingFrame", "အစပုံ"], ["finalFrame", "အဆုံးပုံ"], ["sfx", "အသံအကျိုးသက်ရောက်မှု"], ["backgroundMusic", "နောက်ခံတေးဂီတ"], ["audioNotes", "အသံညွှန်ကြားချက်"], ["voiceover", "ပြောစကား / Voiceover"], ["onscreenText", "Caption"], ["negativePrompt", "မပါစေလိုသည့်အရာများ"]];
-export default function BurmeseDraftEditor({ board, form, busy, onChange, onTranslate, onSave, onRetryReferences }: Props) {
+export default function BurmeseDraftEditor({ referencesLocked = false, board, form, busy, onChange, onTranslate, onSave, onRetryReferences }: Props) {
   const [message, setMessage] = useState("");
   const english = translatedBoard(board, form);
   const updateScene = (id: string, patch: Partial<Scene>) => onChange({ ...board, scenes: board.scenes.map(scene => scene.id === id ? { ...scene, ...patch } : scene) });
@@ -19,14 +19,14 @@ export default function BurmeseDraftEditor({ board, form, busy, onChange, onTran
   return <section className="storyboard-section">
     <h2>၁။ မြန်မာမူကြမ်း စစ်ပြီးပြင်ပါ</h2>
     <p>ဇာတ်ကောင်၊ နေရာ၊ လှုပ်ရှားမှုနှင့် camera ကို ပြင်ပြီးမှ English ပြောင်းပါ။ Edit လုပ်ရုံနဲ့ API မခေါ်ပါ။</p>
-    <div className="workflow-toolbar"><button className="primary-button" disabled={busy} onClick={onSave}>Save project</button><button className="secondary-button" disabled={busy} onClick={onRetryReferences}>ပျောက်နေသော reference မူကြမ်းများ ဖြည့်ရန်</button></div>
+    <div className="workflow-toolbar"><button className="primary-button" disabled={busy} onClick={onSave}>Save project</button><button className="secondary-button" disabled={busy || referencesLocked} onClick={onRetryReferences}>ပျောက်နေသော reference မူကြမ်းများ ဖြည့်ရန်</button></div>
     <fieldset className="scene-fieldset" disabled={busy}>
       {([['projectTitle', 'Project နာမည်'], ['logline', 'ဇာတ်လမ်းအကျဉ်း'], ['visualBible', 'ပုံစံနှင့်အရောင်'], ['globalNegativePrompt', 'တစ်ခုလုံးတွင် မပါစေလိုသည့်အရာများ']] as const).map(([key, label]) => <label className="field" key={key}>{label}<textarea className="input" value={board[key]} onChange={e => onChange({ ...board, [key]: e.target.value })} /></label>)}
       <label className="field">ဆက်စပ်မှုစည်းမျဉ်းများ (တစ်ကြောင်းတစ်ခု)<textarea className="input" value={board.continuityRules.join("\n")} onChange={e => onChange({ ...board, continuityRules: e.target.value.split("\n") })} /></label>
     </fieldset>
-    <h3>Character / Background / Prop မူကြမ်းများ</h3>
+    <h3>Character / Background / Prop မူကြမ်းများ</h3>{referencesLocked && <p>Reference ပြင်ရန် အပေါ်က Character / Background အဆင့်ကို ပြန်သွားပြီး အတည်ပြုပါ။</p>}
     {!board.referencePlan?.length && <p>Reference မူကြမ်း မရှိသေးပါ။ လိုအပ်လျှင် အပေါ်က ဖြည့်ရန်ခလုတ်ကိုသုံးပါ။</p>}
-    {board.referencePlan?.map(ref => <fieldset className="scene-fieldset" key={ref.id} disabled={busy || board.scenes.some(s => s.locked && ref.sceneIds.includes(s.id))}>
+    {board.referencePlan?.map(ref => <fieldset className="scene-fieldset" key={ref.id} disabled={busy || referencesLocked || board.scenes.some(s => s.locked && ref.sceneIds.includes(s.id))}>
       <label className="field">{ref.kind} နာမည်<input className="input" value={ref.title} onChange={e => onChange({ ...board, referencePlan: board.referencePlan!.map(r => r.id === ref.id ? { ...r, title: e.target.value } : r) })} /></label>
       <label className="field">{ref.title} ပုံထုတ်ရန် မြန်မာမူကြမ်း<textarea className="input" aria-label={"Reference image prompt: " + ref.title} rows={6} value={ref.prompt} onChange={e => onChange({ ...board, referencePlan: board.referencePlan!.map(r => r.id === ref.id ? { ...r, prompt: e.target.value } : r) })} /></label>
       <p>သုံးမည့် Scene: {board.scenes.filter(s => ref.sceneIds.includes(s.id)).map(s => s.sceneNumber).join(", ")}</p>

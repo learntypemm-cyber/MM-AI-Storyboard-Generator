@@ -1,3 +1,4 @@
+import { screenplayWorkflowSchema } from "./screenplayWorkflow";
 import JSZip from "jszip";
 import { z } from "zod";
 import type { ImageAsset, ProductionPreset, ReferenceImage, SavedProject } from "../types";
@@ -14,7 +15,7 @@ const scene = z.object({
   negativePrompt: text, openingFrame: text, finalFrame: text, handoff: z.enum(["CUT", "CONTINUATION"]),
   locked: z.boolean().optional(), reviewStatus: z.enum(["draft", "review", "approved"]).optional(), reviewNotes: text.optional(), assetIds: z.array(id).max(4).optional(),
 });
-const board = z.object({ promptLanguage: z.literal("my").optional(), englishSource: z.string().max(2000000).optional(), englishJson: z.string().max(2000000).optional(), referencePlan: z.array(z.object({ id, kind: z.enum(["character", "background", "prop"]), title: text, prompt: text, sceneIds: z.array(id).max(200) })).max(12).optional(), projectTitle: text, logline: text, visualBible: text, continuityRules: z.array(text), globalNegativePrompt: text, productionNotes: z.array(text), scenes: z.array(scene).max(200) });
+const board = z.object({ pipelineSource: z.string().max(3000000).optional(), promptLanguage: z.literal("my").optional(), englishSource: z.string().max(2000000).optional(), englishJson: z.string().max(2000000).optional(), referencePlan: z.array(z.object({ id, kind: z.enum(["character", "background", "prop"]), title: text, prompt: text, sceneIds: z.array(id).max(200) })).max(12).optional(), projectTitle: text, logline: text, visualBible: text, continuityRules: z.array(text), globalNegativePrompt: text, productionNotes: z.array(text), scenes: z.array(scene).max(200) });
 export const presetSettingsSchema = z.object({
   goal: text, platform: z.enum(["TikTok", "Facebook Reels", "YouTube Shorts", "YouTube"]), targetDuration: z.number().positive().max(7200),
   language: z.enum(["Burmese", "English", "Burmese + English"]), audience: text,
@@ -26,6 +27,7 @@ export const presetSettingsSchema = z.object({
 export const presetSchema = z.object({ id, name: z.string().min(1).max(100), settings: presetSettingsSchema });
 const conceptSchema = z.object({ id, title: text, style: text, hook: text, summary: text, visualDirection: text, whyItWorks: text, storyArc: z.array(text), estimatedDuration: z.number().positive() });
 const projectSchema = z.object({
+  screenplay: screenplayWorkflowSchema.optional(),
   id, title: text, savedAt: text, form: presetSettingsSchema.extend({ topic: text }),
   concepts: z.array(conceptSchema).max(20),
   selectedConceptId: text, storyboard: board.nullable(),
