@@ -5,6 +5,45 @@ const text = z.string().max(100000);
 const required = text.refine(v => v.trim().length > 0, "Required text is empty");
 const id = z.string().min(1).max(200);
 export const screenplayChoicesSchema = z.object({ choices: z.array(z.object({ title: required, screenplay: required })).length(3) });
+export const screenplayRepairSchema = z.object({
+  repairs: z.array(z.object({ index: z.number().int().min(0).max(2), title: required, screenplay: required })).min(1).max(3),
+});
+
+export function requiredScreenplaySceneCount(form: Pick<VideoForm, "targetDuration" | "clipDuration">): number {
+  const runtime = Math.max(1, Number(form.targetDuration) || 1);
+  const clipLength = Math.max(1, Number(form.clipDuration) || 1);
+  return Math.max(1, Math.ceil(runtime / clipLength));
+}
+
+const SCREENPLAY_HEADING = /^[ \\t]*(?:(?:[၀-၉0-9]{1,3}[ \\t]*[။.)])|(?:SCENE|SHOT)[ \\t]+\\d+[ \\t]*[:.)-])[ \\t]*\\S.*$/gim;
+
+export function screenplaySceneCount(screenplay: string): number {
+  return [...screenplay.matchAll(SCREENPLAY_HEADING)].length;
+}
+
+function screenplaySceneBodies(screenplay: string): string[] {
+  const matches = [...screenplay.matchAll(SCREENPLAY_HEADING)];
+  return matches.map((match, index) => {
+    const headingEnd = screenplay.indexOf("\\n", (match.index ?? 0) + match[0].length);
+    if (headingEnd < 0) return "";
+    const bodyStart = headingEnd + 1;
+    const nextHeading = matches[index + 1]?.index ?? screenplay.length;
+    return screenplay.slice(bodyStart, nextHeading).trim();
+  });
+}
+
+export function screenplayCompletenessIssues(screenplay: string, form: Pick<VideoForm, "targetDuration" | "clipDuration">): string[] {
+  const expected = requiredScreenplaySceneCount(form);
+  const actual = screenplaySceneCount(screenplay);
+  const issues: string[] = [];
+  if (actual !== expected) issues.push("Expected exactly " + expected + " numbered clip-scenes for " + form.targetDuration + "s at " + form.clipDuration + "s per clip, but found " + actual + ".");
+  if (actual > 0) {
+    const shortScenes = screenplaySceneBodies(screenplay)
+      .filter(body => Array.from(body.replace(/\\s/g, "")).length < 100).length;
+    if (shortScenes) issues.push(shortScenes + " scene(s) have less than 100 non-space characters of action/dialogue.");
+  }
+  return issues;
+}
 const reference = z.object({ id, kind: z.enum(["character", "background", "prop"]), title: required, description: required, englishDescription: text.optional(), englishSource: text.optional(), imageRevision: text.optional() });
 const shot = z.object({ id, title: required, location: required, action: required, dialogue: text, durationSeconds: z.number().positive().max(600), referenceIds: z.array(id).max(3) });
 export const scriptInventorySchema = z.object({ references: z.array(reference).max(12), scenes: z.array(shot).min(1).max(200) }).superRefine((v, ctx) => {
@@ -27,10 +66,64 @@ export function inventoryApproved(w: ScreenplayWorkflow, form: VideoForm): boole
 export function pipelineCurrent(w: ScreenplayWorkflow | undefined, form: VideoForm, board: Storyboard | null): boolean { return !w || Boolean(inventoryApproved(w, form) && board?.pipelineSource === inventorySource(w, form)); }
 export function screenplayRequest(form: VideoForm): string {
   const { referenceImages: _images, ...brief } = form;
-  return "You are a Burmese screenwriter. Return JSON {choices:[{title,screenplay}]} with EXACTLY THREE distinct ORIGINAL complete screenplays, not concept summaries. Each is a feasible finished video for the target duration. Write in Burmese with screenplay formatting: interior/exterior location/time headings, present-tense visible action, character names, dialogue lines, brief parentheticals and relevant sound cues. Give beginning, development and ending; keep speech/actions performable in the runtime. No prompts, shot grids or English translation yet. Respect all user reference evidence and audio policy. Do not invent real brand claims. Each approach should be meaningfully different.\n" + JSON.stringify(brief);
+  const count = requiredScreenplaySceneCount(form);
+  const approximateSecondsPerScene = (form.targetDuration / count).toFixed(1);
+  return [
+    "You are a professional Burmese screenwriter for short-form video. Return valid JSON only: {choices:[{title,screenplay}]} with EXACTLY THREE meaningfully different, original, complete screenplays.",
+    "These must be FULL FILMABLE SCREENPLAYS, not summaries, concepts, outlines or three-act synopses. Write all spoken dialogue and visible actions in Burmese, using proper screenplay formatting, scene headings, present-tense visual action, character names, dialogue, useful brief parentheticals, and relevant sound cues.",
+    "",
+    "RUNTIME AND CLIP COUNT — NON-NEGOTIABLE",
+    "Target finished runtime: " + form.targetDuration + " seconds.",
+    "Requested Google Flow clip length: " + form.clipDuration + " seconds.",
+    "Each screenplay MUST contain EXACTLY " + count + " numbered scene headings. Each numbered scene is one separate video clip; never combine multiple clips into one scene and never summarize several clips in one paragraph.",
+    "Use sequential headings on separate lines, for example '၁။ INT. BEDROOM - DAY' or '1. INT. BEDROOM - DAY'. The final screenplay must have headings numbered 1 through " + count + " (Burmese or Arabic numerals are fine).",
+    "Plan approximately " + approximateSecondsPerScene + " seconds of story action per scene so the scenes together cover the " + form.targetDuration + "-second story. The Flow clip setting may create clips of " + form.clipDuration + " seconds; mention the small edit trims needed to reach the exact target runtime only when necessary.",
+    "",
+    "DETAIL REQUIRED IN EVERY SCENE",
+    "- Start with an interior/exterior location and time slugline, including INT./EXT. where useful.",
+    "- Include several concrete, filmable visual actions with the character's expression, movement, props and meaningful changes during this clip.",
+    "- Include natural Burmese dialogue or voiceover when appropriate; do not rely on narration to explain every visual. Every scene does not need dialogue if the story truly works visually.",
+    "- Add a relevant SFX / ambient audio cue where useful. Actions, reactions and dialogue must fit the allocated seconds.",
+    "- Give each scene a beginning action, a meaningful development or reaction, and a clear visual endpoint/handoff. Keep continuity of the same people, wardrobe, props and location where intended.",
+    "- Each scene body must be substantive: at least 3 concise screenplay lines and approximately 100–180 non-heading characters of visible action/dialogue on average. Do not use a single generic sentence to stand in for a whole clip. Avoid repeating the same action just to reach the count.",
+    "",
+    "STORY QUALITY",
+    "The full screenplay must have a strong hook, setup, clear step-by-step development, a meaningful climax/payoff and a satisfying ending / call to action appropriate to the goal. Spread these beats across all " + count + " scenes instead of rushing straight to the conclusion.",
+    "Keep the story practical to produce in the requested visual style. Use distinct locations only when the story needs them. Do not introduce unsupported factual claims, real brand promises or unnecessary extra characters.",
+    "The three screenplays must use different narrative approaches, but EVERY option must meet the full scene-count and detail requirements. No explanation before or after the JSON.",
+    "",
+    "USER BRIEF (preserve these settings):",
+    JSON.stringify(brief),
+  ].join("\\n");
 }
+
+export function screenplayRepairRequest(
+  form: VideoForm,
+  choices: Array<{ title: string; screenplay: string }>,
+  invalidIndexes: number[],
+): string {
+  const count = requiredScreenplaySceneCount(form);
+  const drafts = invalidIndexes.map(index => ({
+    index,
+    title: choices[index]?.title,
+    screenplay: choices[index]?.screenplay,
+    issues: screenplayCompletenessIssues(choices[index]?.screenplay || "", form),
+  }));
+  return [
+    "You are repairing incomplete Burmese screenplays. Return valid JSON ONLY in this shape: {repairs:[{index,title,screenplay}]}",
+    "Rewrite only the listed screenplay options and keep each original title and core story idea. Do not return the already-complete options.",
+    "Each repaired screenplay MUST contain exactly " + count + " numbered scene headings, one scene per " + form.clipDuration + "-second video clip, covering a target runtime of " + form.targetDuration + " seconds. Number headings sequentially on separate lines (for example ၁။ or 1.).",
+    "Do not summarize or compress the story into 3-4 scenes. Every scene needs at least 3 concise screenplay lines with visual action/reaction, dialogue or voiceover when appropriate, and useful sound cues. Keep each scene body at least 100 non-space characters, with a concrete beginning, development and endpoint.",
+    "Spread the hook, story development, payoff and ending across all " + count + " scenes. Preserve character identities and story logic. Write natural Burmese screenplay prose.",
+    "For every repair, copy its original zero-based index and title exactly. Include every requested index exactly once.",
+    "BRIEF: " + JSON.stringify({ topic: form.topic, goal: form.goal, targetDuration: form.targetDuration, clipDuration: form.clipDuration, language: form.language, audience: form.audience, visualStyle: form.visualStyle, platform: form.platform, audioPolicy: form.audioPolicy, referenceNotes: form.referenceNotes }),
+    "DRAFTS TO REPAIR: " + JSON.stringify(drafts),
+  ].join("\\n");
+}
+
 export function inventoryRequest(w: ScreenplayWorkflow, form: VideoForm): string {
-  return "Extract a production inventory ONLY from this approved Burmese screenplay. JSON {references:[{id,kind:'character'|'background'|'prop',title,description}],scenes:[{id,title,location,action,dialogue,durationSeconds,referenceIds:[]} ]}. Write descriptions in Burmese. Use unique short IDs; reuse one reference for each identity/outfit and location. Include visible single-scene characters, important props and environments, no invented extra cast. Character description: face/hair/build, complete wardrobe, palette and identifying details; location: spatial layout, fixed objects, materials, light direction. List screenplay events in their original order; divide long events into achievable clips near the desired clip length, without changing dialogue/actions. Copy exact dialogue into dialogue; do not paraphrase or omit it. Each shot links at most 3 needed reference IDs; at most 12 references total. An empty landscape can have no character. No video prompts yet.\n" + scriptSource(w, form);
+  const count = requiredScreenplaySceneCount(form);
+  return "Extract a production inventory ONLY from this approved Burmese screenplay. JSON {references:[{id,kind:'character'|'background'|'prop',title,description}],scenes:[{id,title,location,action,dialogue,durationSeconds,referenceIds:[]} ]}. Write descriptions in Burmese. Use unique short IDs; reuse one reference for each identity/outfit and location. Include visible single-scene characters, important props and environments, no invented extra cast. Character description: face/hair/build, complete wardrobe, palette and identifying details; location: spatial layout, fixed objects, materials, light direction. IMPORTANT: produce EXACTLY " + count + " inventory scenes, one for each numbered screenplay scene in the same order. Never merge two numbered scenes into one inventory scene, never split one numbered scene into multiple scenes, and never omit a numbered scene. Set each durationSeconds to " + form.clipDuration + " to match the requested Google Flow clip length; final editing can trim the combined clips to the target " + form.targetDuration + " seconds. Copy exact dialogue into dialogue; do not paraphrase or omit it. Each shot links at most 3 needed reference IDs; at most 12 references total. No video prompts yet.\\n" + scriptSource(w, form);
 }
 export function approvedSceneRequest(w: ScreenplayWorkflow, form: VideoForm): string {
   return "Generate a Burmese storyboard ONLY from the approved screenplay AND edited inventory below. Return JSON {projectTitle,logline,visualBible,continuityRules:[],globalNegativePrompt,productionNotes:[],scenes:[{id,sceneNumber,title,durationSeconds,objective,visualDescription,shotSize,cameraMovement,lighting,mood,action,flowPrompt,voiceover,onscreenText,audioNotes,transition,referenceAssets:[],negativePrompt,openingFrame,finalFrame,handoff:'CUT'|'CONTINUATION',backgroundAngle:'A'|'B'|'C'|'D',sfx,backgroundMusic}]}. One scene per inventory scene, same IDs, order, duration and exact dialogue. Do not invent characters, wardrobe, locations, props, dialogue or events. Refer to approved reference IDs/names; full identity descriptions must match the registry. Technical keys/enums stay English. Override English-output language in the guidance: ALL descriptions and flowPrompt must be Burmese for review.\n" + sceneDetailRequirements + "\nAPPROVED SOURCE:\n" + inventorySource(w, form);
