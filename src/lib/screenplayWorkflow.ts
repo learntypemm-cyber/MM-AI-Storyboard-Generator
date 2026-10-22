@@ -4,9 +4,85 @@ import { sceneDetailRequirements } from "./promptGuidance";
 const text = z.string().max(100000);
 const required = text.refine(v => v.trim().length > 0, "Required text is empty");
 const id = z.string().min(1).max(200);
-export const screenplayChoicesSchema = z.object({ choices: z.array(z.object({ title: required, screenplay: required })).length(3) });
+function objectValue(value: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    if (Array.isArray(candidate)) {
+      const joined = candidate.map((item) => normalizeScreenplayValue(item)).filter((item): item is string => typeof item === "string" && Boolean(item.trim())).join("\n");
+      if (joined) return joined;
+    }
+  }
+  return "";
+}
+
+function normalizeDialogue(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) return value.map((item) => normalizeDialogue(item)).filter(Boolean).join("\n");
+  if (!value || typeof value !== "object") return "";
+  const item = value as Record<string, unknown>;
+  const speaker = objectValue(item, ["speaker", "character", "characterName", "character_name", "name"]);
+  const words = objectValue(item, ["line", "text", "content", "dialogue", "words", "speech"]);
+  if (speaker && words) return speaker + ": " + words;
+  return words || objectValue(item, ["voiceover", "narration", "action", "description"]);
+}
+
+function isSceneRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  const keys = Object.keys(item).map((key) => key.toLowerCase());
+  const has = (...names: string[]) => names.some((name) => keys.includes(name.toLowerCase()));
+  return has("sceneNumber", "scene_number", "sceneTitle", "scene_title", "sceneHeading", "scene_heading", "slugline", "heading")
+    || (has("location") && has("action", "visibleAction", "visualAction", "dialogue"))
+    || (has("title") && has("action") && has("dialogue"));
+}
+
+function renderSceneRecord(item: Record<string, unknown>, index: number): string {
+  const numberValue = item.sceneNumber ?? item.scene_number ?? item.number ?? item.sceneIndex ?? item.scene_index;
+  const sceneNumber = typeof numberValue === "number" && Number.isFinite(numberValue) ? numberValue : index + 1;
+  const heading = objectValue(item, ["sceneHeading", "scene_heading", "slugline", "heading", "sceneTitle", "scene_title", "location", "title"]);
+  const headingText = heading && /^\s*(?:[၀-၉0-9]{1,3}\s*[။.)]|(?:SCENE|SHOT)\s+\d+)/i.test(heading)
+    ? heading
+    : String(sceneNumber) + ". " + (heading || ("Scene " + sceneNumber));
+  const fields: string[] = [headingText];
+  const action = objectValue(item, ["visibleAction", "visible_action", "visualAction", "visual_action", "action", "visualDescription", "visual_description", "description", "stageDirection", "stage_direction", "directions", "beat"]);
+  if (action) fields.push(action);
+  const parenthetical = objectValue(item, ["parenthetical", "direction", "performanceNote", "performance_note"]);
+  if (parenthetical) fields.push("(" + parenthetical + ")");
+  const dialogue = normalizeDialogue(item.dialogue);
+  if (dialogue) fields.push(dialogue);
+  const voiceover = objectValue(item, ["voiceover", "narration", "voiceOver", "voice_over"]);
+  if (voiceover) fields.push(voiceover.startsWith("V.O.") || voiceover.startsWith("V.O:") ? voiceover : "V.O.: " + voiceover);
+  const sound = objectValue(item, ["sfx", "soundEffects", "sound_effects", "ambientSound", "ambient_sound", "audio"]);
+  if (sound) fields.push("SFX: " + sound);
+  const transition = objectValue(item, ["transition", "handoff", "cut"]);
+  if (transition) fields.push("TRANSITION: " + transition);
+  return fields.filter(Boolean).join("\n");
+}
+
+export function normalizeScreenplayValue(value: unknown): unknown {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    if (value.every((item) => typeof item === "string")) return value.map((item) => item.trim()).filter(Boolean).join("\n");
+    if (value.length > 0 && value.every(isSceneRecord)) {
+      return value.map((item, index) => renderSceneRecord(item, index)).filter(Boolean).join("\n\n");
+    }
+    return value.map((item) => normalizeScreenplayValue(item)).filter((item): item is string => typeof item === "string" && Boolean(item.trim())).join("\n");
+  }
+  if (!value || typeof value !== "object") return value;
+  const item = value as Record<string, unknown>;
+  if (item.screenplay !== undefined) return normalizeScreenplayValue(item.screenplay);
+  if (item.script !== undefined) return normalizeScreenplayValue(item.script);
+  if (Array.isArray(item.scenes)) return normalizeScreenplayValue(item.scenes);
+  if (isSceneRecord(item)) return renderSceneRecord(item, 0);
+  const text = objectValue(item, ["text", "content", "line", "script", "draft", "action", "description", "voiceover", "narration", "dialogue"]);
+  return text || value;
+}
+
+const screenplayText = z.preprocess(normalizeScreenplayValue, required);
+export const screenplayChoicesSchema = z.object({ choices: z.array(z.object({ title: required, screenplay: screenplayText })).length(3) });
 export const screenplayRepairSchema = z.object({
-  repairs: z.array(z.object({ index: z.number().int().min(0).max(2), title: required, screenplay: required })).min(1).max(3),
+  repairs: z.array(z.object({ index: z.number().int().min(0).max(2), title: required, screenplay: screenplayText })).min(1).max(3),
 });
 
 export function requiredScreenplaySceneCount(form: Pick<VideoForm, "targetDuration" | "clipDuration">): number {
