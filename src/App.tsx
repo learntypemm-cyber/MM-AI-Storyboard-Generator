@@ -999,7 +999,7 @@ function App() {
               <div className="model-check-copy"><strong>{item.displayName}</strong><small>{item.modelId}</small><p>{item.message}</p></div>
               <span className="model-check-badge">{item.status === "ready" ? "READY" : item.status === "quota" ? "QUOTA" : item.status === "unavailable" ? "UNAVAILABLE" : item.status === "key-error" ? "KEY ERROR" : "CHECK"}</span>
             </div>)}
-          </div>
+          </div>}
           {geminiTestResult && <div className={"gemini-test-result " + (geminiTestResult.ok ? "success" : "error")} role="status"><span>{geminiTestResult.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span><span>{geminiTestResult.message}</span></div>}
           <div className="privacy-note"><AlertCircle size={16} /><span>This is a browser-only development app. The key is sent to Google's Gemini API from your browser and stored locally. For a public deployment, proxy requests through a secured backend.</span></div>
           <div className="modal-actions"><button className="quiet-button" onClick={removeApiKey}>Remove key</button><button className="secondary-button" onClick={() => void testGeminiSettings()} disabled={testingGemini || !validModelSelection}><Zap size={15} /> {testingGemini ? "Testing..." : "Test model"}</button><button className="primary-button" onClick={saveApiSettings} disabled={!apiKeyDraft.trim()}><Check size={16} /> Save settings</button></div>
