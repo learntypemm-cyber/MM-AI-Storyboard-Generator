@@ -360,6 +360,10 @@ describe("screenplay approval workflow", () => {
     fireEvent.click(generate());
     await waitFor(() => expect(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(4);
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem("mm-storyboard-current") || "null");
+      expect(persisted?.storyboard?.scenes?.length).toBe(4);
+    });
     const saved = JSON.parse(localStorage.getItem("mm-storyboard-current")!);
     expect(saved.storyboard.scenes[0]).toMatchObject({ durationSeconds: 8, voiceover: "မင်္ဂလာပါ", action: "မေသည်ခွက်ကိုမလိုက်သည်" });
     expect(saved.storyboard.referencePlan[0].prompt).toContain("အနီရောင်");
