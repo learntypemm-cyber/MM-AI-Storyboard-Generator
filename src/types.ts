@@ -50,6 +50,8 @@ export type BoardVersion = { id: string; label: string; createdAt: string; story
 export type ImageAsset = {
   handle?: string;
   id: string; kind: "character" | "background" | "prop" | "scene"; title: string; prompt: string;
+  /** Optional bilingual prompt variants; `prompt` remains the default/English prompt for older callers. */
+  promptMy?: string; promptEn?: string;
   mimeType: string; data: string; createdAt: string; useAsReference: boolean;
   projectId?: string; sceneId?: string; sceneNumber?: number;
 };
