@@ -4,7 +4,7 @@ import type { ImageAsset, ScreenplayWorkflow, Storyboard, VideoForm } from "../t
 import { generateJson } from "../lib/gemini";
 import { scriptSource, scriptApproved, inventorySource, inventoryCurrent, inventoryApproved, scriptInventorySchema, inventoryRequest, approvedSceneRequest, bindApprovedBoard, pipelineCurrent, requiredScreenplaySceneCount, screenplaySceneCount, screenplayCompletenessIssues } from "../lib/screenplayWorkflow";
 import { storyboardSchema } from "../lib/projectArchive";
-import { referenceImagePrompt } from "../lib/automaticAssets";
+import { referenceImagePrompt, referenceImagePromptMyanmar } from "../lib/automaticAssets";
 import { putAsset, assetAsReference } from "../lib/assetStore";
 import { downloadText, fileSlug } from "../lib/export";
 
@@ -106,14 +106,16 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
         const peers = value.inventory!.references.filter(r => r.kind === ref.kind);
         const code = ({ character: 'C', background: 'B', prop: 'P' }[ref.kind]) + String(peers.findIndex(r => r.id === ref.id) + 1).padStart(2, '0');
         const image = assets.find(a => a.id === ref.id);
-        const englishReady = ref.englishDescription && ref.englishSource === referenceSource(ref);
-        const imagePrompt = englishReady ? referenceImagePrompt({ id: ref.id, kind: ref.kind, title: ref.title, prompt: ref.englishDescription!, sceneIds: [] }, form) : '';
+        const englishReady = Boolean(ref.englishDescription && ref.englishSource === referenceSource(ref));
+        const imagePromptMy = referenceImagePromptMyanmar({ id: ref.id, kind: ref.kind, title: ref.title, prompt: ref.description, sceneIds: [] }, form);
+        const imagePromptEn = englishReady ? referenceImagePrompt({ id: ref.id, kind: ref.kind, title: ref.title, prompt: ref.englishDescription!, sceneIds: [] }, form) : "";
         return <article className="scene-card" key={ref.id}><h3>{code} · {ref.kind}</h3><fieldset className="scene-content scene-fieldset" disabled={busy}>
-          <label className="field">Reference {i + 1} နာမည်<input className="input" value={ref.title} onChange={e => patchRef(ref.id, { title: e.target.value })} /></label>
-          <label className="field">Reference {i + 1} ဖော်ပြချက်<textarea className="input" rows={7} value={ref.description} onChange={e => patchRef(ref.id, { description: e.target.value })} /></label>
+          <label className="field">Reference {i + 1} နာမည်<input className="input" value={ref.title} onChange={e => patchRef(ref.id, { title: e.target.value, englishDescription: undefined, englishSource: undefined })} /></label>
+          <label className="field">Reference {i + 1} ဖော်ပြချက်<textarea className="input" rows={7} value={ref.description} onChange={e => patchRef(ref.id, { description: e.target.value, englishDescription: undefined, englishSource: undefined })} /></label>
           <p>Scene {value.inventory!.scenes.map((s, n) => s.referenceIds.includes(ref.id) ? n + 1 : null).filter(Boolean).join(', ')} တွင်သုံးမယ်။</p>
-          <button className="secondary-button" disabled={!approved || Boolean(englishReady)} onClick={() => void translateReference(ref.id)}>Reference image prompt ကို English ပြောင်းရန်</button>
-          {englishReady && <details><summary>Flow reference image prompt</summary><textarea className="input" rows={8} readOnly value={imagePrompt} /><button className="secondary-button" disabled={!approved} onClick={() => { void navigator.clipboard.writeText(imagePrompt).then(() => setMessage('Reference prompt copied.')).catch(() => onError('Copy မရပါ။ TXT download ကိုသုံးပါ။')); }}>Copy reference prompt</button><button className="secondary-button" disabled={!approved} onClick={() => downloadText(code + '.txt', imagePrompt, 'text/plain;charset=utf-8')}>Reference TXT</button></details>}
+          <button className="secondary-button" disabled={busy || englishReady} onClick={() => void translateReference(ref.id)}>Reference image prompt ကို English ပြောင်းရန်</button>
+          <details><summary>မြန်မာ Reference image prompt အပြည့်အစုံ</summary><textarea className="input" rows={10} readOnly value={imagePromptMy} /><button className="secondary-button" onClick={() => { void navigator.clipboard.writeText(imagePromptMy).then(() => setMessage("မြန်မာ Reference prompt copied.")).catch(() => onError("Copy မရပါ။ Prompt ကို ကိုယ်တိုင်ရွေးချယ်ပါ။")); }}>မြန်မာ Prompt ကို Copy လုပ်ရန်</button><button className="secondary-button" onClick={() => downloadText(code + "-my.txt", imagePromptMy, "text/plain;charset=utf-8")}>မြန်မာ TXT</button></details>
+          {englishReady && <details open><summary>English Reference image prompt အပြည့်အစုံ</summary><textarea className="input" rows={10} readOnly value={imagePromptEn} /><button className="secondary-button" onClick={() => { void navigator.clipboard.writeText(imagePromptEn).then(() => setMessage("English reference prompt copied.")).catch(() => onError("Copy မရပါ။ Reference TXT download ကိုသုံးပါ။")); }}>Copy English prompt</button><button className="secondary-button" onClick={() => downloadText(code + "-en.txt", imagePromptEn, "text/plain;charset=utf-8")}>English Reference TXT</button></details>}
           <label className="field">Flow မှာထုတ်ထားသော reference ပုံတွဲရန်<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { void upload(ref.id, e.target.files?.[0]); e.currentTarget.value = ''; }} /></label>
           {image && <><img style={{ maxWidth: 260, maxHeight: 200, objectFit: 'contain' }} src={assetAsReference(image).previewUrl} alt={ref.title} />{image.prompt !== ref.description && <p role="alert">ဖော်ပြချက်ပြောင်းထားလို့ ပုံအဟောင်းနဲ့ ကိုက်မကိုက် ပြန်စစ်ပါ။</p>}</>}
         </fieldset></article>;
