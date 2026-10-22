@@ -1,7 +1,7 @@
 import { screenplayChoicesSchema, scriptSource, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema, screenplayRequest, requiredScreenplaySceneCount, screenplaySceneCount, screenplayCompletenessIssues } from "./lib/screenplayWorkflow";
 import { draftSource, translatedBoard, validateTranslation } from "./lib/draftTranslation";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
-import { sceneInstructions, sceneBackground, completePromptText, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
+import { sceneInstructions, sceneBackground, completePromptText, completePromptTextMyanmar, completePromptTextBilingual, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import "fake-indexeddb/auto";
 import JSZip from "jszip";
 import App from "./App";
-import { prepareAutomaticAssets, validateReferencePlan, flowSceneBundle, referenceImagePrompt, referencePromptPack } from "./lib/automaticAssets";
+import { prepareAutomaticAssets, validateReferencePlan, flowSceneBundle, referenceImagePrompt, referenceImagePromptMyanmar, referencePromptPack, translateAssetDescriptionBilingual } from "./lib/automaticAssets";
 import { generateJson, listGeminiModels, probeGeminiModel } from "./lib/gemini";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
 import { assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
@@ -550,6 +550,44 @@ describe("multi-view Flow reference sheets", () => {
   });
 });
 
+
+
+it("provides complete Myanmar and English versions of reusable asset prompts", () => {
+  const current = board();
+  current.promptLanguage = "my";
+  current.logline = "ကော်ဖီအကြောင်း ဇာတ်လမ်း";
+  current.visualBible = "နွေးထွေးသော အလင်းရောင်နှင့် သစ်သားစားပွဲ";
+  current.referencePlan = [{ id: "my-character", kind: "character", title: "မေ", prompt: "ဆံပင်တို၊ အပြာရောင်ဝတ်စုံနှင့် ဖော်ရွေသောမျက်နှာ", sceneIds: ["one"] }];
+  current.scenes[0] = { ...current.scenes[0], title: "ကော်ဖီခွက်", flowPrompt: "00:00-00:08\nမေက ကော်ဖီခွက်ကို ဖြည်းဖြည်းကိုင်လိုက်သည်။", openingFrame: "စားပွဲပေါ်က ကော်ဖီခွက်" };
+  const myPrompt = completePromptTextMyanmar(current, form);
+  expect(myPrompt).toContain("မြန်မာဗားရှင်း");
+  expect(myPrompt).toContain("ကော်ဖီအကြောင်း ဇာတ်လမ်း");
+  expect(myPrompt).toContain("ဆံပင်တို");
+  expect(referenceImagePromptMyanmar(current.referencePlan[0], form)).toContain("ဇာတ်ကောင် reference ပုံ");
+  const english = structuredClone(current);
+  english.promptLanguage = undefined;
+  english.logline = "A coffee story";
+  english.visualBible = "Warm lighting and a wooden table";
+  english.referencePlan![0].prompt = "Short hair, blue outfit and a friendly face";
+  english.scenes[0].flowPrompt = "00:00-00:08\nMay gently picks up the coffee cup.";
+  const bilingual = completePromptTextBilingual(current, form, english);
+  expect(bilingual).toContain("MYANMAR VERSION");
+  expect(bilingual).toContain("ENGLISH VERSION");
+  expect(bilingual).toContain("A coffee story");
+  expect(bilingual).toContain("May gently picks up the coffee cup.");
+});
+
+it("translates asset descriptions into saved Burmese and English variants", async () => {
+  const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    candidates: [{ content: { parts: [{ text: JSON.stringify({ myanmar: "အပြာရောင်ဝတ်စုံဝတ်ထားသော ဆံပင်တိုမိန်းကလေး", english: "A short-haired girl wearing a blue dress" }) }] } }],
+  })));
+  await expect(translateAssetDescriptionBilingual("key", "gemini-test", "အပြာရောင်ဝတ်စုံဝတ်ထားသော ဆံပင်တိုမိန်းကလေး")).resolves.toEqual({
+    myanmar: "အပြာရောင်ဝတ်စုံဝတ်ထားသော ဆံပင်တိုမိန်းကလေး",
+    english: "A short-haired girl wearing a blue dress",
+  });
+  expect(String(mock.mock.calls[0][0])).toContain("gemini-test:generateContent");
+  mock.mockRestore();
+});
 
 it("packages Burmese steps, named angles, audio and continuation start frames", async () => {
   const current = board();
