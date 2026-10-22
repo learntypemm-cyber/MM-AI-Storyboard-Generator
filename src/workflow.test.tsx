@@ -563,7 +563,7 @@ it("provides complete Myanmar and English versions of reusable asset prompts", (
   expect(myPrompt).toContain("မြန်မာဗားရှင်း");
   expect(myPrompt).toContain("ကော်ဖီအကြောင်း ဇာတ်လမ်း");
   expect(myPrompt).toContain("ဆံပင်တို");
-  expect(referenceImagePromptMyanmar(current.referencePlan[0], form)).toContain("ဇာတ်ကောင် reference ပုံ");
+  expect(referenceImagePromptMyanmar(current.referencePlan[0], form)).toContain("ဇာတ်ကောင် reference sheet");
   const english = structuredClone(current);
   english.promptLanguage = undefined;
   english.logline = "A coffee story";
