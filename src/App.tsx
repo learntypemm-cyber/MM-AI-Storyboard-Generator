@@ -1,3 +1,4 @@
+import { sceneDetailRequirements } from "./lib/promptGuidance";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -121,7 +122,8 @@ function buildStoryboardPrompt(form: VideoForm, concept: VideoConcept): string {
     "- Include backgroundAngle (A/B/C/D) for the opening shot, sfx and backgroundMusic as separate strings. The first timed beat must use backgroundAngle. handoff describes the transition TO THE NEXT scene: CONTINUATION only for uninterrupted action in the same space; otherwise CUT. Make each next openingFrame match the preceding finalFrame for continuation. Do not force cuts every two seconds.",
     "- Keep character, wardrobe, location and recurring product descriptions precise and mutually consistent. Do not introduce new identities between scenes.",
     "- Each flowPrompt starts with exactly one policy: 'NO TEXT IN THE IMAGE.' or 'INTENTIONAL TEXT IN THE IMAGE: [exact short text]'. For accurate product UI and Burmese captions, use 'NO TEXT IN THE IMAGE.' and add real screen recordings/subtitles in post.",
-    "- Each flowPrompt is detailed copy-paste English, ideally 100-180 words. Include a complete opening frame and final frame, plus audio direction. No markdown fences.",
+    sceneDetailRequirements,
+    "Each flowPrompt is copy-paste English with no markdown fences. Keep metadata fields equally specific.",
     "- Structure each flowPrompt into chronological time ranges from 00:00 to its durationSeconds, usually 2-second beats with a shorter final beat if needed. Each beat specifies [Camera shot], named character action, and [Background] location name plus A (front), B (right), C (back/reverse), or D (left). These letters refer to the four views of ONE location reference sheet. Reuse an angle when appropriate; do not force cuts or a new camera position for every beat. Never refer to an unmentioned location. Close with separate SFX and Background Music directions based on the audio policy.",
     "- Use physically possible camera movement and clear cuts when positions change. Avoid conflicting actions. Timestamps, panel letters and field labels are production directions only: never render them, reference-sheet grids, name tags or borders in the video. Each video frame is a single full-screen shot.",
     "- Don't ask the model to draw website UI unless the user supplied a relevant screenshot. For website tutorials, use authentic screen recordings for any actual click-through.",
@@ -145,6 +147,8 @@ function buildSceneRepairPrompt(form: VideoForm, concept: VideoConcept, scene: S
     "Flow model/mode/clip length: " + form.flowModel + " / " + form.generationMode + " / " + form.clipDuration + "s",
     "Reference notes: " + form.referenceNotes,
     "Current scene JSON: " + JSON.stringify(scene),
+    "Visual style: " + form.visualStyle + ". Audio policy: " + form.audioPolicy + ". Text policy: " + form.textPolicy,
+    sceneDetailRequirements,
     'Retain the same scene number and core story purpose, but fix ambiguity and generic actions. Create an English standalone flowPrompt starting exactly with "NO TEXT IN THE IMAGE." unless specific short intentional text is essential. Include full opening and final frames. Never refer to other scenes, never tell Flow to draw captions, and never invent website UI. Voiceover stays in ' + form.language + '.',
     "Keep flowPrompt time-coded from 00:00 to durationSeconds with camera, named action and named background / A-D angle per beat. Include backgroundAngle for the first beat, sfx, backgroundMusic and an outgoing handoff to the next scene. Keep timing feasible; no forced cuts. Labels and timestamps must not appear in the rendered video.",
     'Return the full Scene fields: sceneNumber,title,durationSeconds,objective,visualDescription,shotSize,cameraMovement,lighting,mood,action,flowPrompt,voiceover,onscreenText,audioNotes,transition,referenceAssets,negativePrompt,openingFrame,finalFrame,handoff,backgroundAngle,sfx,backgroundMusic. Shape: {"scene":{...}}.'
@@ -857,6 +861,7 @@ function App() {
               <select className="input" aria-label="Storyboard version" value={versionId} onChange={(event) => setVersionId(event.target.value)}><option value="">Choose an earlier version…</option>{history.map((version) => <option value={version.id} key={version.id}>{new Date(version.createdAt).toLocaleString()} · {version.label}</option>)}</select>
               <button className="secondary-button" disabled={!versionId || Boolean(busy)} onClick={restoreVersion}>Restore version</button>
               <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={addScene}><Plus size={14} /> Add scene</button>
+              <button className="secondary-button" disabled={Boolean(busy) || !storyboard.scenes.some((scene) => !scene.locked)} onClick={() => void regenerateScenes(storyboard.scenes.filter((scene) => !scene.locked).map((scene) => scene.id))}>Improve all unlocked prompts</button>
               <button className="quiet-button" onClick={() => setSelectedSceneIds(storyboard.scenes.filter((scene) => !scene.locked).map((scene) => scene.id))}>Select unlocked</button>
               <button className="quiet-button" onClick={() => setSelectedSceneIds([])}>Clear</button>
               <button className="secondary-button" disabled={Boolean(busy) || !selectedSceneIds.length} onClick={() => void regenerateScenes(selectedSceneIds)}>Regenerate selected prompts</button>
@@ -891,6 +896,7 @@ function App() {
                     <Field label={"Scene image prompt " + scene.sceneNumber} hint="Use for the opening still in Flow. Attach the reference images listed above."><textarea className="input" readOnly rows={6} value={sceneImagePrompt(scene, storyboard, form)} /></Field>
                     <button className="secondary-button" onClick={() => void copyText(sceneImagePrompt(scene, storyboard, form), "Scene " + scene.sceneNumber + " image prompt")}>Copy scene image prompt</button>
                     <Field label="Google Flow prompt" hint="English prompt for the selected model. Copy this into Flow, then review its active settings."><textarea className="input prompt-editor" value={scene.flowPrompt} onChange={(event) => updateScene(scene.id, { flowPrompt: event.target.value })} rows={8} /></Field>
+                    <details className="field"><summary>Complete Flow prompt · Copy လုပ်လျှင်ရမည့် prompt အပြည့်အစုံ</summary><textarea className="input" readOnly rows={14} aria-label={"Complete Flow prompt " + scene.sceneNumber} value={promptWithReferences({ ...scene, flowPrompt: sceneVideoPrompt(scene, storyboard) }, projectAssets)} /></details>
                     <div className="scene-edit-grid">
                       <Field label="SFX"><textarea className="input" value={scene.sfx ?? ""} onChange={(event) => updateScene(scene.id, { sfx: event.target.value })} rows={2} placeholder="အသံအကျိုးသက်ရောက်မှု" /></Field>
                       <Field label="Background music"><textarea className="input" value={scene.backgroundMusic ?? ""} onChange={(event) => updateScene(scene.id, { backgroundMusic: event.target.value })} rows={2} placeholder="နောက်ခံတေးဂီတ" /></Field>
