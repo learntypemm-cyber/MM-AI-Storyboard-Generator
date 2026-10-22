@@ -317,6 +317,8 @@ describe("automatic concept selection", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(screen.getByLabelText("Reference image prompt: May").closest("details")?.open).toBe(true);
     expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("Best concept");
+    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("ACTION TIMELINE");
+    expect(String(fetchMock.mock.calls[2][1]?.body)).toContain("concrete design specification");
     expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).selectedConceptId).toBe("best");
   });
 });
@@ -466,4 +468,19 @@ it("packages Burmese steps, named angles, audio and continuation start frames", 
   expect(zip.file("scene-02/caption.txt")).toBeTruthy();
   current.scenes[0].handoff = "CUT";
   expect(sceneVideoPrompt(current.scenes[1], current)).not.toContain("actual final frame of the preceding clip");
+});
+
+
+it("includes existing visual details and constraints in the copied/exported video prompt", async () => {
+  const current = board();
+  current.visualBible = "Warm hand-painted ceramic textures";
+  current.continuityRules = ["Keep the cup in the right hand"];
+  const shot = current.scenes[0];
+  shot.lighting = "Soft window key from camera left";
+  shot.negativePrompt = "No duplicate cup";
+  const prompt = sceneVideoPrompt(shot, current);
+  for (const detail of [shot.openingFrame, shot.visualDescription, shot.shotSize, shot.lighting, current.visualBible, current.continuityRules[0], shot.negativePrompt]) expect(prompt).toContain(detail);
+  expect(prompt).toContain("DURATION: 8 seconds");
+  const zip = await JSZip.loadAsync(await promptPackageZip(current, form));
+  expect(await zip.file("scene-01/video-prompt.txt")!.async("string")).toBe(prompt);
 });
