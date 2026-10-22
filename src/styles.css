@@ -501,6 +501,23 @@ textarea.input { resize: vertical; min-height: 64px; }
 .gemini-test-result > span:first-child { display: inline-flex; flex: 0 0 auto; margin-top: 1px; }
 .gemini-test-result.success { border-color: #b8e2cb; background: #f1fbf5; color: #176b43; }
 .gemini-test-result.error { border-color: #f2c8ce; background: #fff6f6; color: #9b2c3e; }
+.model-scan-button { margin-top: 8px; }
+.model-scan-progress { margin-top: 10px; color: #4f607b; font-size: 12px; }
+.gemini-model-check-list { display: grid; gap: 7px; margin-top: 12px; max-height: 330px; overflow: auto; }
+.gemini-model-check-item { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 9px; padding: 10px; border: 1px solid #dce6f5; border-radius: 9px; background: #fff; color: #4f607b; }
+.gemini-model-check-item.ready { border-color: #b8e2cb; background: #f4fbf6; }
+.gemini-model-check-item.quota, .gemini-model-check-item.unavailable, .gemini-model-check-item.error, .gemini-model-check-item.key-error { border-color: #f2c8ce; background: #fff8f8; }
+.model-check-icon { display: inline-flex; margin-top: 1px; color: #64748b; }
+.gemini-model-check-item.ready .model-check-icon { color: #176b43; }
+.gemini-model-check-copy { min-width: 0; }
+.model-check-copy strong, .model-check-copy small { display: block; overflow-wrap: anywhere; }
+.model-check-copy strong { font-size: 12px; }
+.model-check-copy small { margin-top: 2px; color: #64748b; font-size: 10px; }
+.model-check-copy p { margin: 5px 0 0; overflow-wrap: anywhere; font-size: 11px; line-height: 1.45; }
+.model-check-badge { align-self: start; border-radius: 5px; padding: 3px 5px; background: #edf1f7; color: #475569; font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+.gemini-model-check-item.ready .model-check-badge { background: #dcfce7; color: #166534; }
+.gemini-model-check-item.quota .model-check-badge { background: #fef3c7; color: #92400e; }
+
 /* Production workflow controls share the editor's existing palette. */
 .workflow-toolbar, .scene-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px 0; }
 .workflow-toolbar > .input, .workflow-toolbar > .field { flex: 1 1 180px; min-width: 150px; max-width: 340px; }
