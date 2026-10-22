@@ -54,6 +54,63 @@ export function referenceImagePrompt(item: ReferencePlanItem, form: VideoForm): 
   ].filter(Boolean).join("\n\n");
 }
 
+
+export async function translateAssetDescriptionBilingual(apiKey: string, model: string, source: string): Promise<{ myanmar: string; english: string }> {
+  const input = source.trim();
+  if (!input) return { myanmar: "အသေးစိတ်ဖော်ပြချက် မပေးထားပါ။", english: "No additional description provided." };
+  const raw = await generateJson<unknown>(apiKey, model, [
+    "Translate this visual asset description into two equivalent, complete versions. Return JSON only with keys {myanmar:string, english:string}.",
+    "myanmar must be fluent natural Burmese written in Myanmar script, not romanized. english must be natural, precise English suitable for an AI image-generation prompt.",
+    "Preserve all visual details, colors, clothing, relationships, constraints, and proper names. Do not add, omit, reinterpret, or summarize details. If the source is already in one requested language, keep its meaning unchanged in that language.",
+    "SOURCE DESCRIPTION:",
+    JSON.stringify({ source: input }),
+  ].join("\n"));
+  return z.object({ myanmar: z.string().trim().min(1).max(10000), english: z.string().trim().min(1).max(10000) }).parse(raw);
+}
+
+const visualStyleMyanmar: Record<VideoForm["visualStyle"], string> = {
+  "Realistic tutorial": "လက်တွေ့ဆန်သော သင်ခန်းစာဗီဒီယိုပုံစံ",
+  "Cinematic live action": "ရုပ်ရှင်ဆန်သော လက်တွေ့ရိုက်ကူးမှုပုံစံ",
+  "3D animation": "အရည်အသွေးမြင့် 3D ကာတွန်းပုံစံ",
+  "2D motion graphics": "2D motion graphics ပုံစံ",
+  "Presenter-led": "တင်ဆက်သူဦးဆောင်သော ဗီဒီယိုပုံစံ",
+  "Fast-paced social video": "လျင်မြန်သွက်လက်သော လူမှုကွန်ရက်ဗီဒီယိုပုံစံ",
+};
+
+export function referenceImagePromptMyanmar(item: ReferencePlanItem, form: VideoForm): string {
+  const style = visualStyleMyanmar[form.visualStyle];
+  const requirements = form.referenceNotes ? "အသုံးပြုသူ၏ ထပ်ဆောင်းလိုအပ်ချက်များ: " + form.referenceNotes : "";
+  if (item.kind === "character") return [
+    "ပညာရေးဆိုင်ရာ ဗီဒီယိုစီးရီးတွင် ထပ်ခါထပ်ခါအသုံးပြုမည့် ဇာတ်ကောင် reference sheet တစ်ခုကို အပြီးသတ်ဖန်တီးပါ။ ပုံအချိုး 16:9 ဖြစ်ရမည်။",
+    "ဇာတ်ကောင်အမည်: " + item.title,
+    "ဇာတ်ကောင်၏ ရုပ်သွင်ဖော်ပြချက်: " + item.prompt,
+    "ရုပ်ပုံပုံစံ: " + style + "။ နူးညံ့သဘာဝကျသော ရုပ်ရှင်အလင်းရောင်ကို အသုံးပြုပါ။",
+    "ဇာတ်ကောင်တစ်ဦးတည်း၏ ကိုယ်လုံးအပြည့် မြင်ကွင်းများကို ရှေ့တည့်တည့်၊ သုံးပုံတစ်ပုံလှည့်၊ ဘေးတိုက်နှင့် နောက်ကျော မြင်ကွင်းများအဖြစ် ပြပါ။ ထို့အပြင် ပျော်ရွှင်၊ အံ့အားသင့်၊ စဉ်းစားနေပြီး ပုံမှန်မျက်နှာထားဟူသော မျက်နှာအမူအရာ ၄ မျိုးကို အနီးကပ်ပြပါ။",
+    "မြင်ကွင်းနှင့် မျက်နှာအမူအရာအားလုံးတွင် မျက်နှာ၊ ဆံပင်၊ အဝတ်အစား၊ ကိုယ်ခန္ဓာအချိုးအစားနှင့် အရောင်များကို အတိအကျတူညီစွာ ထိန်းထားပါ။ လူတစ်ဦးတည်းကိုသာ ဖော်ပြပါ။ ပေးထားသော reference ပုံရှိပါက သူ၏အမှတ်အသားနှင့် အဝတ်အစားကို မပြောင်းပါနှင့်။",
+    'ပုံ၏ အပေါ်ညာဘက်၊ ဇာတ်ကောင်ပုံများ၏ အပြင်ဘက်တွင် အဝါရောင်နောက်ခံနှင့် အနက်ရောင်စာလုံးဖြင့် "အမည်: ' + item.title + '" ဟု တစ်နေရာတည်းတွင်သာ ရေးပါ။ အခြားစာသားနှင့် watermark မပါစေရ။',
+    "အလင်းမီးခိုးရောင် ရိုးရှင်းသန့်ရှင်းသော studio နောက်ခံကို အသုံးပြုပါ။ ကိုယ်လုံး၊ ဖိနပ်နှင့် ဆက်စပ်ပစ္စည်းအားလုံးကို ဖြတ်မထွက်စေဘဲ အပြည့်ပြပါ။ မြင်ကွင်းတစ်ခုစီကို သေသပ်ညီညာသော model sheet အဖြစ် စီစဉ်ပါ။",
+    requirements,
+  ].filter(Boolean).join("\n\n");
+  if (item.kind === "background") return [
+    "ဗီဒီယိုစီးရီးတွင် ပြန်လည်အသုံးပြုနိုင်မည့် နေရာနောက်ခံ reference sheet တစ်ခုကို အပြီးသတ်ဖန်တီးပါ။ ပုံအချိုး 16:9 ဖြစ်ပြီး တစ်နေရာတည်းကို ပြသသော 2x2 အကွက်လေးကွက် ပါရမည်။",
+    "နေရာအမည်: " + item.title,
+    "နေရာဖော်ပြချက်: " + item.prompt,
+    "ရုပ်ပုံပုံစံ: " + style + "။ နွေးထွေးသော ရုပ်ရှင်ဆန်သည့် အလင်းရောင်ကို သုံးပါ။",
+    "လူ၊ ဇာတ်ကောင်၊ လူပုံရိပ်အရိပ် မပါစေရ။ နေရာဗလာကိုသာ ပြပါ။",
+    "အကွက်လေးခုလုံးသည် တစ်နေရာတည်း၏ မတူညီသော ကင်မရာထောင့်များ ဖြစ်ရမည်။ အခန်းဖွဲ့စည်းပုံ၊ ပရိဘောဂ၊ ပစ္စည်းများ၊ အရောင်၊ ပစ္စည်းမျက်နှာပြင်နှင့် အလင်းရောင်ဦးတည်ချက်တို့ မပြောင်းပါနှင့်။ အကွက်တစ်ခုစီတွင် ယခင်အကွက်ရှိ ပစ္စည်းများကို သဘာဝကျစွာ ပြန်တွေ့ရပါမည်။",
+    "အကွက် A (ဘယ်အပေါ်): ရှေ့တည့်တည့် မြင်ကွင်း။ အကွက် B (ညာအပေါ်): ညာဘက်မှ မြင်ကွင်း။ အကွက် C (ဘယ်အောက်): နောက်ကျော/ပြောင်းပြန်မြင်ကွင်း။ အကွက် D (ညာအောက်): ဘယ်ဘက်မှ မြင်ကွင်း။",
+    "အကွက်တစ်ခုစီကို သီးခြားဘောင်ထဲတွင် ထားပါ။ အကွက်ပုံ၏ အပြင်ဘက်၊ အောက်ဘက်ရှိ သီးခြားအရောင်တစ်တန်းပေါ်တွင် A / ရှေ့မြင်ကွင်း၊ B / ညာမြင်ကွင်း၊ C / နောက်မြင်ကွင်း၊ D / ဘယ်မြင်ကွင်း ဟု တစ်ခုစီရေးပါ။ အခြားစာသားနှင့် watermark မပါစေရ။",
+    requirements,
+  ].filter(Boolean).join("\n\n");
+  return [
+    "ထုတ်ကုန် သို့မဟုတ် အသုံးအဆောင်တစ်ခု၏ အပြီးသတ် reference ပုံတစ်ပုံကို ဖန်တီးပါ။ ပုံထဲတွင် စာသားမပါစေရ။",
+    "ပစ္စည်းအမည်: " + item.title + "။ ဖော်ပြချက်: " + item.prompt,
+    "ရိုးရှင်းသော နောက်ခံပေါ်တွင် ပစ္စည်းတစ်ခုတည်းကိုသာ ပြပါ။ ပုံသဏ္ဌာန်၊ ပစ္စည်းအသား၊ အရောင်နှင့် ခွဲခြားသိသာစေသော အသေးစိတ်များကို မပြောင်းပါနှင့်။ လူ၊ အတုအမှတ်တံဆိပ်၊ collage၊ label သို့မဟုတ် watermark မပါစေရ။",
+    "ရုပ်ပုံပုံစံ: " + style + "။ ပုံအချိုး: " + form.aspectRatio + "။",
+    requirements,
+  ].filter(Boolean).join("\n\n");
+}
+
 export function referencePromptPack(board: Storyboard, form: VideoForm): string {
   if (!board.referencePlan?.length) throw new Error("Prepare reference prompts first.");
   return "FLOW REFERENCE IMAGE PROMPTS\nGenerate these images in Flow, then reuse each image in the scenes listed below.\n\n" + board.referencePlan.map((item) =>
