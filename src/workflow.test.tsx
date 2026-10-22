@@ -1,3 +1,4 @@
+import { screenplayChoicesSchema, scriptSource, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema } from "./lib/screenplayWorkflow";
 import { draftSource, translatedBoard, validateTranslation } from "./lib/draftTranslation";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
 import { sceneInstructions, sceneBackground, completePromptText, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
@@ -14,7 +15,7 @@ import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/bo
 import { assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
 import { createArchive, readArchive } from "./lib/projectArchive";
 import { loadReferences, saveReferences } from "./lib/projectMedia";
-import type { ImageAsset, Scene, Storyboard, VideoForm } from "./types";
+import type { ImageAsset, Scene, Storyboard, VideoForm, ScreenplayWorkflow } from "./types";
 
 const scene = (id: string, locked = false): Scene => ({ id, locked, sceneNumber: id === "one" ? 1 : 2, title: id, durationSeconds: 8, objective: "Show the product", visualDescription: "A table", shotSize: "Close up", cameraMovement: "Static", lighting: "Daylight", mood: "Warm", action: "Lift cup", flowPrompt: "NO TEXT IN THE IMAGE. Opening frame: a cup. Final frame: a cup raised.", voiceover: "Hello", onscreenText: "", audioNotes: "Quiet", transition: "Cut", referenceAssets: [], negativePrompt: "No text", openingFrame: "A cup", finalFrame: "A cup raised", handoff: "CUT" });
 const board = (): Storyboard => ({ projectTitle: "Coffee", logline: "A coffee story", visualBible: "Warm", continuityRules: [], globalNegativePrompt: "No fake UI", productionNotes: [], scenes: [scene("one"), scene("two", true)] });
@@ -279,75 +280,67 @@ describe("Gemini model discovery", () => {
 
 
 
-describe("automatic concept selection", () => {
-  it("keeps concepts for recovery when AI omits a valid recommendation", async () => {
+describe("screenplay approval workflow", () => {
+  const reply = (data: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }] }));
+  it("waits for screenplay and reference approval, preserves edits and invalidates old prompts", async () => {
     localStorage.setItem("mm-storyboard-gemini-key", "test-key");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ concepts: [concept, { ...concept, id: "other" }] }) }] } }] })));
-    render(<App />);
-    await waitFor(() => expect((screen.getByRole("button", { name: "Auto: topic to storyboard" }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Coffee" } });
-    fireEvent.click(screen.getByRole("button", { name: "Auto: topic to storyboard" }));
-    await waitFor(() => expect(screen.getByText(/AI did not return a valid recommendation/)).toBeTruthy());
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByRole("button", { name: /Build this storyboard/ })).toHaveLength(2);
-  });
-
-  it.each([false, true])("prepares visible character prompts after storyboard creation (manual: %s)", async (manual) => {
-    localStorage.setItem("mm-storyboard-gemini-key", "test-key");
-    const reply = (data: unknown) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }] }));
-    const generatedBoard = board();
-    const completeFlowPrompt = [
-      "NO TEXT IN THE IMAGE.",
-      "(00:00-00:04) [Camera shot] Medium close-up at the wooden table. [Action] The named subject reaches for the ceramic cup with a relaxed, deliberate movement. [Background] Cafe A / front view. Keep the subject, cup, table and warm daylight clearly visible.",
-      "(00:04-00:08) [Camera shot] Gentle slow push-in, no jump cut. [Action] The subject lifts the cup naturally, pauses, and brings it toward their face while keeping the same grip and cup shape. [Background] Cafe A / front view, unchanged.",
-      "Opening frame: the cup rests on the table in front of the subject. Final frame: the subject holds the cup steadily at chest height. Preserve realistic hand anatomy, stable props, consistent wardrobe, natural movement, warm daylight and a clean cinematic composition. Audio is quiet cafe ambience with subtle room tone. Do not add logos, extra characters, captions, timestamps or visible production labels."
-    ].join("\\n");
-    generatedBoard.scenes = generatedBoard.scenes.map((item) => ({
-      ...item, locked: false, flowPrompt: completeFlowPrompt,
-      sfx: "Quiet ceramic cup movement", backgroundMusic: "Soft understated instrumental music",
-    }));
     const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(reply({ concepts: [concept, { ...concept, id: "best", title: "Best concept" }, { ...concept, id: "third" }], recommendedConceptIndex: 1 }))
-      .mockResolvedValueOnce(reply(generatedBoard))
+      .mockResolvedValueOnce(reply({ choices: [1, 2, 3].map(n => ({ title: "ဇာတ်လမ်း " + n, screenplay: "အတွင်း။ ကော်ဖီဆိုင် — နေ့\nမေသည် ကော်ဖီသောက်သည်။ မေ: မင်္ဂလာပါ။" })) }))
+      .mockResolvedValueOnce(reply({ screenplay: "ချောရေးမူ။ မေသည် ကော်ဖီခွက်ကို မလိုက်သည်။ မေ: မင်္ဂလာပါ။" }))
+      .mockResolvedValueOnce(reply({ references: [{ id: "may", kind: "character", title: "မေ", description: "ဆံပင်တို၊ အပြာရောင်ဝတ်စုံ" }, { id: "cafe", kind: "background", title: "ကော်ဖီဆိုင်", description: "သစ်သားစားပွဲနှင့် ပြတင်းပေါက်" }], scenes: [{ id: "shot", title: "ကော်ဖီသောက်ချိန်", location: "ကော်ဖီဆိုင်", action: "မေသည်ခွက်ကိုမလိုက်သည်", dialogue: "မင်္ဂလာပါ", durationSeconds: 8, referenceIds: ["may", "cafe"] }] }))
       .mockImplementationOnce(async (_url, init) => {
         const prompt = JSON.parse(String(init?.body)).contents[0].parts[0].text as string;
-        const brief = JSON.parse(prompt.split("\n").at(-1)!);
-        return reply({ assets: [{ kind: "character", title: "May", prompt: "A woman with short hair and blue clothing, neutral backdrop", sceneIds: brief.scenes.map((item: Scene) => item.id) }] });
-      })
-      .mockResolvedValueOnce(new Response(JSON.stringify({ output_image: { data: "aGVsbG8=", mime_type: "image/png" } })));
-    render(<App />);
-    await waitFor(() => expect((screen.getByRole("button", { name: "Auto: topic to storyboard" }) as HTMLButtonElement).disabled).toBe(false));
+        const approved = JSON.parse(prompt.split("\n").at(-1)!);
+        expect(prompt).toContain("အနီရောင်ဝတ်စုံ");
+        return reply({ ...board(), scenes: approved.scenes.map((s: { id: string }) => ({ ...scene(s.id), action: "model changed action", voiceover: "model changed dialogue", durationSeconds: 99 })) });
+      });
+    const app = render(<App />);
+    await waitFor(() => expect((screen.getByRole("button", { name: "မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပေး" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText(/What video do you want to make/), { target: { value: "Coffee" } });
-    fireEvent.click(screen.getByRole("button", { name: manual ? "Generate 3 concepts" : "Auto: topic to storyboard" }));
-    if (manual) {
-      await waitFor(() => expect(screen.getAllByRole("button", { name: /Build this storyboard/ })).toHaveLength(3));
-      fireEvent.click(screen.getAllByRole("button", { name: /Build this storyboard/ })[1]);
-    }
-    await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(2));
-    await waitFor(() => expect(screen.getByText(/မြန်မာမူကြမ်းရပါပြီ/)).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပေး" }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /ဇာတ်ညွှန်း [123] ရွေးမယ်/ })).toHaveLength(3));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "ဇာတ်ညွှန်း 2 ရွေးမယ်" }));
+    fireEvent.change(screen.getByLabelText("မြန်မာဇာတ်ညွှန်း"), { target: { value: "မေကော်ဖီသောက်သည်။ User edit" } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "ဇာတ်ညွှန်း ချောရေးပေး" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "ချောရေးမူကို လက်ခံမယ်" })).toBeTruthy());
+    expect((screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement).value).toBe("မေကော်ဖီသောက်သည်။ User edit");
+    fireEvent.click(screen.getByRole("button", { name: "ချောရေးမူကို လက်ခံမယ်" }));
+    fireEvent.click(screen.getByRole("button", { name: "ဇာတ်ညွှန်းအတည်ပြုပြီး Character / Background စာရင်းထုတ်မယ်" }));
+    await waitFor(() => expect(screen.getByLabelText("Reference 1 ဖော်ပြချက်")).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect((screen.getByLabelText("Reference image prompt: May") as HTMLTextAreaElement).value).toContain("blue clothing");
-    expect(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("Best concept");
-    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("ACTION TIMELINE");
-    expect(String(fetchMock.mock.calls[2][1]?.body)).toContain("concrete design specification");
-    expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).selectedConceptId).toBe("best");
-    fetchMock.mockReset().mockImplementation(async (_url, init) => {
-      const prompt = JSON.parse(String(init?.body)).contents[0].parts[0].text as string;
-      const translated = JSON.parse(prompt.split("\n").at(-1)!);
-      delete translated.promptLanguage;
-      return reply(translated);
-    });
-    fireEvent.click(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" }));
-    await waitFor(() => expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(false));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    fireEvent.change(screen.getAllByLabelText("Scene title")[0], { target: { value: "Edited Burmese title" } });
-    expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const generate = () => screen.getByRole("button", { name: "အတည်ပြုထားသောစာရင်းဖြင့် Scene prompts ထုတ်မယ်" }) as HTMLButtonElement;
+    expect(generate().disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Reference 1 ဖော်ပြချက်"), { target: { value: "ဆံပင်တို၊ အနီရောင်ဝတ်စုံ" } });
+    fireEvent.click(screen.getByRole("button", { name: "Character / Background / Scene စာရင်း အတည်ပြုမယ်" }));
+    expect(generate().disabled).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    fireEvent.click(generate());
+    await waitFor(() => expect(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const saved = JSON.parse(localStorage.getItem("mm-storyboard-current")!);
+    expect(saved.storyboard.scenes[0]).toMatchObject({ durationSeconds: 8, voiceover: "မင်္ဂလာပါ", action: "မေသည်ခွက်ကိုမလိုက်သည်" });
+    expect(saved.storyboard.referencePlan[0].prompt).toContain("အနီရောင်");
+    expect(saved.screenplay.choices[1].versions[0]).toContain("User edit");
+    fireEvent.change(screen.getByLabelText("Reference 1 ဖော်ပြချက်"), { target: { value: "အဝါရောင်ဝတ်စုံ" } });
+    expect(generate().disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("မြန်မာဇာတ်ညွှန်း"), { target: { value: "အသစ်ပြင်ထားသောဇာတ်လမ်း" } });
+    expect(screen.queryByLabelText("Reference 1 ဖော်ပြချက်")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    app.unmount(); render(<App />);
+    await waitFor(() => expect((screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement).value).toBe("အသစ်ပြင်ထားသောဇာတ်လမ်း"));
+    expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+  it("requires exactly three complete screenplay choices", () => {
+    expect(() => screenplayWorkflowSchema.parse({ choices: [], selectedId: "" })).toThrow();
+    expect(() => screenplayChoicesSchema.parse({ choices: [1, 2].map(n => ({ title: String(n), screenplay: "Draft" })) })).toThrow();
+    expect(() => scriptInventorySchema.parse({ references: [], scenes: [{ id: "s", title: "Shot", location: "Park", action: "Walk", dialogue: "", durationSeconds: 8, referenceIds: ["unknown"] }] })).toThrow();
   });
 });
-
 
 describe("automatic character and background production", () => {
   const planning = { assets: [
@@ -565,4 +558,21 @@ it("keeps Burmese drafts and translated English separate, invalidates exports af
   fireEvent.click(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" }));
   expect(onTranslate).toHaveBeenCalledOnce();
   raw.scenes.pop(); expect(() => validateTranslation(raw, draft)).toThrow(/scene IDs/);
+});
+
+
+it("persists screenplay approvals through ZIP and rejects unapproved scene generation", async () => {
+  const workflow: ScreenplayWorkflow = { choices: [{ id: "choice", title: "Coffee", screenplay: "မေကော်ဖီသောက်သည်", versions: ["မူဟောင်း"] }], selectedId: "choice" };
+  workflow.approvedScript = scriptSource(workflow, form);
+  workflow.inventory = { source: scriptSource(workflow, form), references: [], scenes: [{ id: "one", title: "Coffee", location: "Cafe", action: "Drink", dialogue: "Hello", durationSeconds: 8, referenceIds: [] }] };
+  expect(() => bindApprovedBoard(board(), workflow, form)).toThrow("Approve");
+  workflow.approvedInventory = inventorySource(workflow, form);
+  const output = bindApprovedBoard({ ...board(), scenes: [scene("one")] }, workflow, form);
+  const project = { id: "screenplay-project", title: "Coffee", savedAt: "2026-10-22", form, concepts: [], selectedConceptId: "", storyboard: output, screenplay: workflow };
+  const archive = await readArchive(new File([await createArchive({ format: "mm-storyboard", version: 1, project, references: [], assets: [], presets: [] })], "screenplay.zip"));
+  expect(inventoryApproved(archive.project.screenplay!, form)).toBe(true);
+  expect(pipelineCurrent(archive.project.screenplay, form, archive.project.storyboard)).toBe(true);
+  expect(archive.project.screenplay?.choices[0].versions).toEqual(["မူဟောင်း"]);
+  expect(pipelineCurrent(workflow, { ...form, targetDuration: 30 }, output)).toBe(false);
+  expect(() => bindApprovedBoard({ ...board(), scenes: [scene("wrong")] }, workflow, form)).toThrow("changed");
 });

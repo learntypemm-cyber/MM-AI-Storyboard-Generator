@@ -1,3 +1,5 @@
+import ScreenplayStudio from "./components/ScreenplayStudio";
+import { screenplayChoicesSchema, screenplayRequest, pipelineCurrent, inventorySource, inventoryApproved } from "./lib/screenplayWorkflow";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
 import { draftSource, translationPrompt, validateTranslation } from "./lib/draftTranslation";
 import { sceneDetailRequirements } from "./lib/promptGuidance";
@@ -24,7 +26,7 @@ import { auditScene, auditStoryboard } from "./lib/audit";
 import { downloadText, fileSlug, storyboardMarkdown } from "./lib/export";
 import type {
   BoardVersion, ImageAsset, ProductionPreset, FlowModel, GenerationMode, Language, Platform, ReferenceImage, SavedProject,
-  Scene, Storyboard, VideoConcept, VideoForm, VisualStyle,
+  Scene, Storyboard, ScreenplayWorkflow, VideoConcept, VideoForm, VisualStyle,
 } from "./types";
 
 const STORAGE = {
@@ -71,35 +73,6 @@ function flowCompatibility(form: VideoForm): string | null {
   if (form.generationMode === "Video Edit" && form.flowModel !== "Gemini Omni Flash 1.1") return "Video Edit is currently listed for Gemini Omni Flash. Verify support or change the selected model.";
   if (form.generationMode === "Extend" && form.flowModel !== "Veo 3.1 Lite") return "Extend is limited in the current model guide. Veo 3.1 Lite is the safest choice to try; confirm in Flow before generation.";
   return null;
-}
-
-function buildConceptPrompt(form: VideoForm): string {
-  return [
-    "You are a senior creative director who builds practical Google Flow / Veo video plans. Return valid JSON only.",
-    "",
-    "Create exactly 3 DIFFERENT video concepts for this brief:",
-    "TOPIC: " + form.topic,
-    "GOAL: " + form.goal,
-    "PLATFORM: " + form.platform,
-    "TOTAL TARGET RUNTIME: " + form.targetDuration + " seconds",
-    "LANGUAGE: " + form.language,
-    "AUDIENCE: " + form.audience,
-    "VISUAL PREFERENCE: " + form.visualStyle,
-    "ASPECT RATIO: " + form.aspectRatio,
-    "GOOGLE FLOW MODEL: " + form.flowModel,
-    "GENERATION MODE: " + form.generationMode,
-    "CLIP LENGTH TARGET: " + form.clipDuration + " seconds",
-    "AUDIO POLICY: " + form.audioPolicy,
-    "TEXT POLICY: " + form.textPolicy,
-    "REFERENCE NOTES: " + form.referenceNotes,
-    "",
-    "For a product or website tutorial, never invent website buttons, page layout, statistics, features, or navigation. Use provided reference images as evidence, not as a license to fabricate details. If images are provided, study them and recommend where real screen recordings should be inserted. Voiceover must be in the selected language. Put exact Burmese captions in a separate field for editing, never ask a video model to render complex Burmese text.",
-    "Write concept titles, hooks, summaries and explanations in Burmese for user review. Keep JSON keys unchanged.",
-    "The three concepts must have distinct creative approaches: (1) accurate, clean tutorial demonstration; (2) fast hook and social-first visual storytelling; (3) memorable cinematic or animated visual metaphor.",
-    "For each concept include id (short unique slug), title, style, hook (first 1-3 seconds), summary, visualDirection, whyItWorks, storyArc (array of 4-6 short beats), and estimatedDuration (number of seconds near the target).",
-    "Make each concept specific to this brief and practical to generate as short clips. Return JSON matching this shape:",
-    '{"concepts":[{"id":"string","title":"string","style":"string","hook":"string","summary":"string","visualDirection":"string","whyItWorks":"string","storyArc":["string"],"estimatedDuration":30}]}'
-  ].join("\n");
 }
 
 function buildStoryboardPrompt(form: VideoForm, concept: VideoConcept): string {
@@ -211,6 +184,7 @@ function App() {
   const [modelRefresh, setModelRefresh] = useState(0);
   const [concepts, setConcepts] = useState<VideoConcept[]>([]);
   const [selectedConceptId, setSelectedConceptId] = useState("");
+  const [screenplay, setScreenplay] = useState<ScreenplayWorkflow | undefined>();
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>(() => readLocal(STORAGE.saved, []));
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -262,14 +236,14 @@ function App() {
   useEffect(() => { try { localStorage.setItem(STORAGE.saved, JSON.stringify(savedProjects)); } catch { setError("Browser storage is full. Export a ZIP backup to keep your work."); } }, [savedProjects]);
 
   useEffect(() => {
-    const current = readLocal<{ form?: SavedProject["form"]; concepts?: VideoConcept[]; selectedConceptId?: string; storyboard?: Storyboard | null } | null>(STORAGE.current, null);
+    const current = readLocal<{ form?: SavedProject["form"]; concepts?: VideoConcept[]; selectedConceptId?: string; storyboard?: Storyboard | null; screenplay?: ScreenplayWorkflow } | null>(STORAGE.current, null);
     if (current?.form) {
       setForm({ ...DEFAULT_FORM, ...current.form, referenceImages: [] });
       setConcepts(current.concepts ?? []);
       setSelectedConceptId(current.selectedConceptId ?? "");
-      setStoryboard(current.storyboard ?? null);
+      setStoryboard(current.storyboard ?? null); setScreenplay(current.screenplay);
       if (current.storyboard) setStep("storyboard");
-      else if (current.concepts?.length) setStep("concepts");
+      else if (current.screenplay || current.concepts?.length) setStep("concepts");
     }
     loadReferences(projectId).then((references) => { setForm((current) => ({ ...current, referenceImages: references })); setMediaReady(true); })
       .catch(() => setError("Could not restore project reference images."))
@@ -278,9 +252,9 @@ function App() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const current = { projectId, history, form: stripImages(form), concepts, selectedConceptId, storyboard };
+    const current = { projectId, history, form: stripImages(form), concepts, selectedConceptId, storyboard, screenplay };
     try { localStorage.setItem(STORAGE.current, JSON.stringify(current)); } catch { setError("Autosave storage is full. Export a ZIP backup before closing."); }
-  }, [form, concepts, selectedConceptId, storyboard, projectId, history, hydrated]);
+  }, [form, concepts, selectedConceptId, storyboard, screenplay, projectId, history, hydrated]);
 
   useEffect(() => {
     if (!hydrated || !mediaReady) return;
@@ -303,36 +277,25 @@ function App() {
     return true;
   };
 
-  const generateConcepts = async (autoBuild = false) => {
-    setError(""); setNotice("");
-    if (storyboard?.scenes.some((scene) => scene.locked)) { setError("Unlock approved scenes before replacing the project concepts."); return; }
-    remember("Before replacing concepts");
-    if (!hydrated || busy) return;
-    if (!form.topic.trim()) { setError("Enter a topic first."); return; }
-    if (!requireKey()) return;
-    setBusy("concepts");
+  const generateScreenplays = async () => {
+    if (busy || !hydrated || !requireKey()) return;
+    if (!form.topic.trim()) { setError("ခေါင်းစဉ် အရင်ထည့်ပါ။"); return; }
+    setBusy("screenplays"); setError(""); setNotice("");
     try {
-      const result = await generateJson<{ concepts: VideoConcept[]; recommendedConceptIndex?: number }>(apiKey.trim(), geminiModel.trim() || GEMINI_DEFAULT, buildConceptPrompt(form) + (autoBuild ? "\nEvaluate all three concepts for topic relevance, a strong opening, visual clarity, achievable runtime and reference continuity. Include recommendedConceptIndex (0, 1 or 2) for the strongest concept." : ""), form.referenceImages);
-      if (!Array.isArray(result.concepts) || result.concepts.length < 2) throw new Error("The response did not contain three video concepts. Try generating again.");
-      const next = result.concepts.slice(0, 3).map((concept, index) => ({
-        ...concept, id: concept.id || "concept-" + (index + 1), title: concept.title || "Concept " + (index + 1),
-        storyArc: Array.isArray(concept.storyArc) ? concept.storyArc : [],
-      }));
-      setConcepts(next); setSelectedConceptId(next[0].id); setStoryboard(null); setStep("concepts");
-      if (autoBuild) {
-        const index = result.recommendedConceptIndex;
-        if (!Number.isInteger(index) || index! < 0 || index! >= next.length) throw new Error("Concepts were saved, but AI did not return a valid recommendation. Choose a concept below to continue.");
-        setNotice("AI selected: " + next[index!].title + ". Building the storyboard…");
-        await generateStoryboard(next[index!], true);
-      } else setNotice("Three concepts are ready. Choose one to build the full storyboard.");
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Couldn't generate concepts. Please try again."); }
+      const raw = await generateJson<unknown>(apiKey.trim(), geminiModel, screenplayRequest(form), form.referenceImages);
+      const result = screenplayChoicesSchema.parse(raw);
+      await preserveCurrentProject();
+      remember("Before new screenplay choices");
+      setScreenplay({ choices: result.choices.map(c => ({ ...c, id: makeId(), versions: [] })), selectedId: "" });
+      setConcepts([]); setSelectedConceptId(""); setStep("concepts");
+      setNotice("ဇာတ်ညွှန်း ၃ မျိုးရပါပြီ။ တစ်မျိုးရွေးပြီး ဖတ်၊ ပြင်၊ အတည်ပြုပါ။ နောက်အဆင့်ကို အလိုအလျောက် မသွားပါ။");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not write screenplays."); }
     finally { setBusy(null); }
   };
-
-  const generateStoryboard = async (concept: VideoConcept, fromConcepts = false) => {
-    if (!hydrated || (busy && !fromConcepts)) return;
+  const generateStoryboard = async (concept: VideoConcept) => {
+    if (!hydrated || busy) return;
     if (storyboard?.scenes.some((scene) => scene.locked)) { setError("Unlock approved scenes before rebuilding the storyboard."); return; }
-    if (!fromConcepts) remember("Before rebuilding storyboard");
+    remember("Before rebuilding storyboard");
     setError(""); setNotice("");
     if (!requireKey()) return;
     setBusy("storyboard"); setSelectedConceptId(concept.id);
@@ -500,7 +463,7 @@ function App() {
     if (version.concept) { const concept = structuredClone(version.concept); setConcepts((items) => [concept, ...items.filter((item) => item.id !== concept.id)]); setSelectedConceptId(concept.id); }
     if (version.form) setForm((current) => ({ ...current, ...version.form })); setNotice("Version restored. The replaced storyboard is saved in history.");
   };
-  const snapshotProject = (): SavedProject => ({ id: projectId, title: storyboard?.projectTitle || form.topic, savedAt: new Date().toISOString(), form: stripImages(form), concepts, selectedConceptId, storyboard, history });
+  const snapshotProject = (): SavedProject => ({ id: projectId, title: storyboard?.projectTitle || form.topic, savedAt: new Date().toISOString(), form: stripImages(form), concepts, selectedConceptId, storyboard, screenplay, history });
   const savePreset = () => {
     if (!presetName.trim()) { setError("Enter a preset name first."); return; }
     const { topic: _topic, referenceImages: _refs, ...settings } = form;
@@ -525,8 +488,22 @@ function App() {
       const newId = makeId();
       const assetIds = new Map(archive.assets.map((asset) => [asset.id, makeId()]));
       for (const board of [archive.project.storyboard, ...(archive.project.history || []).map((item) => item.storyboard)]) for (const item of board?.referencePlan || []) if (!assetIds.has(item.id)) assetIds.set(item.id, makeId());
+      for (const ref of archive.project.screenplay?.inventory?.references || []) if (!assetIds.has(ref.id)) assetIds.set(ref.id, makeId());
+      const importedForm = { ...DEFAULT_FORM, ...archive.project.form, referenceImages: [] };
+      const previousWorkflow = archive.project.screenplay;
+      const importedWorkflow = previousWorkflow ? structuredClone(previousWorkflow) : undefined;
+      if (importedWorkflow?.inventory) {
+        importedWorkflow.inventory.references = importedWorkflow.inventory.references.map(ref => ({ ...ref, id: assetIds.get(ref.id)! }));
+        importedWorkflow.inventory.scenes = importedWorkflow.inventory.scenes.map(scene => ({ ...scene, referenceIds: scene.referenceIds.map(id => assetIds.get(id)!) }));
+        if (previousWorkflow && inventoryApproved(previousWorkflow, importedForm)) importedWorkflow.approvedInventory = inventorySource(importedWorkflow, importedForm);
+      }
       const remapBoard = (board: Storyboard | null): Storyboard | null => board ? { ...board, referencePlan: board.referencePlan?.map((item) => ({ ...item, id: assetIds.get(item.id)! })), scenes: board.scenes.map((scene) => ({ ...scene, assetIds: scene.assetIds?.map((id) => assetIds.get(id)!) })) } : null;
-      const project = { ...archive.project, id: newId, storyboard: remapBoard(archive.project.storyboard), history: archive.project.history?.map((version) => ({ ...version, storyboard: remapBoard(version.storyboard)! })) };
+      const remappedStoryboard = remapBoard(archive.project.storyboard);
+      if (remappedStoryboard && importedWorkflow && pipelineCurrent(previousWorkflow, importedForm, archive.project.storyboard)) {
+        remappedStoryboard.pipelineSource = inventorySource(importedWorkflow, importedForm);
+        remappedStoryboard.englishJson = undefined; remappedStoryboard.englishSource = undefined;
+      }
+      const project = { ...archive.project, screenplay: importedWorkflow, id: newId, storyboard: remappedStoryboard, history: archive.project.history?.map((version) => ({ ...version, storyboard: remapBoard(version.storyboard)! })) };
       await writeAssets(archive.assets.map((asset) => ({ ...asset, handle: assetHandle(asset), id: assetIds.get(asset.id)!, projectId: newId })));
       if (!await loadProject(project, archive.references)) return;
       setSavedProjects((items) => [project, ...items.filter((item) => item.id !== project.id)]);
@@ -554,7 +531,7 @@ function App() {
 
   // Persist before switching so the single current-project slot never destroys a draft.
   const preserveCurrentProject = async () => {
-    if (!form.topic.trim() && !concepts.length && !storyboard && !history.length && !form.referenceImages.length) return;
+    if (!form.topic.trim() && !screenplay && !concepts.length && !storyboard && !history.length && !form.referenceImages.length) return;
     if (!mediaReady) throw new Error("Reference images are not loaded. Reopen this project before switching.");
     await saveReferences(projectId, form.referenceImages);
     const saved = snapshotProject();
@@ -575,8 +552,8 @@ function App() {
       lastEdit.current = { label: "", time: 0 };
       setProjectId(project.id); setHistory(project.history || []); setSelectedSceneIds([]); setVersionId("");
       setForm({ ...DEFAULT_FORM, ...project.form, referenceImages: images }); setMediaReady(true);
-      setConcepts(project.concepts); setSelectedConceptId(project.selectedConceptId); setStoryboard(project.storyboard);
-      setStep(project.storyboard ? "storyboard" : project.concepts.length ? "concepts" : "brief");
+      setConcepts(project.concepts); setSelectedConceptId(project.selectedConceptId); setStoryboard(project.storyboard); setScreenplay(project.screenplay);
+      setStep(project.storyboard ? "storyboard" : (project.screenplay || project.concepts.length) ? "concepts" : "brief");
       setLibraryOpen(false); setNotice("Opened " + project.title + ". Your previous draft is saved in My projects.");
       return true;
     } catch (caught) {
@@ -592,7 +569,7 @@ function App() {
       await preserveCurrentProject();
       setMediaReady(true); lastEdit.current = { label: "", time: 0 };
       setProjectId(makeId()); setHistory([]); setSelectedSceneIds([]); setVersionId("");
-      setForm(DEFAULT_FORM); setConcepts([]); setSelectedConceptId(""); setStoryboard(null);
+      setForm(DEFAULT_FORM); setScreenplay(undefined); setConcepts([]); setSelectedConceptId(""); setStoryboard(null);
       setStep("brief"); setNotice("Ready for a new topic. Your previous draft is saved in My projects."); setShowAdvanced(false);
     } catch (caught) {
       setError("Could not save your draft. Your current work is still open. " + (caught instanceof Error ? caught.message : "Export a ZIP backup."));
@@ -702,9 +679,9 @@ function App() {
         <button className="new-project-button" disabled={Boolean(busy) || !hydrated} onClick={newProject}><Plus size={17} /> New project <span>⌘ K</span></button>
         <div className="sidebar-label">WORKSPACE</div>
         <button className={step === "brief" ? "side-link active" : "side-link"} onClick={() => setStep("brief")}><LayoutDashboard size={17} /> Video brief</button>
-        <button className={step === "concepts" ? "side-link active" : "side-link"} onClick={() => concepts.length ? setStep("concepts") : setNotice("Generate concepts first to use this step.")}><Lightbulb size={17} /> Concepts <span className="side-count">{concepts.length || "–"}</span></button>
+        <button className={step === "concepts" ? "side-link active" : "side-link"} onClick={() => screenplay || concepts.length ? setStep("concepts") : setNotice("ဇာတ်ညွှန်း ၃ မျိုး အရင်ထုတ်ပါ။")}><Lightbulb size={17} /> ဇာတ်ညွှန်း / References <span className="side-count">{screenplay?.choices.length || concepts.length || "–"}</span></button>
         <button className={step === "storyboard" ? "side-link active" : "side-link"} onClick={() => storyboard ? setStep("storyboard") : setNotice("Build a storyboard first to use this step.")}><Film size={17} /> Storyboard <span className="side-count">{storyboard?.scenes.length || "–"}</span></button>
-        <button className={assetStudioOpen ? "side-link active" : "side-link"} disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={17} /> Asset Studio <span className="side-count">NEW</span></button>
+        {showAdvanced && <button className={assetStudioOpen ? "side-link active" : "side-link"} disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={17} /> Asset Studio <span className="side-count">NEW</span></button>}
         <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
         <div className="saved-list">
           {savedProjects.slice(0, 4).map((project) => <button className="saved-item" key={project.id} disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)} title={project.title}><FolderOpen size={15} /><span>{project.title}</span></button>)}
@@ -720,7 +697,7 @@ function App() {
 
       <main className="main-panel">
         <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "Concept selection" : "Storyboard editor"}</strong></div>
+          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "ဇာတ်ညွှန်းနှင့် Reference အတည်ပြုခြင်း" : "Storyboard editor"}</strong></div>
           <div className="topbar-actions">
             <button className="primary-button small-primary" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={15} /> Save project</button>
             <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
@@ -736,7 +713,7 @@ function App() {
             <div>
               <div className="eyebrow"><span className="eyebrow-mark"><Sparkles size={12} /></span> AI VIDEO WORKFLOW <span className="eyebrow-dot">•</span> GOOGLE FLOW READY</div>
               <h1>Turn ideas into <span className="gradient-text">storyboards.</span></h1>
-              <p className="page-description">One brief in. Three creative directions, scene-by-scene Flow prompts, Burmese narration, and a production-ready plan out.</p>
+              <p className="page-description">ခေါင်းစဉ်မှ မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပါ။ ဇာတ်ညွှန်းနှင့် Character / Background ကို အတည်ပြုပြီးမှ Scene prompts ထုတ်ပါ။</p>
             </div>
             <div className="welcome-stat"><div className="welcome-stat-icon"><Zap size={19} /></div><div><strong>One brief</strong><span>Complete video plan</span></div></div>
           </section>
@@ -744,12 +721,12 @@ function App() {
           <div className="stepper">
             {[
               { id: "brief", number: "01", label: "Brief", icon: FileText },
-              { id: "concepts", number: "02", label: "Concepts", icon: Lightbulb },
-              { id: "storyboard", number: "03", label: "Storyboard", icon: Clapperboard },
+              { id: "concepts", number: "02", label: "ဇာတ်ညွှန်း / References", icon: Lightbulb },
+              { id: "storyboard", number: "03", label: "Scene prompts / English", icon: Clapperboard },
             ].map((item, index) => {
               const Icon = item.icon;
               const active = step === item.id;
-              const complete = (item.id === "brief" && (concepts.length > 0 || Boolean(form.topic.trim()))) || (item.id === "concepts" && concepts.length > 0) || (item.id === "storyboard" && Boolean(storyboard));
+              const complete = (item.id === "brief" && (concepts.length > 0 || Boolean(form.topic.trim()))) || (item.id === "concepts" && (screenplay ? inventoryApproved(screenplay, form) : concepts.length > 0)) || (item.id === "storyboard" && Boolean(storyboard) && pipelineCurrent(screenplay, form, storyboard));
               return <div className={active ? "step-item active" : complete ? "step-item complete" : "step-item"} key={item.id}>
                 <div className="step-num">{complete && !active ? <Check size={14} /> : <Icon size={14} />}</div><div className="step-copy"><span>{item.number}</span><strong>{item.label}</strong></div>{index < 2 && <div className="step-connector" />}
               </div>;
@@ -807,14 +784,13 @@ function App() {
               </div>}
               <div className="brief-footer">
                 <div className="footer-info"><span className="secure-icon"><KeyRound size={14} /></span><span>{apiKey ? "Gemini API is configured" : "Set up a Gemini API key to start"} <button className="inline-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>{apiKey ? "Manage key" : "Set up API key"}</button></span></div>
-                <span className="field-hint">Enter a topic. Get the story, reusable reference prompts, scene image prompts and video prompts. Create all media yourself in Flow.</span>
-                <button className="primary-button generate-button" onClick={() => void generateConcepts(true)} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "concepts" ? "Choosing the best concept…" : busy === "storyboard" ? "Building storyboard…" : busy === "assets" ? "Preparing references…" : "Auto: topic to storyboard"}</button>
-                <button className="secondary-button" onClick={() => void generateConcepts()} disabled={Boolean(busy) || !hydrated}>{busy === "concepts" ? <span className="spinner" /> : <Sparkles size={17} />}{busy === "concepts" ? "Generating concepts..." : "Generate 3 concepts"}<ChevronRight size={17} /></button>
+                <span className="field-hint">ခေါင်းစဉ် → ဇာတ်ညွှန်း ၃ မျိုး → ရွေး/ပြင်/အတည်ပြု → Character / Background → Scene prompts</span>
+                <button className="primary-button generate-button" onClick={() => void generateScreenplays()} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "screenplays" ? "ဇာတ်ညွှန်းရေးနေပါတယ်…" : "မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပေး"}</button>
               </div>
             </div>
           </section>
 
-          {concepts.length > 0 && (step === "concepts" || step === "storyboard") && <section className="results-section">
+          {!screenplay && concepts.length > 0 && (step === "concepts" || step === "storyboard") && <section className="results-section">
             <div className="section-heading results-heading">
               <div className="section-icon purple"><Lightbulb size={18} /></div>
               <div><h2>Choose your creative direction</h2><p>Three ways to tell the same story. Select one to build its storyboard.</p></div>
@@ -838,9 +814,10 @@ function App() {
             </div>
           </section>}
 
+          {screenplay && (step === "concepts" || step === "storyboard") && <ScreenplayStudio value={screenplay} form={form} board={storyboard} projectId={projectId} assets={projectAssets} busy={Boolean(busy) || !hydrated} apiKey={apiKey.trim()} model={geminiModel} requireKey={requireKey} onChange={setScreenplay} onBoard={(next) => { remember("Before approved scene generation"); setStoryboard(next); setStep("storyboard"); }} onBusy={setBusy} onError={setError} />}
           {!storyboard && history.length > 0 && <div className="workflow-toolbar"><label className="field"><span className="field-label">Previous storyboard versions</span><select className="input" value={versionId} onChange={(event) => setVersionId(event.target.value)}><option value="">Choose a version…</option>{history.map((version) => <option key={version.id} value={version.id}>{version.label} · {new Date(version.createdAt).toLocaleString()}</option>)}</select></label><button className="secondary-button" disabled={!versionId || Boolean(busy)} onClick={restoreVersion}>Restore version</button></div>}
-          {storyboard?.promptLanguage === "my" && step === "storyboard" && <BurmeseDraftEditor board={storyboard} form={form} busy={Boolean(busy) || !hydrated} onChange={setStoryboard} onTranslate={() => void translateDraft()} onSave={() => void saveProject()} onRetryReferences={() => void retryReferences()} />}
-          {storyboard && storyboard.promptLanguage !== "my" && step === "storyboard" && <section className="storyboard-section">
+          {pipelineCurrent(screenplay, form, storyboard) && storyboard?.promptLanguage === "my" && step === "storyboard" && <BurmeseDraftEditor referencesLocked={Boolean(screenplay)} board={storyboard} form={form} busy={Boolean(busy) || !hydrated} onChange={setStoryboard} onTranslate={() => void translateDraft()} onSave={() => void saveProject()} onRetryReferences={() => void retryReferences()} />}
+          {pipelineCurrent(screenplay, form, storyboard) && storyboard && storyboard.promptLanguage !== "my" && step === "storyboard" && <section className="storyboard-section">
             <div className="section-heading results-heading">
               <div className="section-icon green"><Clapperboard size={18} /></div>
               <div><h2>Your storyboard</h2><p>Edit the prompts and narration before moving each clip into Google Flow.</p></div>
@@ -952,7 +929,7 @@ function App() {
       {settingsOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
         <section className="modal-card settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <div className="modal-top"><div className="modal-icon"><KeyRound size={20} /></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={18} /></button></div>
-          <h2 id="settings-title">Connect Gemini</h2><p className="modal-description">Your API key powers concept generation, storyboard creation, and scene improvements.</p>
+          <h2 id="settings-title">Connect Gemini</h2><p className="modal-description">Your API key writes screenplay choices, polishes your edits, prepares approved scenes and translates prompts only when you request each step.</p>
           <Field label="Gemini API key" hint="Key ထည့်တာနဲ့ ဒီ browser ထဲ အလိုအလျောက်သိမ်းပါတယ်။ Website address သို့မဟုတ် browser ပြောင်းရင် ပြန်ထည့်ရန်လိုပါတယ်။"><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => { setApiKeyDraft(event.target.value); setGeminiTestResult(null); persistApiKey(event.target.value); }} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
           <Field label="Gemini API model" hint="Choose a text model listed by Google for your key. Quota and generation access depend on your account."><select className="input" value={modelOptions.some((item) => item.id === modelDraft) ? modelDraft : ""} disabled={!modelOptions.length || loadingModels} onChange={(event) => { setModelDraft(event.target.value); setGeminiTestResult(null); }}><option value="" disabled>{loadingModels ? "Loading models…" : "Add a key to load models"}</option>{modelOptions.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.id}</option>)}</select></Field>
           {modelListError && <div role="alert" className="gemini-test-result error">{modelListError}</div>}
@@ -969,7 +946,7 @@ function App() {
         <section className="modal-card library-modal" role="dialog" aria-modal="true" aria-labelledby="library-title">
           <div className="modal-top"><div className="modal-icon"><FolderOpen size={20} /></div><button className="icon-button" onClick={() => setLibraryOpen(false)} aria-label="Close library"><X size={18} /></button></div>
           <h2 id="library-title">Your project library</h2><p className="modal-description">Saved projects, reference images and assets stay in this browser. Use Backup ZIP to move a complete project to another browser.</p>
-          {!savedProjects.length ? <div className="empty-library-modal"><FolderOpen size={28} /><strong>No saved projects yet</strong><span>Build a storyboard, then click Save.</span></div> : <div className="library-projects">{savedProjects.map((project) => <div className="library-project" key={project.id}><div className="library-project-icon"><Clapperboard size={18} /></div><button className="library-project-main" disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)}><strong>{project.title}</strong><span>{project.storyboard ? project.storyboard.scenes.length + " scenes" : project.concepts.length + " concepts"} · {new Date(project.savedAt).toLocaleString()}</span></button><button className="icon-button danger-icon" onClick={() => setSavedProjects((current) => current.filter((item) => item.id !== project.id))} title="Delete saved project" aria-label="Delete saved project"><Trash2 size={16} /></button></div>)}</div>}
+          {!savedProjects.length ? <div className="empty-library-modal"><FolderOpen size={28} /><strong>No saved projects yet</strong><span>Save your screenplay, reference preparation or storyboard at any step.</span></div> : <div className="library-projects">{savedProjects.map((project) => <div className="library-project" key={project.id}><div className="library-project-icon"><Clapperboard size={18} /></div><button className="library-project-main" disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)}><strong>{project.title}</strong><span>{project.storyboard ? project.storyboard.scenes.length + " scenes" : project.screenplay ? project.screenplay.choices.length + " screenplays" : project.concepts.length + " concepts"} · {new Date(project.savedAt).toLocaleString()}</span></button><button className="icon-button danger-icon" onClick={() => setSavedProjects((current) => current.filter((item) => item.id !== project.id))} title="Delete saved project" aria-label="Delete saved project"><Trash2 size={16} /></button></div>)}</div>}
           <div className="modal-actions"><button className="quiet-button" onClick={() => setLibraryOpen(false)}>Close</button><button className="primary-button" onClick={() => { newProject(); setLibraryOpen(false); }}><Plus size={16} /> New project</button></div>
         </section>
       </div>}

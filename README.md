@@ -147,3 +147,12 @@ Download complete prompt ZIP includes START-HERE-MM.txt, reusable reference prom
 ### Burmese-first review
 
 New concepts, storyboard descriptions and reference design drafts are requested in Burmese. Edit the draft without API calls, then explicitly select the English translation action. English output is stored separately; editing the draft or its settings disables English copy/download until translated again. Exact spoken dialogue/voiceover and captions remain in their original language. Save/Backup ZIP retains both versions. Existing English projects offer a Burmese-draft conversion action. Initial Burmese drafting does not automatically run the English completeness-repair loop. Translation is one API request and preserves structural IDs, timing, references and locks; failed translation leaves the draft intact.
+
+
+### Screenplay-first approvals
+
+The primary entry point now requests exactly three complete original Burmese screenplays. Selecting or editing a screenplay does not call an API. Polish creates a proposal; users explicitly accept it or retain the current draft, and can restore the preceding version. Approving the script extracts a character/background/important-prop registry and ordered scene list, without generating scene prompts yet.
+
+Users edit reference designs, scene associations, actions, dialogue and durations, then explicitly approve the inventory. They may translate individual approved reference designs for Flow image generation and attach PNG/JPEG/WebP results (up to 10 MB each) to the corresponding reference. Uploaded pictures are stored locally with the project and included in Backup ZIP. Changing a reference design displays a mismatch warning for an older attached image.
+
+Only approved inventories can generate scene prompts. The app binds the exact approved scene IDs/order, durations, actions, dialogue and reference IDs/designs to the output; unknown or missing scenes are rejected. Script/brief or inventory changes invalidate downstream access until approved/regenerated. English prompt export remains a separate explicit step. All screenplay choices, edit history, approvals and references persist in autosave, My projects and project backups. New projects no longer use automatic concept selection; the legacy editor remains for older projects. Actual model fidelity and generated visuals still require user review.
