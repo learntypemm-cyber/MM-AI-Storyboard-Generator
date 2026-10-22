@@ -4,13 +4,14 @@ import { assetAsReference, putAsset, readAssets, removeAsset, sceneReferences } 
 import type { ImageAsset, ReferenceImage, Scene, Storyboard, VideoForm, VisualStyle } from "../types";
 import "./AssetStudio.css";
 import { generateImage, IMAGE_MODEL } from "../lib/imageGeneration";
+import { translateAssetDescriptionBilingual } from "../lib/automaticAssets";
 
 type AssetKind = "character" | "background" | "scene";
 type StudioTab = "character" | "background" | "scene";
 type JobState = "idle" | "running" | "paused" | "done" | "cancelled";
 type Props = {
   protectedAssetIds: string[]; projectId: string; onAssetsChanged: () => void;
-  open: boolean; onClose: () => void; apiKey: string; projectTitle: string; topic: string;
+  open: boolean; onClose: () => void; apiKey: string; model: string; projectTitle: string; topic: string;
   visualStyle: VisualStyle; aspectRatio: VideoForm["aspectRatio"];
   projectReferences: ReferenceImage[]; storyboard: Storyboard | null;
 };
@@ -87,6 +88,50 @@ function BackgroundPrompt(name: string, description: string, time: string, style
     "Create one single full-frame location image. Do not make a collage, mood board, grid, multiple camera angles or storyboard sheet."
   ].join("\n\n");
 }
+
+const visualStyleMyanmar: Record<VisualStyle, string> = {
+  "Realistic tutorial": "လက်တွေ့ဆန်သော သင်ခန်းစာဗီဒီယိုပုံစံ",
+  "Cinematic live action": "ရုပ်ရှင်ဆန်သော လက်တွေ့ရိုက်ကူးမှုပုံစံ",
+  "3D animation": "အရည်အသွေးမြင့် 3D ကာတွန်းပုံစံ",
+  "2D motion graphics": "2D motion graphics ပုံစံ",
+  "Presenter-led": "တင်ဆက်သူဦးဆောင်သော ဗီဒီယိုပုံစံ",
+  "Fast-paced social video": "လျင်မြန်သွက်လက်သော လူမှုကွန်ရက်ဗီဒီယိုပုံစံ",
+};
+const backgroundTimeMyanmar: Record<string, string> = {
+  "Soft daylight from a nearby window": "အနီးရှိ ပြတင်းပေါက်မှ နူးညံ့သော နေ့အလင်းရောင်",
+  "Warm morning sunlight": "နွေးထွေးသော နံနက်ခင်း နေရောင်",
+  "Bright neutral studio lighting": "တောက်ပပြီး အရောင်မ偏သော studio အလင်းရောင်",
+  "Golden hour, late afternoon": "နေ့လယ်နောက်ပိုင်း ရွှေရောင်နေရောင်ချိန်",
+  "Quiet evening with practical lamps": "အခန်းသုံးမီးများဖြင့် ငြိမ်သက်သော ညနေခင်း",
+  "Blue-hour cinematic lighting": "နေဝင်ချိန်အပြာရောင် ရုပ်ရှင်ဆန်သောအလင်းရောင်",
+};
+function CharacterPromptMyanmar(title: string, description: string, style: VisualStyle, format: string): string {
+  const formatInstruction = format === "Turnaround sheet"
+    ? "ဇာတ်ကောင်တစ်ဦးတည်း၏ ကိုယ်လုံးအပြည့် ရှေ့တည့်တည့်၊ သုံးပုံတစ်ပုံလှည့်၊ ဘေးတိုက်နှင့် နောက်ကျောမြင်ကွင်းများပါသော reference sheet တစ်ခု ဖန်တီးပါ။ မျက်နှာ၊ ဆံပင်၊ အဝတ်အစား၊ အရပ်၊ ကိုယ်ခန္ဓာအချိုးအစားနှင့် ဆက်စပ်ပစ္စည်းများကို အားလုံးတွင် တူညီစွာ ထိန်းပါ။ ရိုးရှင်းသော နောက်ခံ၊ အကွာအဝေးညီညာစွာထားပြီး စာသားမပါစေရ။"
+    : format === "Expression sheet"
+      ? "ဇာတ်ကောင်တစ်ဦးတည်း၏ ခေါင်းနှင့်ပခုံးပုံ ၆ ပုံပါသော မျက်နှာအမူအရာ reference sheet တစ်ခု ဖန်တီးပါ။ မျက်နှာ၊ ဆံပင်၊ အသားအရောင်၊ အသက်အရွယ်၊ အဝတ်အစားကော်လာနှင့် အချိုးအစားကို တူညီစွာ ထိန်းပါ။ အမူအရာတစ်ခုစီကို သီးခြားရှင်းလင်းစွာ ပြပါ။ စာသားမပါစေရ။"
+      : "ကိုယ်လုံးအပြည့် မြင်ရသော ဇာတ်ကောင် reference portrait တစ်ပုံကို အလယ်ဗဟိုတွင် ဖန်တီးပါ။ မျက်နှာ၊ ဆံပင်ပုံစံ၊ အဝတ်အစား၊ ဖိနပ်နှင့် ခွဲခြားသိသာစေသော ဆက်စပ်ပစ္စည်းများကို ရှင်းလင်းစွာ ပြပါ။ နောက်ခံကို ရိုးရှင်းသန့်ရှင်းစွာထားပါ။";
+  return [
+    "ပညာရေးဆိုင်ရာ ဗီဒီယိုစီးရီးတွင် ပြန်လည်အသုံးပြုမည့် ဇာတ်ကောင် reference ပုံကို အပြီးသတ်ဖန်တီးပါ။",
+    "ဇာတ်ကောင်အမည်: " + (title.trim() || "အဓိကဇာတ်ကောင်"),
+    "အသုံးပြုသူ၏ ဖော်ပြချက် သို့မဟုတ် ပြင်ဆင်လိုသည့်အရာ: " + (description.trim() || "မြန်မာစာရိုက်သင်ခန်းစာအတွက် ဖော်ရွေပြီး မှတ်မိလွယ်သော ဇာတ်ကောင်တစ်ဦး ဖန်တီးပါ။"),
+    "ရုပ်ပုံပုံစံ: " + visualStyleMyanmar[style] + "။ ခန္ဓာကိုယ်ပုံစံ သဘာဝကျစေပြီး မျက်နှာအမူအရာ၊ အသေးစိတ်နှင့် အလင်းရောင်ကို သေသပ်စွာဖော်ပြပါ။",
+    formatInstruction,
+    "Reference ပုံများ ပေးထားပါက မူရင်းဇာတ်ကောင်၏ မျက်နှာ၊ ကိုယ်ပိုင်လက္ခဏာ၊ အသက်အရွယ်၊ အသားအရောင်၊ ဆံပင်၊ ကိုယ်ခန္ဓာအချိုးအစား၊ အဝတ်အစားနှင့် ဆက်စပ်ပစ္စည်းများကို မပြောင်းပါနှင့်။ အသုံးပြုသူက ပြောင်းရန် တိတိကျကျ မတောင်းဆိုလျှင် ဒီဇိုင်းအသစ် မပြုလုပ်ပါနှင့်။",
+    "နောင် scene များတွင် အလွယ်တကူ ခွဲခြားမှတ်မိနိုင်အောင် ဖန်တီးပါ။ watermark၊ ထပ်နေသောဇာတ်ကောင်၊ ခန္ဓာကိုယ်အစိတ်အပိုင်းပိုများခြင်း၊ လက်ချောင်းပိုများခြင်း၊ မသက်ဆိုင်သောပစ္စည်းနှင့် ဖတ်လို့ရသောစာသားများ မပါစေရ။",
+  ].join("\n\n");
+}
+function BackgroundPromptMyanmar(name: string, description: string, time: string, style: VisualStyle, aspectRatio: string): string {
+  return [
+    "ဗီဒီယိုပရောဂျက်တွင် ပြန်လည်အသုံးပြုနိုင်မည့် နေရာနောက်ခံပုံတစ်ပုံကို အပြီးသတ်ဖန်တီးပါ။",
+    "နေရာအမည်: " + (name.trim() || "စာရိုက်သင်ခန်းစာနေရာ"),
+    "ပတ်ဝန်းကျင်အသေးစိတ်: " + (description.trim() || "မြန်မာစာရိုက်သင်ခန်းစာအတွက် သန့်ရှင်းဖော်ရွေသော စားပွဲ၊ ကီးဘုတ်နှင့် ကွန်ပျူတာပါဝင်သည့် အလုပ်လုပ်ရာနေရာ။"),
+    "အလင်းရောင် / အချိန်: " + (backgroundTimeMyanmar[time] || time),
+    "ရုပ်ပုံပုံစံ: " + visualStyleMyanmar[style] + "။ ပုံအချိုး: " + aspectRatio + "။",
+    "နောက်ပိုင်းတွင် ဇာတ်ကောင်ကို ထပ်တင်နိုင်စေရန် ရှေ့ပိုင်း၊ အလယ်ပိုင်းနှင့် နောက်ခံပိုင်းကို ခွဲခြားဖော်ပြပါ။ Perspective၊ အရိပ်နှင့် အာရုံစိုက်ရမည့်နေရာကို သဘာဝကျစွာ ဖန်တီးပါ။ လူ၊ ဇာတ်ကောင်၊ လူပုံအရိပ်၊ ဖတ်လို့ရသောစာသား၊ logo၊ UI သို့မဟုတ် watermark မပါစေရ။",
+    "ပုံအပြည့် တစ်ပုံတည်းကိုသာ ဖန်တီးပါ။ Collage၊ mood board၊ grid၊ ကင်မရာထောင့်မျိုးစုံ သို့မဟုတ် storyboard sheet မဖန်တီးပါနှင့်။",
+  ].join("\n\n");
+}
 function SceneImagePrompt(scene: Scene, storyboard: Storyboard, projectTitle: string, visualStyle: VisualStyle, aspectRatio: string, topic: string): string {
   return [
     "GENERATE ONE FINISHED IMAGE FOR THIS STORYBOARD SCENE NOW. Do not return a written plan.",
@@ -106,7 +151,7 @@ function SceneImagePrompt(scene: Scene, storyboard: Storyboard, projectTitle: st
 }
 
 export default function AssetStudio(props: Props) {
-  const { protectedAssetIds, projectId, onAssetsChanged, open, onClose, apiKey, projectTitle, topic, visualStyle, aspectRatio, projectReferences, storyboard } = props;
+  const { protectedAssetIds, projectId, onAssetsChanged, open, onClose, apiKey, model, projectTitle, topic, visualStyle, aspectRatio, projectReferences, storyboard } = props;
   const [tab, setTab] = useState<StudioTab>("character");
   const [assets, setAssets] = useState<ImageAsset[]>([]);
   const [selectedSceneIds, setSelectedSceneIds] = useState<string[]>([]);
@@ -148,10 +193,10 @@ export default function AssetStudio(props: Props) {
     const unique = chosen.filter((image, index, list) => image.data && list.findIndex((other) => other.name === image.name && other.data === image.data) === index);
     return unique;
   }
-  async function saveGenerated(kind: AssetKind, title: string, prompt: string, image: { data: string; mimeType: string }, sceneNumber?: number, sceneId?: string): Promise<ImageAsset> {
+  async function saveGenerated(kind: AssetKind, title: string, prompt: string, image: { data: string; mimeType: string }, sceneNumber?: number, sceneId?: string, promptMy = prompt, promptEn = prompt): Promise<ImageAsset> {
     const asset: ImageAsset = {
       id: makeId(), kind, title: title.trim() || (kind === "scene" ? "Scene " + sceneNumber : kind === "character" ? "Character reference" : "Background"),
-      prompt, mimeType: image.mimeType, data: image.data, createdAt: new Date().toISOString(), projectId, sceneId, sceneNumber, useAsReference: kind !== "scene" && selectedAssets.length < MAX_REFERENCES
+      prompt: promptEn, promptMy, promptEn, mimeType: image.mimeType, data: image.data, createdAt: new Date().toISOString(), projectId, sceneId, sceneNumber, useAsReference: kind !== "scene" && selectedAssets.length < MAX_REFERENCES
     };
     await putAsset(asset);
     setAssets((current) => [asset, ...current]);
@@ -162,19 +207,31 @@ export default function AssetStudio(props: Props) {
   async function generateCharacter(): Promise<void> {
     setError(""); setNotice("");
     if (!apiKey.trim()) { setError("Add your Gemini API key in Settings first, then reopen Asset Studio."); return; }
-    const prompt = CharacterPrompt(characterName, characterDescription, visualStyle, characterFormat);
     setBusyId("character");
-    try { await saveGenerated("character", characterName || "Character reference", prompt, await generateImage(apiKey, prompt, "1:1", inputReferences())); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Could not generate this character image."); }
+    try {
+      const source = characterDescription.trim() || "Create a friendly, approachable, memorable character suitable for a Myanmar typing tutorial.";
+      setNotice("မြန်မာနှင့် English prompt နှစ်မျိုး ပြင်ဆင်ပြီး character ပုံထုတ်နေပါတယ်…");
+      const versions = await translateAssetDescriptionBilingual(apiKey, model, source);
+      const promptEn = CharacterPrompt(characterName, versions.english, visualStyle, characterFormat);
+      const promptMy = CharacterPromptMyanmar(characterName, versions.myanmar, visualStyle, characterFormat);
+      const image = await generateImage(apiKey, promptEn, "1:1", inputReferences());
+      await saveGenerated("character", characterName || "Character reference", promptEn, image, undefined, undefined, promptMy, promptEn);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not generate this character image."); }
     finally { setBusyId(""); }
   }
   async function generateBackground(): Promise<void> {
     setError(""); setNotice("");
     if (!apiKey.trim()) { setError("Add your Gemini API key in Settings first, then reopen Asset Studio."); return; }
-    const prompt = BackgroundPrompt(backgroundName, backgroundDescription, backgroundTime, visualStyle, aspectRatio);
     setBusyId("background");
-    try { await saveGenerated("background", backgroundName || "Background", prompt, await generateImage(apiKey, prompt, aspectRatio, inputReferences())); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Could not generate this background image."); }
+    try {
+      const source = backgroundDescription.trim() || "A clean, welcoming workspace for a Myanmar typing lesson, desk, computer keyboard, natural materials and tidy composition. Realistic, tidy, friendly and calm.";
+      setNotice("မြန်မာနှင့် English prompt နှစ်မျိုး ပြင်ဆင်ပြီး background ပုံထုတ်နေပါတယ်…");
+      const versions = await translateAssetDescriptionBilingual(apiKey, model, source);
+      const promptEn = BackgroundPrompt(backgroundName, versions.english, backgroundTime, visualStyle, aspectRatio);
+      const promptMy = BackgroundPromptMyanmar(backgroundName, versions.myanmar, backgroundTime, visualStyle, aspectRatio);
+      const image = await generateImage(apiKey, promptEn, aspectRatio, inputReferences());
+      await saveGenerated("background", backgroundName || "Background", promptEn, image, undefined, undefined, promptMy, promptEn);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not generate this background image."); }
     finally { setBusyId(""); }
   }
   async function copyText(text: string, label: string): Promise<void> {
@@ -250,7 +307,9 @@ export default function AssetStudio(props: Props) {
   function promptForDownload(): void {
     const promptLines = assets.map((asset) =>
       "TYPE: " + asset.kind.toUpperCase() + "\nTITLE: " + asset.title + "\nCREATED: " + asset.createdAt +
-      (asset.sceneNumber ? "\nSCENE: " + asset.sceneNumber : "") + "\nPROMPT:\n" + asset.prompt
+      (asset.sceneNumber ? "\nSCENE: " + asset.sceneNumber : "") +
+      "\n\nBURMESE PROMPT / မြန်မာဗားရှင်း:\n" + (asset.promptMy || asset.prompt) +
+      "\n\nENGLISH PROMPT / အင်္ဂလိပ်ဗားရှင်း:\n" + (asset.promptEn || asset.prompt)
     ).join("\n\n---\n\n");
     const url = URL.createObjectURL(new Blob([promptLines], { type: "text/plain;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = "mm-storyboard-asset-prompts.txt"; link.click(); URL.revokeObjectURL(url);
@@ -340,6 +399,11 @@ export default function AssetStudio(props: Props) {
                 <div className="asset-card-body"><strong title={asset.title}>{asset.title}</strong><small>{new Date(asset.createdAt).toLocaleString()}</small>
                   <div className="asset-card-actions"><button onClick={() => downloadAsset(asset)} title="Download image"><ArrowDownToLine size={14} /></button><button onClick={() => void copyText(asset.prompt, asset.title)} title="Copy image prompt">{copied === asset.title ? <Check size={14} /> : <Copy size={14} />}</button>{asset.kind !== "scene" && <button className={asset.projectId === projectId && asset.useAsReference ? "reference-selected" : ""} disabled={isBusy} onClick={() => void toggleReference(asset)} title={asset.projectId === projectId && asset.useAsReference ? "Remove from project reference set" : "Add a reusable copy to this project"}><CheckCircle2 size={14} /></button>}<button className="delete" onClick={() => void deleteImage(asset)} disabled={isBusy} title="Delete image"><Trash2 size={14} /></button></div>
                   {asset.kind !== "scene" && <label className="asset-use-reference"><input type="checkbox" checked={asset.projectId === projectId && asset.useAsReference} disabled={isBusy} onChange={() => void toggleReference(asset)} /> Use for consistency</label>}
+                  <details className="asset-prompt-versions">
+                    <summary>မြန်မာ / English prompt ကြည့်ရန်</summary>
+                    <label className="asset-field"><span>မြန်မာ Prompt</span><textarea rows={5} readOnly value={asset.promptMy || asset.prompt} /></label>
+                    <label className="asset-field"><span>English Prompt</span><textarea rows={5} readOnly value={asset.promptEn || asset.prompt} /></label>
+                  </details>
                 </div>
               </article>)}</div>}
             </section>
