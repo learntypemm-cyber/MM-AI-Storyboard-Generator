@@ -142,3 +142,8 @@ The primary workflow produces prompts, not media. Generate character sheets (fou
 Each scene has an opening background angle, separate SFX/music directions and an outgoing Cut/Continue choice. Continue instructs the following scene to reuse the actual final frame of the previous clip. Review continuity after reordering scenes. New AI storyboard prompts request timed camera/action/background beats; older untimed prompts receive one full-duration action interval when exported. Review generated timing and supported settings in Flow.
 
 Download complete prompt ZIP includes START-HERE-MM.txt, reusable reference prompts, scene instructions in Burmese, opening-image/video prompts, audio, voiceover and captions. No generated images or videos are included. Existing reference descriptions automatically use the new sheet layout when copied or exported; use Prepare / recheck for missing characters or locations.
+
+
+### Burmese-first review
+
+New concepts, storyboard descriptions and reference design drafts are requested in Burmese. Edit the draft without API calls, then explicitly select the English translation action. English output is stored separately; editing the draft or its settings disables English copy/download until translated again. Exact spoken dialogue/voiceover and captions remain in their original language. Save/Backup ZIP retains both versions. Existing English projects offer a Burmese-draft conversion action. Initial Burmese drafting does not automatically run the English completeness-repair loop. Translation is one API request and preserves structural IDs, timing, references and locks; failed translation leaves the draft intact.

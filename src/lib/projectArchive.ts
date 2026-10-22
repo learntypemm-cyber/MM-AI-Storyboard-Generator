@@ -14,7 +14,7 @@ const scene = z.object({
   negativePrompt: text, openingFrame: text, finalFrame: text, handoff: z.enum(["CUT", "CONTINUATION"]),
   locked: z.boolean().optional(), reviewStatus: z.enum(["draft", "review", "approved"]).optional(), reviewNotes: text.optional(), assetIds: z.array(id).max(4).optional(),
 });
-const board = z.object({ referencePlan: z.array(z.object({ id, kind: z.enum(["character", "background", "prop"]), title: text, prompt: text, sceneIds: z.array(id).max(200) })).max(12).optional(), projectTitle: text, logline: text, visualBible: text, continuityRules: z.array(text), globalNegativePrompt: text, productionNotes: z.array(text), scenes: z.array(scene).max(200) });
+const board = z.object({ promptLanguage: z.literal("my").optional(), englishSource: z.string().max(2000000).optional(), englishJson: z.string().max(2000000).optional(), referencePlan: z.array(z.object({ id, kind: z.enum(["character", "background", "prop"]), title: text, prompt: text, sceneIds: z.array(id).max(200) })).max(12).optional(), projectTitle: text, logline: text, visualBible: text, continuityRules: z.array(text), globalNegativePrompt: text, productionNotes: z.array(text), scenes: z.array(scene).max(200) });
 export const presetSettingsSchema = z.object({
   goal: text, platform: z.enum(["TikTok", "Facebook Reels", "YouTube Shorts", "YouTube"]), targetDuration: z.number().positive().max(7200),
   language: z.enum(["Burmese", "English", "Burmese + English"]), audience: text,
@@ -66,3 +66,5 @@ export async function readArchive(file: File): Promise<ProjectArchive> {
   }
   return { ...result, references: result.references.map((ref) => ({ ...ref, previewUrl: `data:${ref.mimeType};base64,${ref.data}` })) };
 }
+
+export { board as storyboardSchema };

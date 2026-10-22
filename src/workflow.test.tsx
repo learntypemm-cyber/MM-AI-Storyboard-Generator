@@ -1,3 +1,5 @@
+import { draftSource, translatedBoard, validateTranslation } from "./lib/draftTranslation";
+import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
 import { sceneInstructions, sceneBackground, completePromptText, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
 // @vitest-environment jsdom
 import React from "react";
@@ -85,6 +87,15 @@ describe("portable archives", () => {
     expect(result.presets[0].name).toBe("Coffee settings");
     expect(JSON.stringify(result)).not.toContain("SECRET");
     expect(JSON.stringify(result)).not.toContain("private-host");
+  });
+  it("restores Burmese drafts and valid English snapshots after archive serialization", async () => {
+    const data = value(); const draft = data.project.storyboard;
+    draft.promptLanguage = "my";
+    draft.englishJson = JSON.stringify(board());
+    draft.englishSource = draftSource(draft, form);
+    const result = await readArchive(new File([await createArchive(data)], "draft.zip"));
+    expect(result.project.storyboard?.promptLanguage).toBe("my");
+    expect(translatedBoard(result.project.storyboard!, form)).not.toBeNull();
   });
   it("retains the creative brief and concept with a historical storyboard", async () => {
     const data = value();
@@ -313,13 +324,27 @@ describe("automatic concept selection", () => {
       fireEvent.click(screen.getAllByRole("button", { name: /Build this storyboard/ })[1]);
     }
     await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(2));
-    await waitFor(() => expect(screen.getByText(/Prompt package ready/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/မြန်မာမူကြမ်းရပါပြီ/)).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(screen.getByLabelText("Reference image prompt: May").closest("details")?.open).toBe(true);
+    expect((screen.getByLabelText("Reference image prompt: May") as HTMLTextAreaElement).value).toContain("blue clothing");
+    expect(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(true);
     expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("Best concept");
     expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("ACTION TIMELINE");
     expect(String(fetchMock.mock.calls[2][1]?.body)).toContain("concrete design specification");
     expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).selectedConceptId).toBe("best");
+    fetchMock.mockReset().mockImplementation(async (_url, init) => {
+      const prompt = JSON.parse(String(init?.body)).contents[0].parts[0].text as string;
+      const translated = JSON.parse(prompt.split("\n").at(-1)!);
+      delete translated.promptLanguage;
+      return reply(translated);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" }));
+    await waitFor(() => expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(false));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getAllByLabelText("Scene title")[0], { target: { value: "Edited Burmese title" } });
+    expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -514,4 +539,30 @@ it("reports blocked key storage instead of claiming that the key was saved", () 
   fireEvent.change(screen.getByLabelText(/Gemini API key/), { target: { value: "unsaved-test-key" } });
   expect(screen.getByText(/API key could not be saved/)).toBeTruthy();
   expect(localStorage.getItem("mm-storyboard-gemini-key")).toBeNull();
+});
+
+
+it("keeps Burmese drafts and translated English separate, invalidates exports after editing", () => {
+  const draft = board(); draft.promptLanguage = "my";
+  draft.scenes[0].flowPrompt = "မေသည် ကော်ဖီခွက်ကို ကိုင်လိုက်သည်";
+  const raw = structuredClone(draft); raw.scenes[0].flowPrompt = "May picks up her coffee cup";
+  raw.scenes[0].durationSeconds = 99; raw.scenes[0].voiceover = "Changed speech";
+  const english = validateTranslation(raw, draft);
+  expect(english.scenes[0].durationSeconds).toBe(8);
+  expect(english.scenes[0].voiceover).toBe(draft.scenes[0].voiceover);
+  draft.englishSource = draftSource(draft, form); draft.englishJson = JSON.stringify(english);
+  expect(translatedBoard(draft, form)?.scenes[0].flowPrompt).toBe("May picks up her coffee cup");
+  expect(draft.scenes[0].flowPrompt).toContain("မေသည်");
+  const onTranslate = vi.fn(); const onChange = vi.fn();
+  const ui = render(<BurmeseDraftEditor board={draft} form={form} busy={false} onChange={onChange} onTranslate={onTranslate} onSave={() => {}} onRetryReferences={() => {}} />);
+  expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(false);
+  draft.scenes[0].action = "New edited action";
+  expect(translatedBoard(draft, form)).toBeNull();
+  ui.rerender(<BurmeseDraftEditor board={draft} form={form} busy={false} onChange={onChange} onTranslate={onTranslate} onSave={() => {}} onRetryReferences={() => {}} />);
+  expect(screen.getByText(/English ပြန်ပြောင်းရန်လိုသည်/)).toBeTruthy();
+  expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(onTranslate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" }));
+  expect(onTranslate).toHaveBeenCalledOnce();
+  raw.scenes.pop(); expect(() => validateTranslation(raw, draft)).toThrow(/scene IDs/);
 });

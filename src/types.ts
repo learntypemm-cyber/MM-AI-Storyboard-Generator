@@ -28,6 +28,9 @@ export type Scene = {
 };
 export type ReferencePlanItem = { id: string; kind: "character" | "background" | "prop"; title: string; prompt: string; sceneIds: string[] };
 export type Storyboard = {
+  promptLanguage?: "my";
+  englishSource?: string;
+  englishJson?: string;
   referencePlan?: ReferencePlanItem[];
   projectTitle: string; logline: string; visualBible: string; continuityRules: string[];
   globalNegativePrompt: string; productionNotes: string[]; scenes: Scene[];
