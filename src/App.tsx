@@ -1,5 +1,5 @@
 import ScreenplayStudio from "./components/ScreenplayStudio";
-import { screenplayChoicesSchema, screenplayRequest, pipelineCurrent, inventorySource, inventoryApproved } from "./lib/screenplayWorkflow";
+import { screenplayChoicesSchema, screenplayRepairSchema, screenplayRequest, screenplayRepairRequest, screenplayCompletenessIssues, requiredScreenplaySceneCount, pipelineCurrent, inventorySource, inventoryApproved } from "./lib/screenplayWorkflow";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
 import { draftSource, translationPrompt, validateTranslation } from "./lib/draftTranslation";
 import { sceneDetailRequirements } from "./lib/promptGuidance";
@@ -286,10 +286,39 @@ function App() {
     setBusy("screenplays"); setError(""); setNotice("");
     try {
       const raw = await generateJson<unknown>(apiKey.trim(), geminiModel, screenplayRequest(form), form.referenceImages);
-      const result = screenplayChoicesSchema.parse(raw);
+      let choices = screenplayChoicesSchema.parse(raw).choices;
+      const invalidIndexes = choices.map((choice, index) => screenplayCompletenessIssues(choice.screenplay, form).length ? index : -1).filter(index => index >= 0);
+      if (invalidIndexes.length) {
+        setNotice("ဇာတ်ညွှန်းအရှည်နဲ့ scene အရေအတွက်ကို ပြန်ညှိနေပါတယ်…");
+        const repairRaw = await generateJson<unknown>(
+          apiKey.trim(),
+          geminiModel,
+          screenplayRepairRequest(form, choices, invalidIndexes),
+          form.referenceImages,
+        );
+        const repairs = screenplayRepairSchema.parse(repairRaw).repairs;
+        const repairedByIndex = new Map<number, (typeof repairs)[number]>();
+        for (const repair of repairs) {
+          if (repairedByIndex.has(repair.index)) throw new Error("Gemini returned duplicate screenplay repairs. Please retry.");
+          repairedByIndex.set(repair.index, repair);
+        }
+        for (const index of invalidIndexes) {
+          if (!repairedByIndex.has(index)) throw new Error("Gemini did not return every incomplete screenplay repair. Please retry.");
+        }
+        choices = choices.map((choice, index) => {
+          const repair = repairedByIndex.get(index);
+          if (!repair) return choice;
+          return { title: choice.title, screenplay: repair.screenplay };
+        });
+      }
+      const remainingIssues = choices.map((choice, index) => ({ index, title: choice.title, issues: screenplayCompletenessIssues(choice.screenplay, form) })).filter(item => item.issues.length);
+      if (remainingIssues.length) {
+        const expected = requiredScreenplaySceneCount(form);
+        throw new Error("Gemini still returned incomplete scripts after an automatic repair. For " + form.targetDuration + "s at " + form.clipDuration + "s per clip, each screenplay needs exactly " + expected + " numbered scenes. No incomplete screenplay was saved. Please try again or select a model that can generate longer text.");
+      }
       await preserveCurrentProject();
       remember("Before new screenplay choices");
-      setScreenplay({ choices: result.choices.map(c => ({ ...c, id: makeId(), versions: [] })), selectedId: "" });
+      setScreenplay({ choices: choices.map(c => ({ ...c, id: makeId(), versions: [] })), selectedId: "" });
       setConcepts([]); setSelectedConceptId(""); setStep("concepts");
       setNotice("ဇာတ်ညွှန်း ၃ မျိုးရပါပြီ။ တစ်မျိုးရွေးပြီး ဖတ်၊ ပြင်၊ အတည်ပြုပါ။ နောက်အဆင့်ကို အလိုအလျောက် မသွားပါ။");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not write screenplays."); }
