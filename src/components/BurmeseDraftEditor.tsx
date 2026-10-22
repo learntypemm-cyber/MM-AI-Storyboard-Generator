@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Scene, Storyboard, VideoForm } from "../types";
 import { translatedBoard } from "../lib/draftTranslation";
-import { completePromptText, promptPackageZip } from "../lib/promptPackage";
+import { completePromptText, completePromptTextMyanmar, completePromptTextBilingual, promptPackageZip } from "../lib/promptPackage";
 import { downloadText, fileSlug } from "../lib/export";
 
 type Props = { referencesLocked?: boolean; board: Storyboard; form: VideoForm; busy: boolean; onChange: (board: Storyboard) => void; onTranslate: () => void; onSave: () => void; onRetryReferences: () => void };
@@ -11,6 +11,12 @@ export default function BurmeseDraftEditor({ referencesLocked = false, board, fo
   const english = translatedBoard(board, form);
   const updateScene = (id: string, patch: Partial<Scene>) => onChange({ ...board, scenes: board.scenes.map(scene => scene.id === id ? { ...scene, ...patch } : scene) });
   const copy = async () => { if (!english) return; try { await navigator.clipboard.writeText(completePromptText(english, form)); setMessage("English prompts copied."); } catch { setMessage("Copy မရပါ။ TXT download ကိုသုံးပါ။"); } };
+  const downloadBilingual = () => {
+    if (!english) return;
+    const content = completePromptTextBilingual(board, form, english);
+    downloadText(fileSlug(board.projectTitle) + "-burmese-english-prompts.txt", content, "text/plain;charset=utf-8");
+    setMessage("မြန်မာနှင့် English prompt နှစ်မျိုးစလုံးကို သိမ်းပြီးပါပြီ။");
+  };
   const zip = async () => {
     if (!english) return;
     try { const blob = await promptPackageZip(english, form); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = fileSlug(board.projectTitle) + "-english-prompts.zip"; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
@@ -47,9 +53,9 @@ export default function BurmeseDraftEditor({ referencesLocked = false, board, fo
     <div className="workflow-toolbar">
       <button className="secondary-button" disabled={busy || !english} onClick={() => void copy()}>Copy English prompts</button>
       <button className="secondary-button" disabled={busy || !english} onClick={() => english && downloadText(fileSlug(board.projectTitle) + "-english-prompts.txt", completePromptText(english, form), "text/plain;charset=utf-8")}>Download English TXT</button>
-      <button className="secondary-button" disabled={busy || !english} onClick={() => void zip()}>Download English ZIP</button>
+      <button className="secondary-button" disabled={busy || !english} onClick={() => void zip()}>Download English ZIP</button><button className="secondary-button" disabled={busy || !english} onClick={downloadBilingual}>Download Burmese + English TXT</button>
     </div>
     {message && <p role="status">{message}</p>}
-    {english && <details className="field"><summary>English prompt အပြည့်အစုံကြည့်ရန်</summary><textarea className="input" readOnly rows={18} value={completePromptText(english, form)} /></details>}
+    {english && <><details className="field"><summary>မြန်မာ prompt အပြည့်အစုံကြည့်ရန်</summary><textarea className="input" readOnly rows={18} value={completePromptTextMyanmar(board, form)} /></details><details className="field"><summary>English prompt အပြည့်အစုံကြည့်ရန်</summary><textarea className="input" readOnly rows={18} value={completePromptText(english, form)} /></details></>}
   </section>;
 }
