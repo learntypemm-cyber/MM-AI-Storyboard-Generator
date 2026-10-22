@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import type { ReferencePlanItem, Scene, Storyboard, VideoForm } from "../types";
-import { referenceImagePrompt } from "./automaticAssets";
+import { referenceImagePrompt, referenceImagePromptMyanmar } from "./automaticAssets";
 
 export function referenceCode(item: ReferencePlanItem, board: Storyboard): string {
   const peers = (board.referencePlan || []).filter((entry) => entry.kind === item.kind);
@@ -121,7 +121,7 @@ export function sceneImagePromptMyanmar(scene: Scene, board: Storyboard, form: V
     "ပေးထားသော reference ပုံများကို အသုံးပြုပြီး ဇာတ်ကောင်၏ မျက်နှာ၊ အဝတ်အစား၊ နေရာနှင့် ပစ္စည်းများကို တူညီစွာ ထိန်းပါ။ Reference ဖော်ပြချက်များ:\n" + referenceDescriptionsMyanmar(scene, board),
     ...scenePlanReferences(scene, board).filter((item) => item.kind === "background").map((item) =>
       referenceCode(item, board) + " (" + item.title + ") အတွက် A = ရှေ့၊ B = ညာ၊ C = နောက်၊ D = ဘယ် ဖြစ်သည်။ နောက်ခံ reference sheet သည် တစ်နေရာတည်း၏ ထောင့်လေးခုဖြစ်ကြောင်း ထိန်းထားပါ။"),
-    "ဖြစ်နိုင်သည့် အဖွင့်အခိုက်အတန့်ကိုသာ ပြပါ။ လူထပ်တိုးခြင်း၊ ဇာတ်ကောင်နှစ်ထပ်ဖြစ်ခြင်း၊ caption သို့မဟုတ် watermark မပါစေရ။",",
+    "ဖြစ်နိုင်သည့် အဖွင့်အခိုက်အတန့်ကိုသာ ပြပါ။ လူထပ်တိုးခြင်း၊ ဇာတ်ကောင်နှစ်ထပ်ဖြစ်ခြင်း၊ caption သို့မဟုတ် watermark မပါစေရ။",
     "မပါစေလိုသည့်အရာများ: " + scene.negativePrompt,
   ].filter(Boolean).join("\n\n");
 }
