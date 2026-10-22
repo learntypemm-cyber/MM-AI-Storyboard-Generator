@@ -11,8 +11,8 @@ import {
   LayoutDashboard, Lightbulb, MonitorPlay, Plus, RefreshCw, Save, Settings,
   Sparkles, Trash2, Upload, Volume2, Wand2, X, Zap, Clock3, ArrowUp, ArrowDown, Lock, Unlock, History,
 } from "lucide-react";
-import type { GeminiModelOption } from "./lib/gemini";
-import { generateJson, listGeminiModels, testGeminiModel } from "./lib/gemini";
+import type { GeminiModelCheck, GeminiModelOption } from "./lib/gemini";
+import { generateJson, listGeminiModels, probeGeminiModel, testGeminiModel } from "./lib/gemini";
 import { assetAsReference, assetHandle, promptWithReferences, readAssets, sceneReferences, writeAssets } from "./lib/assetStore";
 import { prepareAutomaticAssets, referenceImagePrompt, referencePromptPack } from "./lib/automaticAssets";
 import { workflowGuideMM, sceneBackground, referenceCode, sceneReferenceList, scenePreparationMode, sceneImagePrompt, sceneVideoPrompt, sceneInstructions, completePromptText, promptPackageZip } from "./lib/promptPackage";
@@ -182,6 +182,9 @@ function App() {
   const [modelListError, setModelListError] = useState("");
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelRefresh, setModelRefresh] = useState(0);
+  const [modelChecks, setModelChecks] = useState<GeminiModelCheck[]>([]);
+  const [checkingModels, setCheckingModels] = useState(false);
+  const [modelCheckProgress, setModelCheckProgress] = useState(0);
   const [concepts, setConcepts] = useState<VideoConcept[]>([]);
   const [selectedConceptId, setSelectedConceptId] = useState("");
   const [screenplay, setScreenplay] = useState<ScreenplayWorkflow | undefined>();
@@ -637,6 +640,58 @@ function App() {
     }
   };
 
+  const checkGeminiModelAvailability = async () => {
+    const key = apiKeyDraft.trim();
+    if (!key || modelListKey !== key || !modelOptions.length || loadingModels || checkingModels) return;
+    setCheckingModels(true);
+    setModelChecks([]);
+    setModelCheckProgress(0);
+    setGeminiTestResult(null);
+    const results: GeminiModelCheck[] = [];
+    try {
+      // Test one model at a time to reduce burst requests on Free-tier accounts.
+      for (const option of modelOptions) {
+        const result = await probeGeminiModel(key, option.id);
+        results.push(result);
+        setModelChecks([...results]);
+        setModelCheckProgress(results.length);
+        // Stop making requests when the supplied key is rejected.
+        if (result.status === "key-error") {
+          for (const remaining of modelOptions.slice(results.length)) {
+            results.push({
+              modelId: remaining.id,
+              displayName: remaining.displayName,
+              status: "error",
+              message: "Skipped because the API key was rejected during an earlier test.",
+              durationMs: 0,
+            });
+          }
+          setModelChecks([...results]);
+          setModelCheckProgress(results.length);
+          break;
+        }
+      }
+
+      const selectedWorks = results.some((item) => item.modelId === modelDraft && item.status === "ready");
+      const recommended = results.find((item) => item.status === "ready" && /flash/i.test(item.modelId) && !/(preview|experimental|exp)/i.test(item.modelId))
+        || results.find((item) => item.status === "ready" && /flash/i.test(item.modelId))
+        || results.find((item) => item.status === "ready");
+
+      if (!selectedWorks && recommended) {
+        setModelDraft(recommended.modelId);
+        setGeminiTestResult({ ok: true, message: "Best working model selected: " + recommended.displayName + ". Press Save settings to apply it." });
+      } else if (selectedWorks) {
+        setGeminiTestResult({ ok: true, message: "Your selected model passed the live generation test." });
+      } else {
+        setGeminiTestResult({ ok: false, message: "No model passed the live test. Check the key, quota and model access, then try again later." });
+      }
+    } catch (caught) {
+      setGeminiTestResult({ ok: false, message: caught instanceof Error ? caught.message : "Could not check Gemini models." });
+    } finally {
+      setCheckingModels(false);
+    }
+  };
+
   const persistApiKey = (value: string): boolean => {
     const key = value.trim();
     if (!key) return false; // Clearing the input is not a request to remove the saved key.
@@ -935,6 +990,16 @@ function App() {
           {modelListError && <div role="alert" className="gemini-test-result error">{modelListError}</div>}
           {apiKeyDraft.trim() && apiKeyDraft.trim() === apiKey && <p role="status">API key saved in this browser · Refresh လုပ်ပြီးလည်း ပြန်သုံးနိုင်ပါတယ်။</p>}
           <button className="quiet-button" disabled={!apiKeyDraft.trim() || loadingModels} onClick={() => setModelRefresh((value) => value + 1)}><RefreshCw size={15} /> {loadingModels ? "Loading models…" : "Refresh models"}</button>
+          <button className="secondary-button model-scan-button" disabled={!apiKeyDraft.trim() || loadingModels || checkingModels || !modelOptions.length || modelListKey !== apiKeyDraft.trim()} onClick={() => void checkGeminiModelAvailability()}><Zap size={15} /> {checkingModels ? "Testing models " + modelCheckProgress + "/" + modelOptions.length + "…" : "Check which models work"}</button>
+          <p className="field-hint">Runs one small live generation request per listed model. This may use some Free-tier quota. Results reflect access at the time of the test, not future quota availability.</p>
+          {checkingModels && <div className="model-scan-progress" role="status">Testing {modelCheckProgress} of {modelOptions.length} models sequentially to reduce burst requests.</div>}
+          {modelChecks.length > 0 && <div className="gemini-model-check-list" aria-label="Gemini model test results">
+            {modelChecks.map((item) => <div className={"gemini-model-check-item " + item.status} key={item.modelId}>
+              <span className="model-check-icon">{item.status === "ready" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}</span>
+              <div className="model-check-copy"><strong>{item.displayName}</strong><small>{item.modelId}</small><p>{item.message}</p></div>
+              <span className="model-check-badge">{item.status === "ready" ? "READY" : item.status === "quota" ? "QUOTA" : item.status === "unavailable" ? "UNAVAILABLE" : item.status === "key-error" ? "KEY ERROR" : "CHECK"}</span>
+            </div>)}
+          </div>
           {geminiTestResult && <div className={"gemini-test-result " + (geminiTestResult.ok ? "success" : "error")} role="status"><span>{geminiTestResult.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span><span>{geminiTestResult.message}</span></div>}
           <div className="privacy-note"><AlertCircle size={16} /><span>This is a browser-only development app. The key is sent to Google's Gemini API from your browser and stored locally. For a public deployment, proxy requests through a secured backend.</span></div>
           <div className="modal-actions"><button className="quiet-button" onClick={removeApiKey}>Remove key</button><button className="secondary-button" onClick={() => void testGeminiSettings()} disabled={testingGemini || !validModelSelection}><Zap size={15} /> {testingGemini ? "Testing..." : "Test model"}</button><button className="primary-button" onClick={saveApiSettings} disabled={!apiKeyDraft.trim()}><Check size={16} /> Save settings</button></div>
