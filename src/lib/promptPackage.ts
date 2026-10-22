@@ -86,6 +86,112 @@ export function completePromptText(board: Storyboard, form: VideoForm): string {
     ...board.scenes.map((scene) => sceneInstructions(scene, board) + "\n\nSCENE IMAGE PROMPT:\n" + sceneImagePrompt(scene, board, form) + "\n\nVIDEO PROMPT:\n" + sceneVideoPrompt(scene, board) + "\n\nCAPTION FOR EDITING:\n" + scene.onscreenText),
   ].join("\n\n--------------------\n\n");
 }
+
+const angleNamesMyanmar: Record<"A" | "B" | "C" | "D", string> = {
+  A: "ရှေ့ဘက်", B: "ညာဘက်", C: "နောက်ဘက် / ပြောင်းပြန်", D: "ဘယ်ဘက်",
+};
+const visualStyleNamesMyanmar: Record<VideoForm["visualStyle"], string> = {
+  "Realistic tutorial": "လက်တွေ့ဆန်သော သင်ခန်းစာပုံစံ",
+  "Cinematic live action": "ရုပ်ရှင်ဆန်သော လက်တွေ့ရိုက်ကူးမှု",
+  "3D animation": "3D ကာတွန်းပုံစံ",
+  "2D motion graphics": "2D motion graphics ပုံစံ",
+  "Presenter-led": "တင်ဆက်သူဦးဆောင်သည့် ပုံစံ",
+  "Fast-paced social video": "လျင်မြန်သွက်လက်သော လူမှုကွန်ရက်ဗီဒီယိုပုံစံ",
+};
+function sceneBackgroundMyanmar(scene: Scene, board: Storyboard): string {
+  const angle = scene.backgroundAngle || "A";
+  const rows = scenePlanReferences(scene, board).filter((item) => item.kind === "background")
+    .map((item) => referenceCode(item, board) + " — " + item.title + " — " + angle + " / " + angleNamesMyanmar[angle]);
+  return rows.join("၊ ") || "သီးခြား background reference sheet မလိုပါ။ Scene ထဲမှာ ဖော်ပြထားသော နေရာကိုသာ သုံးပါ။";
+}
+function referenceDescriptionsMyanmar(scene: Scene, board: Storyboard): string {
+  return scenePlanReferences(scene, board).map((item) => referenceCode(item, board) + " (" + item.title + "): " + item.prompt).join("\n");
+}
+export function sceneImagePromptMyanmar(scene: Scene, board: Storyboard, form: VideoForm): string {
+  return [
+    "ဤဇာတ်ကွက်အတွက် အပြီးသတ်အဖွင့်ပုံတစ်ပုံတည်းကို ဖန်တီးပါ။ ပုံထဲတွင် မလိုအပ်သောစာသား မပါစေရ။",
+    "Collage သို့မဟုတ် စာဖြင့်ရှင်းပြထားသော plan မဟုတ်ဘဲ ဗီဒီယိုစတင်ချိန်၏ တစ်ကွက်တည်း still image ဖြစ်ရမည်။ Reference code များကို ပုံထဲတွင် မရေးပါနှင့်။",
+    "အဖွင့်ပုံ: " + (scene.openingFrame || scene.visualDescription),
+    "နောက်ခံ / အဖွင့်ကင်မရာထောင့်: " + sceneBackgroundMyanmar(scene, board),
+    "ဖွဲ့စည်းပုံနှင့် မြင်ကွင်း: " + scene.visualDescription,
+    "ရိုက်ကွက်အရွယ်အစား: " + scene.shotSize,
+    "အလင်းရောင်: " + scene.lighting + "။ ခံစားချက်: " + scene.mood,
+    "ရုပ်ပုံပုံစံ: " + visualStyleNamesMyanmar[form.visualStyle] + "။ ပုံအချိုး: " + form.aspectRatio,
+    "အဓိကရုပ်ပုံလမ်းညွှန်: " + board.visualBible,
+    "ပေးထားသော reference ပုံများကို အသုံးပြုပြီး ဇာတ်ကောင်၏ မျက်နှာ၊ အဝတ်အစား၊ နေရာနှင့် ပစ္စည်းများကို တူညီစွာ ထိန်းပါ။ Reference ဖော်ပြချက်များ:\n" + referenceDescriptionsMyanmar(scene, board),
+    ...scenePlanReferences(scene, board).filter((item) => item.kind === "background").map((item) =>
+      referenceCode(item, board) + " (" + item.title + ") အတွက် A = ရှေ့၊ B = ညာ၊ C = နောက်၊ D = ဘယ် ဖြစ်သည်။ နောက်ခံ reference sheet သည် တစ်နေရာတည်း၏ ထောင့်လေးခုဖြစ်ကြောင်း ထိန်းထားပါ။"),
+    "ဖြစ်နိုင်သည့် အဖွင့်အခိုက်အတန့်ကိုသာ ပြပါ။ လူထပ်တိုးခြင်း၊ ဇာတ်ကောင်နှစ်ထပ်ဖြစ်ခြင်း၊ caption သို့မဟုတ် watermark မပါစေရ။",",
+    "မပါစေလိုသည့်အရာများ: " + scene.negativePrompt,
+  ].filter(Boolean).join("\n\n");
+}
+export function sceneVideoPromptMyanmar(scene: Scene, board: Storyboard): string {
+  const previous = previousContinuousScene(scene, board);
+  const time = (seconds: number) => String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
+  const timedPrompt = /\d{2}:\d{2}/.test(scene.flowPrompt) ? scene.flowPrompt : scene.flowPrompt + "\n\n(00:00-" + time(scene.durationSeconds) + ")\n[ကင်မရာရိုက်ကွက်] " + scene.shotSize + "\n[လုပ်ဆောင်ချက်] " + scene.action;
+  return [
+    timedPrompt,
+    "နောက်ခံ / အဖွင့်ထောင့်: " + sceneBackgroundMyanmar(scene, board),
+    previous && scenePreparationMode(scene, board) === "image-to-video" ? "အစပုံ: ယခင်ဇာတ်ကွက်၏ အမှန်တကယ်နောက်ဆုံး frame ကို အသုံးပြုပါ။ ဇာတ်ကောင်တည်နေရာ၊ အဝတ်အစား၊ ပစ္စည်း၊ အလင်းနှင့် ကင်မရာဦးတည်ချက်ကို မပြောင်းပါနှင့်။ ဆက်ဝင်လာမည့်အခြေအနေ: " + previous.finalFrame : "",
+    ...scenePlanReferences(scene, board).filter((item) => item.kind === "background").map((item) =>
+      referenceCode(item, board) + " (" + item.title + "): A = ရှေ့၊ B = ညာ၊ C = နောက်/ပြောင်းပြန်၊ D = ဘယ်။ သတ်မှတ်ထားသော ထောင့်နှင့် နေရာကိုသာ သုံးပါ။"),
+    scenePreparationMode(scene, board) === "image-to-video" ? "ပေးထားသော scene အဖွင့်ပုံကို စတင်ဖွဲ့စည်းပုံအဖြစ် အသုံးပြုပြီး ဇာတ်ကွက်လုပ်ဆောင်ချက်အတိုင်း လှုပ်ရှားစေပါ။" : "အဖွင့်ပုံ မလိုအပ်ဘဲ ဖော်ပြချက်အတိုင်း ဤမြင်ကွင်းကို တိုက်ရိုက်ဖန်တီးပါ။",
+    "ဇာတ်ကွက်ကြာချိန်: " + scene.durationSeconds + " စက္ကန့်",
+    "ရုပ်ပုံပုံစံလမ်းညွှန်: " + board.visualBible,
+    "အဖွင့် frame: " + scene.openingFrame,
+    "ဖွဲ့စည်းပုံ / ပတ်ဝန်းကျင်: " + scene.visualDescription,
+    "ရိုက်ကွက်အရွယ်အစား: " + scene.shotSize,
+    "လုပ်ဆောင်ချက်: " + scene.action,
+    "ကင်မရာလှုပ်ရှားမှု: " + scene.cameraMovement,
+    "အလင်းရောင်: " + scene.lighting,
+    "ခံစားချက်: " + scene.mood,
+    "ဇာတ်ကွက်ဆက်စပ်မှုစည်းမျဉ်းများ: " + board.continuityRules.join("၊ "),
+    "ရှောင်ရန်: " + [board.globalNegativePrompt, scene.negativePrompt].filter(Boolean).join("၊ "),
+    "နောက်ဆုံး frame: " + scene.finalFrame,
+    "အသံညွှန်ကြားချက်: " + scene.audioNotes,
+    "အသံအကျိုးသက်ရောက်မှု (SFX): " + (scene.sfx ?? "အသံညွှန်ကြားချက်နှင့် လိုက်ဖက်စွာ ထည့်ပါ။"),
+    "နောက်ခံတေးဂီတ: " + (scene.backgroundMusic ?? "အသံညွှန်ကြားချက်နှင့် လိုက်ဖက်စွာ ထည့်ပါ။"),
+    scene.voiceover ? "ပြောစကား / Voiceover: " + scene.voiceover : "",
+    "ဆက်စပ် reference များ:\n" + referenceDescriptionsMyanmar(scene, board),
+  ].filter(Boolean).join("\n\n");
+}
+export function completePromptTextMyanmar(board: Storyboard, form: VideoForm): string {
+  return [
+    "မြန်မာဗားရှင်း — ပြည့်စုံသော Flow Prompt Package",
+    workflowGuideMM(),
+    "ပရောဂျက်: " + board.projectTitle,
+    "ဇာတ်လမ်းအကျဉ်း: " + board.logline,
+    "ရုပ်ပုံပုံစံလမ်းညွှန်: " + board.visualBible,
+    "လုပ်ဆောင်ရန်အစီအစဉ်: ပထမဦးစွာ ပြန်သုံးနိုင်သော Character / Background reference ပုံများကို ထုတ်ပါ။ ထို့နောက် ဇာတ်ကွက်တစ်ခုချင်းစီအတွက် အဖွင့်ပုံနှင့် video prompt များကို အသုံးပြုပါ။ ပုံနှင့် video ကို Google Flow တွင် ကိုယ်တိုင်ထုတ်ရပါမည်။",
+    ...(board.referencePlan || []).map((item) => referenceCode(item, board) + " — " + item.title + "\nအသုံးပြုမည့် ဇာတ်ကွက်များ: " + board.scenes.filter((scene) => item.sceneIds.includes(scene.id)).map((scene) => scene.sceneNumber).join(", ") + "\n\n" + referenceImagePromptMyanmar(item, form)),
+    ...board.scenes.map((scene) => {
+      const previous = previousContinuousScene(scene, board);
+      const mode = scenePreparationMode(scene, board) === "image-to-video";
+      const instructions = "ဇာတ်ကွက် " + scene.sceneNumber + ": " + scene.title +
+        "\nကြာချိန်: " + scene.durationSeconds + " စက္ကန့်" +
+        "\nအသုံးပြုမည့် reference: " + (sceneReferenceList(scene, board)) +
+        "\nနောက်ခံ: " + sceneBackgroundMyanmar(scene, board) +
+        "\n" + (mode ? previous
+          ? "၁။ ယခင်ဇာတ်ကွက်၏ နောက်ဆုံး frame ကို သိမ်းယူပြီး ဒီဇာတ်ကွက်၏ အစပုံအဖြစ်သုံးပါ။\n၂။ အောက်ပါ မြန်မာ video prompt ဖြင့် လှုပ်ရှားမှုကို ဆက်ပါ။"
+          : "၁။ သက်ဆိုင်ရာ Character / Background reference ပုံများကို Flow ထဲသို့ ထည့်ပါ။\n၂။ အောက်ပါ အဖွင့်ပုံ prompt ဖြင့် still image တစ်ပုံ ထုတ်ပါ။\n၃။ အဲဒီပုံကို start frame အဖြစ်သုံးပြီး အောက်ပါ video prompt ဖြင့် clip ထုတ်ပါ။"
+          : "အောက်ပါ video prompt ကို text-to-video အဖြစ်သုံးပါ။ အဖွင့်ပုံသည် ရွေးချယ်နိုင်သော အပိုအဆင့်ဖြစ်သည်။") +
+        "\nအဝတ်အစား၊ ပစ္စည်း၊ နေရာ၊ အလင်းရောင်နှင့် လှုပ်ရှားမှု ဆက်စပ်မှုကို စစ်ပါ။ Caption ကို editing မှာ ထည့်ပါ။";
+      return instructions + "\n\nအဖွင့်ပုံ prompt (မြန်မာ):\n" + sceneImagePromptMyanmar(scene, board, form) +
+        "\n\nVideo prompt (မြန်မာ):\n" + sceneVideoPromptMyanmar(scene, board) +
+        "\n\nEditing တွင် ထည့်ရန် caption:\n" + scene.onscreenText;
+    }),
+  ].join("\n\n--------------------\n\n");
+}
+export function completePromptTextBilingual(burmeseBoard: Storyboard, form: VideoForm, englishBoard: Storyboard): string {
+  return [
+    "==================== MYANMAR VERSION / မြန်မာဗားရှင်း ====================",
+    completePromptTextMyanmar(burmeseBoard, form),
+    "",
+    "==================== ENGLISH VERSION / အင်္ဂလိပ်ဗားရှင်း ====================",
+    completePromptText(englishBoard, form),
+  ].join("\n\n");
+}
+
 export async function promptPackageZip(board: Storyboard, form: VideoForm): Promise<Blob> {
   const zip = new JSZip();
   zip.file("START-HERE-MM.txt", workflowGuideMM());
