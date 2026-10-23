@@ -334,6 +334,13 @@ describe("screenplay approval workflow", () => {
         const approved = JSON.parse(prompt.split("\n").at(-1)!);
         expect(prompt).toContain("အနီရောင်ဝတ်စုံ");
         return reply({ ...board(), scenes: approved.scenes.map((s: { id: string }) => ({ ...scene(s.id), action: "model changed action", voiceover: "model changed dialogue", durationSeconds: 99 })) });
+      })
+      .mockImplementationOnce(async (_url, init) => {
+        const prompt = JSON.parse(String(init?.body)).contents[0].parts[0].text as string;
+        expect(prompt).toContain("ONE batch");
+        const input = JSON.parse(prompt.split("\n").at(-1)!) as { references: Array<{ id: string; prompt: string }> };
+        expect(input.references).toHaveLength(2);
+        return reply({ references: input.references.map(ref => ({ id: ref.id, englishPrompt: "English prompt: " + ref.prompt })) });
       });
     const app = render(<App />);
     await waitFor(() => expect((screen.getByRole("button", { name: "မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပေး" }) as HTMLButtonElement).disabled).toBe(false));
@@ -361,6 +368,11 @@ describe("screenplay approval workflow", () => {
     fireEvent.click(generate());
     await waitFor(() => expect(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(4);
+    fireEvent.click(screen.getByRole("button", { name: "Reference အားလုံးကို English တစ်ခါတည်းပြောင်းမယ်" }));
+    await waitFor(() => expect(screen.getByText("Reference 2 ခုလုံးကို တစ်ခါတည်း English ပြောင်းပြီးပါပြီ။")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(screen.getByText(/2 \/ 2 reference prompts English ပြောင်းပြီးပါပြီ/)).toBeTruthy();
+    expect(screen.getByText("English Reference image prompt အပြည့်အစုံ")).toBeTruthy();
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem("mm-storyboard-current") || "null");
       expect(persisted?.storyboard?.scenes?.length).toBe(4);
@@ -374,11 +386,11 @@ describe("screenplay approval workflow", () => {
     expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
     fireEvent.change(screen.getByLabelText("မြန်မာဇာတ်ညွှန်း"), { target: { value: "အသစ်ပြင်ထားသောဇာတ်လမ်း" } });
     expect(screen.queryByLabelText("Reference 1 ဖော်ပြချက်")).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     app.unmount(); render(<App />);
     await waitFor(() => expect((screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement).value).toBe("အသစ်ပြင်ထားသောဇာတ်လမ်း"));
     expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
   it("calculates screenplay clip count from target runtime and validates under-length scripts", () => {
     expect(requiredScreenplaySceneCount({ targetDuration: 60, clipDuration: 8 })).toBe(8);
