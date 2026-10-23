@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Scene, ShotBreakdown, Storyboard, VideoForm } from "../types";
+import type { ImageAsset, Scene, ShotBreakdown, Storyboard, VideoForm } from "../types";
 import { shotBreakdownOutputSchema, shotBreakdownRequest, shotImagePromptText, shotPackageText, validateShotPrompt } from "./multiShot";
 
 const form: VideoForm = {
@@ -58,6 +58,8 @@ describe("multi-shot breakdown", () => {
     expect(request).toContain("GENERATE THE STORYBOARD IMAGE NOW.");
     expect(request).toContain('"sceneNumber":' + scene.sceneNumber);
     expect(request).toContain('"clipDurationSeconds":8');
+    const linkedAsset: ImageAsset = { id: "bg1", kind: "background", title: "Cafe", prompt: "A small cafe", mimeType: "image/png", data: "aGVsbG8=", createdAt: "2026-10-23", useAsReference: false, projectId: "coffee" };
+    expect(shotBreakdownRequest(scene, board, form, [linkedAsset])).toContain('"handle":"@CafeBg1"');
   });
 
   it("builds a one-frame still prompt from the approved scene references", () => {
@@ -85,5 +87,6 @@ describe("multi-shot breakdown", () => {
     expect(packaged).toContain("GENERATE THE STORYBOARD IMAGE NOW.");
     expect(packaged).toContain("GOOGLE FLOW VIDEO PROMPT");
     expect(packaged).toContain("NO TEXT IN THE IMAGE.");
+    expect(packaged).toContain("NOT APPROVED - review the opening still in Google Flow before using the video prompt.");
   });
 });
