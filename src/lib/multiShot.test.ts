@@ -56,7 +56,7 @@ describe("multi-shot breakdown", () => {
     const request = shotBreakdownRequest(scene, board, form);
     expect(request).toContain("2 to 4 distinct, chronological");
     expect(request).toContain("GENERATE THE STORYBOARD IMAGE NOW.");
-    expect(request).toContain("Scene " + scene.sceneNumber);
+    expect(request).toContain('"sceneNumber":' + scene.sceneNumber);
     expect(request).toContain('"clipDurationSeconds":8');
   });
 
