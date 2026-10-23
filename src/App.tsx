@@ -237,6 +237,7 @@ function App() {
   const castAssets = projectAssets.filter((asset) => asset.kind !== "scene");
   const selectedConcept = concepts.find((concept) => concept.id === selectedConceptId);
   const compatibility = flowCompatibility(form);
+  const boardCurrent = Boolean(storyboard && pipelineCurrent(screenplay, form, storyboard));
   const allAudits = useMemo(() => auditStoryboard(storyboard, form), [storyboard, form]);
   const auditCount = useMemo(() => storyboard?.scenes.reduce((sum, scene) => sum + auditScene(scene).filter((item) => !item.ok).length, 0) ?? 0, [storyboard]);
 
@@ -791,8 +792,8 @@ function App() {
         <div className="sidebar-label">WORKSPACE</div>
         <button className={step === "brief" ? "side-link active" : "side-link"} onClick={() => setStep("brief")}><LayoutDashboard size={17} /> Video brief</button>
         <button className={step === "concepts" ? "side-link active" : "side-link"} onClick={() => screenplay || concepts.length ? setStep("concepts") : setNotice("ဇာတ်ညွှန်း ၃ မျိုး အရင်ထုတ်ပါ။")}><Lightbulb size={17} /> ဇာတ်ညွှန်း / References <span className="side-count">{screenplay?.choices.length || concepts.length || "–"}</span></button>
-        <button className={step === "storyboard" ? "side-link active" : "side-link"} onClick={() => storyboard ? setStep("storyboard") : setNotice("Build a storyboard first to use this step.")}><Film size={17} /> Storyboard <span className="side-count">{storyboard?.scenes.length || "–"}</span></button>
-        <button className={step === "shots" ? "side-link active" : "side-link"} onClick={() => storyboard ? setStep("shots") : setNotice("Scene prompts generate လုပ်ပြီးမှ Shot list ကိုဖွင့်နိုင်ပါတယ်.")}><Film size={17} /> Shot list / Flow export <span className="side-count">{storyboard?.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0) || "–"}</span></button>
+        <button className={step === "storyboard" ? "side-link active" : "side-link"} onClick={() => boardCurrent ? setStep("storyboard") : setNotice(storyboard ? "Screenplay သို့မဟုတ် references ပြောင်းထားလို့ storyboard အဟောင်းဖြစ်နေပါပြီ။ Scene prompts ကိုပြန်အတည်ပြုပါ။" : "Build a storyboard first to use this step.")}><Film size={17} /> Storyboard <span className="side-count">{storyboard?.scenes.length || "–"}</span></button>
+        <button className={step === "shots" ? "side-link active" : "side-link"} onClick={() => boardCurrent ? setStep("shots") : setNotice(storyboard ? "Storyboard အဟောင်းဖြစ်နေပါပြီ။ Scene prompts ကိုပြန်အတည်ပြုပြီးမှ Shot list ကိုသုံးပါ။" : "Scene prompts generate လုပ်ပြီးမှ Shot list ကိုဖွင့်နိုင်ပါတယ်.")}><Film size={17} /> Shot list / Flow export <span className="side-count">{storyboard?.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0) || "–"}</span></button>
         {showAdvanced && <button className={assetStudioOpen ? "side-link active" : "side-link"} disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={17} /> Asset Studio <span className="side-count">NEW</span></button>}
         <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
         <div className="saved-list">
@@ -841,10 +842,10 @@ function App() {
               const active = step === item.id;
               const complete = (item.id === "brief" && (concepts.length > 0 || Boolean(form.topic.trim())))
                 || (item.id === "concepts" && (screenplay ? inventoryApproved(screenplay, form) : concepts.length > 0))
-                || (item.id === "storyboard" && Boolean(storyboard) && pipelineCurrent(screenplay, form, storyboard))
-                || (item.id === "shots" && Boolean(storyboard?.scenes.some((scene) => scene.shots?.length)));
+                || (item.id === "storyboard" && boardCurrent)
+                || (item.id === "shots" && boardCurrent && Boolean(storyboard?.scenes.some((scene) => scene.shots?.length)));
               const canVisit = item.id === "brief" || (item.id === "concepts" && Boolean(screenplay || concepts.length))
-                || (item.id === "storyboard" && Boolean(storyboard)) || (item.id === "shots" && Boolean(storyboard));
+                || (item.id === "storyboard" && boardCurrent) || (item.id === "shots" && boardCurrent);
               return <button type="button" className={active ? "step-item active" : complete ? "step-item complete" : "step-item"} key={item.id}
                 disabled={!canVisit} aria-current={active ? "step" : undefined}
                 onClick={() => setStep(item.id as "brief" | "concepts" | "storyboard" | "shots")}>
