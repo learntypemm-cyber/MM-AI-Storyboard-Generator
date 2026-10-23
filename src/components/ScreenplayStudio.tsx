@@ -77,7 +77,7 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
       "Translate all Burmese instructions into precise natural English. Do not summarize, shorten, skip details, add ideas, change names or translate IDs. The englishPrompt must be the full usable image-generation prompt, not just the description.",
       "INPUT REFERENCES:",
       JSON.stringify({ references: inputs }),
-    ].join("\\n"));
+    ].join("\n"));
     const result = z.object({
       references: z.array(z.object({
         id: z.string().min(1).max(200),
