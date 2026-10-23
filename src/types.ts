@@ -14,6 +14,11 @@ export type VideoConcept = {
   id: string; title: string; style: string; hook: string; summary: string; visualDirection: string;
   whyItWorks: string; storyArc: string[]; estimatedDuration: number;
 };
+export type ShotBreakdown = {
+  id: string; shotNumber: number; title: string; purpose: string; shotSize: string; cameraMovement: string;
+  action: string; durationSeconds: number; openingFrame: string; finalFrame: string; flowPrompt: string;
+  referenceAssets: string[]; negativePrompt: string; voiceover: string; audioNotes: string; sfx: string; backgroundMusic: string;
+};
 export type Scene = {
   backgroundAngle?: "A" | "B" | "C" | "D";
   sfx?: string; backgroundMusic?: string;
