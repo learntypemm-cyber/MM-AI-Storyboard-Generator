@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { Scene, ShotBreakdown, Storyboard, VideoForm } from "../types";
+import type { ImageAsset, Scene, ShotBreakdown, Storyboard, VideoForm } from "../types";
+import { assetHandle } from "./assetStore";
 
 const promptText = z.string().trim().min(1).max(30000);
 const generatedShotSchema = z.object({
@@ -31,10 +32,13 @@ export const shotBreakdownOutputSchema = z.object({
   }
 });
 
-export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: VideoForm): string {
+export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: VideoForm, assets: ImageAsset[] = []): string {
   const references = (board.referencePlan || [])
     .filter((reference) => !reference.sceneIds.length || reference.sceneIds.includes(scene.id))
-    .map((reference) => ({ id: reference.id, kind: reference.kind, title: reference.title, description: reference.prompt }));
+    .map((reference) => {
+      const asset = assets.find((item) => item.id === reference.id);
+      return { id: reference.id, kind: reference.kind, title: reference.title, description: reference.prompt, handle: asset ? assetHandle(asset) : undefined };
+    });
   const source = {
     projectTitle: board.projectTitle,
     visualBible: board.visualBible,
@@ -59,6 +63,7 @@ export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: Vide
     "Break the ONE supplied screenplay scene into 2 to 4 distinct, chronological, filmable shots. These shot cards are individual clip prompts the user will manually generate in Google Flow and assemble in an external video editor. Do not create images or videos.",
     "Preserve the original scene's story, character identities, wardrobe, props, location, dialogue and outcome. Do not invent characters, plot events, products or locations. Vary framing intentionally (establishing wide, medium action, close-up insert, or reaction) only when each angle adds a clear storytelling purpose. Avoid redundant coverage.",
     "Each shot must stand alone as a complete copy-paste English video prompt. Start flowPrompt with exactly 'NO TEXT IN THE IMAGE.' Include subject appearance, exact environment, one clear primary action, composition, shot size, camera movement, lighting, mood, temporal movement, and explicit opening and final frames. Never say 'same as the previous shot' or 'as before', and never rely on hidden model memory. Do not ask Flow to render camera labels, shot numbers, subtitles, readable UI, grids, reference labels or watermarks.",
+    "When a provided reference has a handle, repeat that exact canonical @Handle in every applicable imagePrompt and flowPrompt; never invent, rename or alter a provided handle. Keep exact asset titles in referenceAssets. These prompts will be used with the matching reference image attachments.",
     "Also return imagePrompt for a pre-generation still QA gate. It must begin exactly with 'GENERATE THE STORYBOARD IMAGE NOW.' then direct the model to create exactly ONE opening-frame still, not a contact sheet, collage or video. Include 'NO TEXT IN THE IMAGE.' and preserve the provided identities, wardrobe, environment, props, lighting, composition, aspect ratio and attached reference images. The still should be reviewed before the user generates the video.",
     "Each shot durationSeconds must equal " + form.clipDuration + " seconds, matching the chosen Flow clip setting. Shots are separate clips; the user will manually trim and assemble them to keep the scene at approximately " + scene.durationSeconds + " seconds. Use aspect ratio " + form.aspectRatio + ". Do not put multiple hard cuts or different camera setups inside one shot prompt.",
     "Keep voiceover/dialogue in " + form.language + " and include it only if the supplied scene needs it. Technical fields and flowPrompt should be in precise natural English. Only use the supplied reference registry; list exact reference titles in referenceAssets. Include useful negativePrompt, audioNotes, sfx and backgroundMusic fields.",
@@ -69,11 +74,14 @@ export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: Vide
   ].join("\n");
 }
 
-export function shotImagePromptText(shot: ShotBreakdown, scene: Scene, board: Storyboard, form: VideoForm): string {
+export function shotImagePromptText(shot: ShotBreakdown, scene: Scene, board: Storyboard, form: VideoForm, assets: ImageAsset[] = []): string {
   if (shot.imagePrompt?.trim()) return shot.imagePrompt;
   const references = (board.referencePlan || [])
     .filter((reference) => !reference.sceneIds.length || reference.sceneIds.includes(scene.id))
-    .map((reference) => reference.kind + " " + reference.title + ": " + reference.prompt);
+    .map((reference) => {
+      const asset = assets.find((item) => item.id === reference.id);
+      return (asset ? assetHandle(asset) + " - " : "") + reference.kind + " " + reference.title + ": " + reference.prompt;
+    });
   return [
     "GENERATE THE STORYBOARD IMAGE NOW.",
     "Create exactly ONE finished still image for the opening frame of Scene " + scene.sceneNumber + ", Shot " + shot.shotNumber + ". Do not create a contact sheet, collage, grid, storyboard layout or video.",
@@ -91,11 +99,11 @@ export function shotImagePromptText(shot: ShotBreakdown, scene: Scene, board: St
   ].join("\n\n");
 }
 
-export function validateShotPrompt(shot: ShotBreakdown, form: VideoForm, board: Storyboard, scene: Scene): string[] {
+export function validateShotPrompt(shot: ShotBreakdown, form: VideoForm, board: Storyboard, scene: Scene, assets: ImageAsset[] = []): string[] {
   const prompt = (shot.flowPrompt || "").trim();
   const firstLine = prompt.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || "";
   const words = prompt.split(/\s+/).filter(Boolean).length;
-  const imagePrompt = shotImagePromptText(shot, scene, board, form).trim();
+  const imagePrompt = shotImagePromptText(shot, scene, board, form, assets).trim();
   const issues: string[] = [];
   if (!/^NO TEXT IN THE IMAGE\./i.test(firstLine) && !/^INTENTIONAL TEXT IN THE IMAGE:\s*\S/i.test(firstLine)) issues.push("Add a text policy on the first line.");
   if (words < 80) issues.push("Video prompt is short; add subject, action, camera, lighting and continuity details.");
@@ -104,12 +112,22 @@ export function validateShotPrompt(shot: ShotBreakdown, form: VideoForm, board: 
   if (/as before|same as (?:the )?previous|same person as|continue from previous shot/i.test(prompt)) issues.push("Replace vague previous-shot references with explicit details and attached references.");
   if (!shot.title.trim() || !shot.action.trim()) issues.push("Shot title and action are required.");
   if (!/^GENERATE THE STORYBOARD IMAGE NOW\./i.test(imagePrompt)) issues.push("Opening still prompt must start with GENERATE THE STORYBOARD IMAGE NOW.");
+  const requiredHandles = (board.referencePlan || [])
+    .filter((reference) => !reference.sceneIds.length || reference.sceneIds.includes(scene.id))
+    .filter((reference) => ["character", "background"].includes(reference.kind))
+    .map((reference) => assets.find((asset) => asset.id === reference.id))
+    .filter((asset): asset is ImageAsset => Boolean(asset))
+    .map(assetHandle);
+  for (const handle of requiredHandles) {
+    if (!prompt.includes(handle)) issues.push("Video prompt should include the attached reference handle " + handle + ".");
+    if (!imagePrompt.includes(handle)) issues.push("Opening still prompt should include the attached reference handle " + handle + ".");
+  }
   if (shot.durationSeconds !== form.clipDuration) issues.push("Duration differs from the selected Flow clip length (" + form.clipDuration + "s). Check the active model's supported duration.");
   return issues;
 }
 
-export function shotPromptText(shot: ShotBreakdown, scene: Scene, board?: Storyboard, form?: VideoForm): string {
-  const stillPrompt = board && form ? shotImagePromptText(shot, scene, board, form) : (shot.imagePrompt || "GENERATE THE STORYBOARD IMAGE NOW. Create one opening still. NO TEXT IN THE IMAGE.");
+export function shotPromptText(shot: ShotBreakdown, scene: Scene, board?: Storyboard, form?: VideoForm, assets: ImageAsset[] = []): string {
+  const stillPrompt = board && form ? shotImagePromptText(shot, scene, board, form, assets) : (shot.imagePrompt || "GENERATE THE STORYBOARD IMAGE NOW. Create one opening still. NO TEXT IN THE IMAGE.");
   return [
     "SCENE " + String(scene.sceneNumber).padStart(2, "0") + " - " + scene.title,
     "SHOT " + String(shot.shotNumber).padStart(2, "0") + " - " + shot.title,
@@ -132,18 +150,18 @@ export function shotPromptText(shot: ShotBreakdown, scene: Scene, board?: Storyb
   ].join("\n\n");
 }
 
-export function sceneShotsText(scene: Scene, board?: Storyboard, form?: VideoForm): string {
+export function sceneShotsText(scene: Scene, board?: Storyboard, form?: VideoForm, assets: ImageAsset[] = []): string {
   const shots = scene.shots || [];
   if (!shots.length) return "Scene " + scene.sceneNumber + " - " + scene.title + "\nNo shot breakdown has been generated yet.";
-  return shots.map((shot) => shotPromptText(shot, scene, board, form)).join("\n\n----------------------------------------\n\n");
+  return shots.map((shot) => shotPromptText(shot, scene, board, form, assets)).join("\n\n----------------------------------------\n\n");
 }
 
-export function shotPackageText(board: Storyboard, form?: VideoForm): string {
+export function shotPackageText(board: Storyboard, form?: VideoForm, assets: ImageAsset[] = []): string {
   return [
     "MULTI-SHOT GOOGLE FLOW PROMPT PACKAGE",
     "Each shot is an independent prompt for manual generation in Google Flow. Review and approve its opening still first. Then generate video manually and assemble/trim clips in your video editor. Confirm the active Flow model settings.",
     "Project: " + board.projectTitle,
     "Story: " + board.logline,
-    ...(board.scenes.filter((scene) => scene.shots?.length).map((scene) => sceneShotsText(scene, board, form))),
+    ...(board.scenes.filter((scene) => scene.shots?.length).map((scene) => sceneShotsText(scene, board, form, assets))),
   ].join("\n\n========================================\n\n");
 }
