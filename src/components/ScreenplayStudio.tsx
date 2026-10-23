@@ -14,7 +14,7 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
   const selected = value.choices.find(c => c.id === value.selectedId);
   const expectedSceneCount = requiredScreenplaySceneCount(form);
   const selectedSceneCount = selected ? screenplaySceneCount(selected.screenplay) : 0;
-  const selectedScriptIssues = selected ? screenplayCompletenessIssues(selected.screenplay, form) : [];
+  const selectedScriptIssues = selected ? (selected.sourceType === "existing" ? (selectedSceneCount > 0 ? [] : ["Scene heading မတွေ့ပါ။ Scene တစ်ခုစီကို INT./EXT. heading သို့မဟုတ် 1. / ၁။ နဲ့စပါ။"]) : screenplayCompletenessIssues(selected.screenplay, form)) : [];
   const current = inventoryCurrent(value, form);
   const approved = inventoryApproved(value, form);
   const run = async (label: string, action: () => Promise<void>) => {
@@ -25,19 +25,24 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
   const editChoice = (patch: Partial<NonNullable<typeof selected>>) => { if (!selected) return; onChange({ ...value, choices: value.choices.map(c => c.id === selected.id ? { ...c, ...patch } : c) }); };
   const polish = () => run("polish", async () => {
     if (!selected?.screenplay.trim()) return;
+    const polishSceneCount = selected.sourceType === "existing" ? selectedSceneCount : expectedSceneCount;
     const raw = await generateJson<unknown>(
       apiKey,
       model,
-      "Polish this user-edited Burmese screenplay while preserving its plot, ending, cast, scene count and intended dialogue. Keep exactly " + expectedSceneCount + " numbered clip-scenes for a " + form.targetDuration + "-second video with " + form.clipDuration + "-second source clips. Do not summarize or remove scenes. Improve Burmese prose, filmable action, dialogue and transitions only. Return JSON {screenplay:string}.\n" + selected.screenplay,
+      "Polish this user-edited Burmese screenplay while preserving its plot, ending, cast, scene count and intended dialogue. Keep exactly " + polishSceneCount + " numbered scenes. Do not summarize or remove scenes. Improve Burmese prose, filmable action, dialogue and transitions only. Return JSON {screenplay:string}.\n" + selected.screenplay,
     );
     const result = z.object({ screenplay: z.string().trim().min(1).max(100000) }).parse(raw);
-    const issues = screenplayCompletenessIssues(result.screenplay, form);
+    const issues = selected.sourceType === "existing"
+      ? (screenplaySceneCount(result.screenplay) > 0 ? [] : ["Scene heading မတွေ့ပါ။"])
+      : screenplayCompletenessIssues(result.screenplay, form);
     if (issues.length) throw new Error("ချောရေးမူက မပြည့်စုံသေးပါ။ " + issues.join(" "));
     editChoice({ polishCandidate: result.screenplay, polishFor: selected.screenplay });
   });
   const extract = () => run("inventory", async () => {
     if (!selected?.screenplay.trim() || current) return;
-    const screenplayIssues = screenplayCompletenessIssues(selected.screenplay, form);
+    const screenplayIssues = selected.sourceType === "existing"
+      ? (screenplaySceneCount(selected.screenplay) > 0 ? [] : ["Scene heading မတွေ့ပါ။"])
+      : screenplayCompletenessIssues(selected.screenplay, form);
     if (screenplayIssues.length) {
       throw new Error("ဇာတ်ညွှန်းမပြည့်စုံသေးပါ။ Expected " + expectedSceneCount + " scenes, found " + screenplaySceneCount(selected.screenplay) + ". " + screenplayIssues.join(" "));
     }
@@ -45,8 +50,9 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
     onChange(next);
     const raw = await generateJson<unknown>(apiKey, model, inventoryRequest(next, form), form.referenceImages);
     const parsed = scriptInventorySchema.parse(raw);
-    if (parsed.scenes.length !== expectedSceneCount) {
-      throw new Error("Scene စာရင်းက " + parsed.scenes.length + " ခုပဲ ရလာပါတယ်။ ဒီ video အတွက် " + expectedSceneCount + " ခုလိုအပ်ပါတယ်။ ပြန်စမ်းကြည့်ပါ။");
+    const expectedInventoryScenes = selected.sourceType === "existing" ? selectedSceneCount : expectedSceneCount;
+    if (parsed.scenes.length !== expectedInventoryScenes) {
+      throw new Error("Scene စာရင်းက " + parsed.scenes.length + " ခုပဲ ရလာပါတယ်။ ဒီဇာတ်ညွှန်းအတွက် " + expectedInventoryScenes + " ခုလိုအပ်ပါတယ်။ ပြန်စမ်းကြည့်ပါ။");
     }
     const ids = new Map(parsed.references.map(r => [r.id, crypto.randomUUID()]));
     onChange({ ...next, approvedInventory: undefined, inventory: { source: scriptSource(next, form), references: parsed.references.map(r => ({ id: ids.get(r.id)!, title: r.title, kind: r.kind, description: r.description })), scenes: parsed.scenes.map(s => ({ ...s, id: crypto.randomUUID(), referenceIds: s.referenceIds.map(id => ids.get(id)!) })) } });
@@ -117,9 +123,9 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
     } catch (e) { onError(e instanceof Error ? e.message : "Image save failed"); } finally { onBusy(null); }
   };
   return <section className="storyboard-section screenplay-studio">
-    <h2>၁။ မြန်မာဇာတ်ညွှန်း ၃ မျိုးထဲမှ ရွေးပါ</h2>
-    <p>ဗီဒီယိုမှာ ဖြစ်လာမည့်ဇာတ်လမ်းကို အရင်ဖတ်ပါ။ ရွေးချယ်ခြင်းနှင့် ကိုယ်တိုင် edit လုပ်ခြင်းက API မသုံးပါ။ Target {form.targetDuration}s ÷ {form.clipDuration}s per clip = <strong>{expectedSceneCount} scenes per screenplay</strong> ဖြစ်ရပါမယ်။ Scene တစ်ခုက Flow clip တစ်ခုစီ ဖြစ်ပါတယ်။</p>
-    <div className="concept-grid">{value.choices.map((c, i) => <article className="concept-card" key={c.id}><h3>{i + 1}. {c.title}</h3><p>Scene အရေအတွက်: <strong>{screenplaySceneCount(c.screenplay)} / {expectedSceneCount}</strong> {screenplayCompletenessIssues(c.screenplay, form).length ? "· မပြည့်စုံသေး" : "· ပြည့်စုံ"}</p><details><summary>ဇာတ်ညွှန်းအပြည့် ဖတ်ရန်</summary><pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", padding: 16 }}>{c.screenplay}</pre></details><button className="primary-button" disabled={busy} aria-pressed={value.selectedId === c.id} onClick={() => onChange({ ...value, selectedId: c.id })}>ဇာတ်ညွှန်း {i + 1} ရွေးမယ်</button></article>)}</div>
+    <h2>{selected?.sourceType === "existing" ? "၁။ ရှိပြီးသား Screenplay မှ ဆက်လုပ်မယ်" : "၁။ မြန်မာဇာတ်ညွှန်း ၃ မျိုးထဲမှ ရွေးပါ"}</h2>
+    <p>{selected?.sourceType === "existing" ? "သင်ထည့်ထားသော ဇာတ်ညွှန်းကို မူရင်းအတိုင်း အသုံးပြုပါမယ်။ Scene count က သင့် screenplay ထဲမှာရှိတဲ့ အခန်းအရေအတွက်အတိုင်း ဖြစ်ပါတယ်။" : "ဗီဒီယိုမှာ ဖြစ်လာမည့်ဇာတ်လမ်းကို အရင်ဖတ်ပါ။ ရွေးချယ်ခြင်းနှင့် ကိုယ်တိုင် edit လုပ်ခြင်းက API မသုံးပါ။ Target " + form.targetDuration + "s ÷ " + form.clipDuration + "s per clip = " + expectedSceneCount + " scenes per screenplay ဖြစ်ရပါမယ်." + " Scene တစ်ခုက Flow clip တစ်ခုစီ ဖြစ်ပါတယ်."}</p>
+    <div className="concept-grid">{value.choices.map((c, i) => <article className="concept-card" key={c.id}><h3>{i + 1}. {c.title}</h3><p>Scene အရေအတွက်: <strong>{screenplaySceneCount(c.screenplay)}{c.sourceType === "existing" ? " (မူရင်း screenplay)" : " / " + expectedSceneCount}</strong> {c.sourceType === "existing" ? (screenplaySceneCount(c.screenplay) > 0 ? "· အသုံးပြုနိုင်" : "· heading လိုအပ်") : (screenplayCompletenessIssues(c.screenplay, form).length ? "· မပြည့်စုံသေး" : "· ပြည့်စုံ")}</p><details><summary>ဇာတ်ညွှန်းအပြည့် ဖတ်ရန်</summary><pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", padding: 16 }}>{c.screenplay}</pre></details><button className="primary-button" disabled={busy} aria-pressed={value.selectedId === c.id} onClick={() => onChange({ ...value, selectedId: c.id })}>ဇာတ်ညွှန်း {i + 1} ရွေးမယ်</button></article>)}</div>
     {selected && <>
       <h3>၂။ ရွေးထားသောဇာတ်ညွှန်းကို ပြင် / ချောရေးပါ</h3>
       <fieldset className="scene-fieldset" disabled={busy}>
