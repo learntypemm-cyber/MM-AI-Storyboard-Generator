@@ -27,6 +27,8 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
   const shotCount = board.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0);
   const scenesWithShots = board.scenes.filter((scene) => scene.shots?.length).length;
   const shotsApproved = board.scenes.reduce((sum, scene) => sum + (scene.shots || []).filter((shot) => shot.imageApproved).length, 0);
+  const plannedClipSeconds = board.scenes.reduce((sum, scene) => sum + (scene.shots?.length ? scene.shots.reduce((shotSum, shot) => shotSum + shot.durationSeconds, 0) : scene.durationSeconds), 0);
+  const runtimeDelta = plannedClipSeconds - form.targetDuration;
 
   const updateShots = (sceneId: string, update: (shots: ShotBreakdown[]) => ShotBreakdown[]) => {
     onChange({
@@ -104,7 +106,7 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
     </div>
     <div className="shot-workflow-note">
       <Scissors size={17} />
-      <div><strong>အသုံးပြုပုံ</strong><p>Scene တစ်ခုအတွက် ၂–၄ shot prompt ထုတ်ပေးပါမယ်။ Shot တစ်ခုစီဟာ သီးခြား Flow clip အတွက်ဖြစ်ပြီး ရွေးထားတဲ့ clip length ကိုသုံးပါတယ်။ နောက်ဆုံး runtime နဲ့ကိုက်ဖို့ clip များကို video editor မှာ ကိုယ်တိုင် trim / arrange လုပ်ပါ။ Shot prompt ထုတ်ခြင်းက image/video မဖန်တီးပါ။</p></div>
+      <div><strong>အသုံးပြုပုံ</strong><p>Scene တစ်ခုအတွက် ၂–၄ shot prompt ထုတ်ပေးပါမယ်။ Shot တစ်ခုစီဟာ သီးခြား Flow clip အတွက်ဖြစ်ပြီး ရွေးထားတဲ့ clip length ကိုသုံးပါတယ်။ နောက်ဆုံး runtime နဲ့ကိုက်ဖို့ clip များကို video editor မှာ ကိုယ်တိုင် trim / arrange လုပ်ပါ။ Shot prompt ထုတ်ခြင်းက image/video မဖန်တီးပါ။</p><div className={runtimeDelta > 0 ? "shot-runtime-estimate warning" : "shot-runtime-estimate"}><strong>Runtime preview</strong><span>{plannedClipSeconds}s footage if you use every planned clip · {form.targetDuration}s final-video target.</span><small>{runtimeDelta > 0 ? "သုံးမည့် shot အားလုံးကို ထုတ်ပါက " + runtimeDelta + "s ခန့်ကို editing မှာ trim လုပ်ရပါမယ်။ Flow credits သက်သာဖို့ တကယ်သုံးမယ့် shot တွေကိုသာ ထုတ်ပါ။" : runtimeDelta < 0 ? "လက်ရှိ plan မှာ target ထက် " + Math.abs(runtimeDelta) + "s နည်းနေပါတယ်။ နောက်ထပ် shot များထည့်ရန် သို့မဟုတ် edit ထဲမှာပဲ လိုသလိုညှိနိုင်ပါတယ်။" : "လက်ရှိ prompt အရ output duration က target နဲ့ကိုက်ညီနေပါတယ်။"}</small></div></div>
     </div>
     <div className="shot-toolbar">
       <button className="secondary-button" disabled={!shotCount} onClick={() => void copyText(shotPackageText(board, form, assets), "All shot prompts")}><Copy size={15} /> Copy all shot prompts</button>
