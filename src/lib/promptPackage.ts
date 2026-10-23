@@ -2,7 +2,7 @@ import { referencePromptMM, sceneImagePromptMM, sceneVideoPromptMM } from "./ful
 import JSZip from "jszip";
 import type { ReferencePlanItem, Scene, Storyboard, VideoForm } from "../types";
 import { referenceImagePrompt, referenceImagePromptMyanmar } from "./automaticAssets";
-import { shotPackageText, shotPromptText } from "./multiShot";
+import { shotPackageText, shotPromptText, shotImagePromptText } from "./multiShot";
 
 export function referenceCode(item: ReferencePlanItem, board: Storyboard): string {
   const peers = (board.referencePlan || []).filter((entry) => entry.kind === item.kind);
@@ -203,7 +203,7 @@ export async function promptPackageZip(board: Storyboard, form: VideoForm): Prom
   const zip = new JSZip();
   zip.file("START-HERE-MM.txt", workflowGuideMM());
   zip.file("complete-prompts.txt", completePromptText(board, form));
-  zip.file("shot-prompts.txt", shotPackageText(board));
+  zip.file("shot-prompts.txt", shotPackageText(board, form));
   for (const item of board.referencePlan || []) zip.file("references/" + referenceCode(item, board) + ".txt", item.title + "\n\n" + referenceImagePrompt(item, form));
   for (const scene of board.scenes) {
     const folder = zip.folder("scene-" + String(scene.sceneNumber).padStart(2, "0"))!;
@@ -216,8 +216,9 @@ export async function promptPackageZip(board: Storyboard, form: VideoForm): Prom
     for (const shot of scene.shots || []) {
       const shotFolder = folder.folder("shots")!;
       const shotName = "shot-" + String(shot.shotNumber).padStart(2, "0");
+      shotFolder.file(shotName + "-image-prompt.txt", shotImagePromptText(shot, scene, board, form));
       shotFolder.file(shotName + "-video-prompt.txt", shot.flowPrompt);
-      shotFolder.file(shotName + "-details.txt", shotPromptText(shot, scene));
+      shotFolder.file(shotName + "-details.txt", shotPromptText(shot, scene, board, form));
     }
   }
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
