@@ -47,7 +47,7 @@ const shot: ShotBreakdown = {
 
 describe("multi-shot breakdown", () => {
   it("requires an image prompt and a self-contained video prompt for each generated shot", () => {
-    const parsed = shotBreakdownOutputSchema.parse({ shots: [{ ...shot, id: undefined }] });
+    const parsed = shotBreakdownOutputSchema.parse({ shots: [{ ...shot }, { ...shot, shotNumber: 2 }] });
     expect(parsed.shots[0].imagePrompt).toContain("GENERATE THE STORYBOARD IMAGE NOW.");
     expect(() => shotBreakdownOutputSchema.parse({ shots: [{ ...shot, imagePrompt: "" }, { ...shot, shotNumber: 2 }] })).toThrow();
   });
