@@ -16,7 +16,7 @@ export type VideoConcept = {
 };
 export type ShotBreakdown = {
   id: string; shotNumber: number; title: string; purpose: string; shotSize: string; cameraMovement: string;
-  action: string; durationSeconds: number; openingFrame: string; finalFrame: string; flowPrompt: string;
+  action: string; durationSeconds: number; openingFrame: string; finalFrame: string; imagePrompt?: string; flowPrompt: string;
   referenceAssets: string[]; negativePrompt: string; voiceover: string; audioNotes: string; sfx: string; backgroundMusic: string;
 };
 export type Scene = {
