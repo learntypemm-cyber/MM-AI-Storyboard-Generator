@@ -1,6 +1,6 @@
 import { referencePromptMM, sceneImagePromptMM, sceneVideoPromptMM } from "./fullPrompts";
 import JSZip from "jszip";
-import type { ReferencePlanItem, Scene, Storyboard, VideoForm } from "../types";
+import type { ImageAsset, ReferencePlanItem, Scene, Storyboard, VideoForm } from "../types";
 import { referenceImagePrompt, referenceImagePromptMyanmar } from "./automaticAssets";
 import { shotPackageText, shotPromptText, shotImagePromptText } from "./multiShot";
 
@@ -199,11 +199,11 @@ export function completePromptTextBilingual(burmeseBoard: Storyboard, form: Vide
   ].join("\n\n");
 }
 
-export async function promptPackageZip(board: Storyboard, form: VideoForm): Promise<Blob> {
+export async function promptPackageZip(board: Storyboard, form: VideoForm, assets: ImageAsset[] = []): Promise<Blob> {
   const zip = new JSZip();
   zip.file("START-HERE-MM.txt", workflowGuideMM());
   zip.file("complete-prompts.txt", completePromptText(board, form));
-  zip.file("shot-prompts.txt", shotPackageText(board, form));
+  zip.file("shot-prompts.txt", shotPackageText(board, form, assets));
   for (const item of board.referencePlan || []) zip.file("references/" + referenceCode(item, board) + ".txt", item.title + "\n\n" + referenceImagePrompt(item, form));
   for (const scene of board.scenes) {
     const folder = zip.folder("scene-" + String(scene.sceneNumber).padStart(2, "0"))!;
@@ -216,9 +216,9 @@ export async function promptPackageZip(board: Storyboard, form: VideoForm): Prom
     for (const shot of scene.shots || []) {
       const shotFolder = folder.folder("shots")!;
       const shotName = "shot-" + String(shot.shotNumber).padStart(2, "0");
-      shotFolder.file(shotName + "-image-prompt.txt", shotImagePromptText(shot, scene, board, form));
+      shotFolder.file(shotName + "-image-prompt.txt", shotImagePromptText(shot, scene, board, form, assets));
       shotFolder.file(shotName + "-video-prompt.txt", shot.flowPrompt);
-      shotFolder.file(shotName + "-details.txt", shotPromptText(shot, scene, board, form));
+      shotFolder.file(shotName + "-details.txt", shotPromptText(shot, scene, board, form, assets));
     }
   }
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
