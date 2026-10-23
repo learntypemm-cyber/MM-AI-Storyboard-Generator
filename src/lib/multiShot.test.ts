@@ -61,7 +61,7 @@ describe("multi-shot breakdown", () => {
     expect(request).toContain('"sceneNumber":' + scene.sceneNumber);
     expect(request).toContain('"clipDurationSeconds":8');
     const linkedAsset: ImageAsset = { id: "bg1", kind: "background", title: "Cafe", prompt: "A small cafe", mimeType: "image/png", data: "aGVsbG8=", createdAt: "2026-10-23", useAsReference: false, projectId: "coffee" };
-    expect(shotBreakdownRequest(scene, board, form, [linkedAsset])).toContain('"handle":"@CafeBg1"');
+    expect(shotBreakdownRequest(scene, board, form, [linkedAsset])).toContain('"handle":"@Cafebg1"');
   });
 
   it("builds a one-frame still prompt from the approved scene references", () => {
