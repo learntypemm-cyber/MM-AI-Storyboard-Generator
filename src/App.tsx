@@ -1,6 +1,6 @@
 import { materializeFullPrompts } from "./lib/fullPrompts";
 import ScreenplayStudio from "./components/ScreenplayStudio";
-import { screenplayChoicesSchema, screenplayRepairSchema, screenplayRequest, screenplayRepairRequest, screenplayCompletenessIssues, requiredScreenplaySceneCount, pipelineCurrent, inventorySource, inventoryApproved } from "./lib/screenplayWorkflow";
+import { screenplayChoicesSchema, screenplayRepairSchema, screenplayRequest, screenplayRepairRequest, screenplayCompletenessIssues, requiredScreenplaySceneCount, normalizeExistingScreenplay, screenplaySceneCount, pipelineCurrent, inventorySource, inventoryApproved } from "./lib/screenplayWorkflow";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
 import { draftSource, translationPrompt, validateTranslation } from "./lib/draftTranslation";
 import { sceneDetailRequirements } from "./lib/promptGuidance";
@@ -189,6 +189,8 @@ function App() {
   const [concepts, setConcepts] = useState<VideoConcept[]>([]);
   const [selectedConceptId, setSelectedConceptId] = useState("");
   const [screenplay, setScreenplay] = useState<ScreenplayWorkflow | undefined>();
+  const [existingScreenplayDraft, setExistingScreenplayDraft] = useState("");
+  const [existingScreenplayTitle, setExistingScreenplayTitle] = useState("");
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>(() => readLocal(STORAGE.saved, []));
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -325,6 +327,28 @@ function App() {
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not write screenplays."); }
     finally { setBusy(null); }
   };
+  const startFromExistingScreenplay = async () => {
+    if (busy || !hydrated) return;
+    const normalized = normalizeExistingScreenplay(existingScreenplayDraft.trim());
+    if (!normalized) { setError("ရှိပြီးသား screenplay စာသားကို အရင်ထည့်ပါ။"); return; }
+    if (normalized.length > 100000) { setError("Screenplay က စာလုံး 100,000 ထက်ကျော်နေပါတယ်။ ဖိုင်/စာသားကို အပိုင်းလိုက်တိုအောင် ပြင်ပါ။"); return; }
+    const sceneCount = screenplaySceneCount(normalized);
+    if (!sceneCount) { setError("Scene heading မတွေ့ပါ။ အခန်းတစ်ခုစီကို INT. / EXT. နဲ့စပါ၊ သို့မဟုတ် ၁။ / 1. နံပါတ်ထည့်ပါ။"); return; }
+    try {
+      await preserveCurrentProject();
+      const id = makeId();
+      const title = existingScreenplayTitle.trim().slice(0, 120) || form.topic.trim() || "ကိုယ်ပိုင်ဇာတ်ညွှန်း";
+      const choice = { id, title, screenplay: normalized, versions: [], sourceType: "existing" as const };
+      if (!form.topic.trim()) setForm((current) => ({ ...current, topic: title }));
+      setScreenplay({ choices: [choice], selectedId: id });
+      setConcepts([]); setSelectedConceptId(""); setStoryboard(null); setStep("concepts");
+      setNotice("ရှိပြီးသား screenplay ကို အသုံးပြုလိုက်ပါပြီ။ မူရင်းဇာတ်ညွှန်းကို ပြန်ရေးမထားပါ။ " + sceneCount + " scenes ကို တိုက်ရိုက် inventory ထုတ်နိုင်ပါပြီ။");
+      setError("");
+    } catch (caught) {
+      setError("Screenplay အသစ်မဖွင့်နိုင်ပါ။ လက်ရှိ project ကို မပျက်စေရန် မပြောင်းထားပါ။ " + (caught instanceof Error ? caught.message : "Please retry."));
+    }
+  };
+
   const generateStoryboard = async (concept: VideoConcept) => {
     if (!hydrated || busy) return;
     if (storyboard?.scenes.some((scene) => scene.locked)) { setError("Unlock approved scenes before rebuilding the storyboard."); return; }
@@ -875,6 +899,36 @@ function App() {
               </div>
             </div>
           </section>
+
+          {step === "brief" && <section className="panel existing-screenplay-panel">
+            <div className="section-heading">
+              <div className="section-icon purple"><FileText size={18} /></div>
+              <div><h2>Screenplay ရေးပြီးသားရှိလား?</h2><p>AI ကို screenplay အသစ်ရေးခိုင်းစရာမလိုပါ။ ရှိပြီးသားစာသားကနေ Character / Background / Scene စာရင်းကို ဆက်ထုတ်နိုင်ပါတယ်။</p></div>
+              <div className="panel-kicker">USE YOUR SCRIPT</div>
+            </div>
+            <div className="form-content">
+              <Field label="Screenplay ခေါင်းစဉ် (optional)"><input className="input" maxLength={120} value={existingScreenplayTitle} onChange={(event) => setExistingScreenplayTitle(event.target.value)} placeholder="ဥပမာ — ကိုမင်းမင်း၏ ဇာတ်လမ်း" /></Field>
+              <Field label="ရှိပြီးသား screenplay ကို ဒီမှာ paste လုပ်ပါ" hint="Scene heading ဥပမာ — ၁။ INT. GAMING ROOM - DAY သို့မဟုတ် INT. GAMING ROOM - DAY။ Scene အရေအတွက်ကို မူရင်းအတိုင်း ထိန်းထားပါမယ်။">
+                <textarea className="input topic-input" rows={12} maxLength={100000} value={existingScreenplayDraft} onChange={(event) => setExistingScreenplayDraft(event.target.value)} placeholder={"၁။ INT. ROOM - DAY\nဇာတ်ကောင်က ...\n\n၂။ EXT. STREET - DAY\nဇာတ်ကောင်က ..."} />
+              </Field>
+              <div className="workflow-toolbar">
+                <label className="upload-button"><Upload size={15} /> TXT / MD ဖိုင်တင်မယ်<input type="file" accept=".txt,.md,.fountain,text/plain,text/markdown" disabled={Boolean(busy) || !hydrated} onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (!file) return;
+                  if (file.size > 500000) { setError("Screenplay ဖိုင်က 500 KB ထက်ကြီးနေပါတယ်။ ပိုတိုသော TXT / MD ဖိုင်ကို သုံးပါ။"); return; }
+                  void file.text().then((content) => {
+                    if (content.length > 100000) throw new Error("Screenplay စာသားက 100,000 characters ထက်ကျော်နေပါတယ်။");
+                    setExistingScreenplayDraft(normalizeExistingScreenplay(content));
+                    setExistingScreenplayTitle((current) => current.trim() ? current : file.name.replace(/\.[^.]+$/, ""));
+                    setError(""); setNotice("Screenplay ဖိုင်ကို ဖတ်ပြီးပါပြီ။ Scene များကို စစ်ပြီး ဆက်လုပ်ပါ။");
+                  }).catch((caught) => setError(caught instanceof Error ? caught.message : "Screenplay ဖိုင်ကို ဖတ်မရပါ။"));
+                }} /></label>
+                <span className="field-hint">{screenplaySceneCount(normalizeExistingScreenplay(existingScreenplayDraft))} scenes တွေ့ထားသည်။ Text ဖိုင်သည် သင့် browser ထဲမှာပဲ ဖတ်ပြီးသိမ်းဆည်းပါမယ်။</span>
+                <button className="primary-button" disabled={Boolean(busy) || !hydrated || !existingScreenplayDraft.trim()} onClick={() => void startFromExistingScreenplay()}><ChevronRight size={16} />ရှိပြီးသား Screenplay မှ ဆက်လုပ်မယ်</button>
+              </div>
+            </div>
+          </section>}
 
           {!screenplay && concepts.length > 0 && (step === "concepts" || step === "storyboard") && <section className="results-section">
             <div className="section-heading results-heading">
