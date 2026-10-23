@@ -24,7 +24,7 @@ export type Scene = {
   sfx?: string; backgroundMusic?: string;
   preparationMode?: "text-to-video" | "image-to-video";
   locked?: boolean; reviewStatus?: "draft" | "review" | "approved"; reviewNotes?: string;
-  assetIds?: string[];
+  assetIds?: string[]; shots?: ShotBreakdown[];
   id: string; sceneNumber: number; title: string; durationSeconds: number; objective: string;
   visualDescription: string; shotSize: string; cameraMovement: string; lighting: string; mood: string;
   fullImagePrompt?: string; fullVideoPrompt?: string; fullPromptSource?: string;
