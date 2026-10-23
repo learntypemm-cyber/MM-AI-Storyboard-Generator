@@ -11,7 +11,7 @@ const scene = z.object({
   backgroundAngle: z.enum(["A", "B", "C", "D"]).optional(), sfx: text.optional(), backgroundMusic: text.optional(),
   shots: z.array(z.object({
     id, shotNumber: z.number().int().positive(), title: text, purpose: text, shotSize: text, cameraMovement: text,
-    action: text, durationSeconds: z.number().positive().max(600), openingFrame: text, finalFrame: text, imagePrompt: text.optional(), flowPrompt: text,
+    action: text, durationSeconds: z.number().positive().max(600), openingFrame: text, finalFrame: text, imagePrompt: text.optional(), imageApproved: z.boolean().optional(), flowPrompt: text,
     referenceAssets: z.array(text).max(20), negativePrompt: text, voiceover: text, audioNotes: text, sfx: text, backgroundMusic: text,
   })).max(4).optional(),
   preparationMode: z.enum(["text-to-video", "image-to-video"]).optional(),
