@@ -27,6 +27,8 @@ const board: Storyboard = {
 };
 const longFlowPrompt = [
   "NO TEXT IN THE IMAGE.",
+  "(00:00-00:03) [Camera shot] Medium close-up at the wooden table. [Action] The woman reaches toward the ceramic cup with her hand fully visible.",
+  "(00:03-00:08) [Camera shot] Maintain the same continuous medium close-up and framing. [Action] She lifts the cup carefully and pauses at chest height.",
   "Opening frame: a ceramic cup rests near the edge of a wooden cafe table in warm morning light.",
   "A young woman with a cream cardigan reaches slowly toward the cup, her face calm and focused.",
   "Medium close-up composition with a gentle camera push-in, keeping the cup and her hand fully visible.",
@@ -69,6 +71,10 @@ describe("multi-shot breakdown", () => {
     expect(generated).toContain("NO TEXT IN THE IMAGE.");
     expect(generated).toContain("Cafe: A small cafe with a large window");
     expect(generated).toContain("9:16");
+  });
+
+  it("passes a shot with complete, contiguous timing and frame directions", () => {
+    expect(validateShotPrompt(shot, form, board, scene)).toEqual([]);
   });
 
   it("flags vague or incomplete prompts and warns about unsupported duration mismatch", () => {
