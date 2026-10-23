@@ -655,3 +655,13 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .shot-approval small { color: #8b98ad; font-size: 9px; line-height: 1.7; }
 .shot-approval:has(input:checked) { border-color: #d1ebdf; background: #f6fcf8; }
 .shot-approval:has(input:checked) strong { color: #267d62; }
+
+
+.shot-runtime-estimate { display: grid; gap: 4px; margin-top: 10px; padding: 10px 11px; border-radius: 8px; border: 1px solid #dcece5; background: #f7fcf9; }
+.shot-runtime-estimate strong { color: #27745c; font-size: 10px; }
+.shot-runtime-estimate span { color: #516a60; font-size: 10px; line-height: 1.6; }
+.shot-runtime-estimate small { color: #71877e; font-size: 9px; line-height: 1.65; }
+.shot-runtime-estimate.warning { border-color: #f0dfb5; background: #fffbf1; }
+.shot-runtime-estimate.warning strong { color: #926b23; }
+.shot-runtime-estimate.warning span { color: #79633b; }
+.shot-runtime-estimate.warning small { color: #917a4b; }
