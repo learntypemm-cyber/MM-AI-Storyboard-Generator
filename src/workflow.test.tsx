@@ -372,7 +372,7 @@ describe("screenplay approval workflow", () => {
     await waitFor(() => expect(screen.getByText("Reference 2 ခုလုံးကို တစ်ခါတည်း English ပြောင်းပြီးပါပြီ။")).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(screen.getByText(/2 \/ 2 reference prompts English ပြောင်းပြီးပါပြီ/)).toBeTruthy();
-    expect(screen.getByText("English Reference image prompt အပြည့်အစုံ")).toBeTruthy();
+    expect(screen.getAllByText("English Reference image prompt အပြည့်အစုံ")).toHaveLength(2);
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem("mm-storyboard-current") || "null");
       expect(persisted?.storyboard?.scenes?.length).toBe(4);
