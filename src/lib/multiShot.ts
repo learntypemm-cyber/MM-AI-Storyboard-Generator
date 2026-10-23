@@ -139,6 +139,7 @@ export function shotPromptText(shot: ShotBreakdown, scene: Scene, board?: Storyb
     "Final frame: " + shot.finalFrame,
     "OPENING STILL PROMPT",
     stillPrompt,
+    "Still review status: " + (shot.imageApproved ? "APPROVED" : "NOT APPROVED - review the opening still in Google Flow before using the video prompt."),
     "References: " + (shot.referenceAssets.join("; ") || "Use the approved scene reference list."),
     "GOOGLE FLOW VIDEO PROMPT",
     shot.flowPrompt,
