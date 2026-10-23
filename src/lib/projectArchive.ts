@@ -9,6 +9,11 @@ const image = z.object({ name: text, mimeType: z.string().regex(/^image\/[a-z0-9
 const scene = z.object({
   fullImagePrompt: text.optional(), fullVideoPrompt: text.optional(), fullPromptSource: text.optional(),
   backgroundAngle: z.enum(["A", "B", "C", "D"]).optional(), sfx: text.optional(), backgroundMusic: text.optional(),
+  shots: z.array(z.object({
+    id, shotNumber: z.number().int().positive(), title: text, purpose: text, shotSize: text, cameraMovement: text,
+    action: text, durationSeconds: z.number().positive().max(600), openingFrame: text, finalFrame: text, flowPrompt: text,
+    referenceAssets: z.array(text).max(20), negativePrompt: text, voiceover: text, audioNotes: text, sfx: text, backgroundMusic: text,
+  })).max(4).optional(),
   preparationMode: z.enum(["text-to-video", "image-to-video"]).optional(),
   id, sceneNumber: z.number().int().positive(), title: text, durationSeconds: z.number().positive().max(600), objective: text,
   visualDescription: text, shotSize: text, cameraMovement: text, lighting: text, mood: text, action: text, flowPrompt: text,
