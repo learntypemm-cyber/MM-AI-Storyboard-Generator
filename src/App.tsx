@@ -22,6 +22,7 @@ import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/bo
 import { createArchive, readArchive, presetSchema } from "./lib/projectArchive";
 import ComfyUIStudio from "./components/ComfyUIStudio";
 import AssetStudio from "./components/AssetStudio";
+import ShotBreakdownStudio from "./components/ShotBreakdownStudio";
 import { buildContactSheetPrompt } from "./lib/flowProduction";
 import { auditScene, auditStoryboard } from "./lib/audit";
 import { downloadText, fileSlug, storyboardMarkdown } from "./lib/export";
@@ -204,7 +205,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [step, setStep] = useState<"brief" | "concepts" | "storyboard">("brief");
+  const [step, setStep] = useState<"brief" | "concepts" | "storyboard" | "shots">("brief");
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -791,6 +792,7 @@ function App() {
         <button className={step === "brief" ? "side-link active" : "side-link"} onClick={() => setStep("brief")}><LayoutDashboard size={17} /> Video brief</button>
         <button className={step === "concepts" ? "side-link active" : "side-link"} onClick={() => screenplay || concepts.length ? setStep("concepts") : setNotice("ဇာတ်ညွှန်း ၃ မျိုး အရင်ထုတ်ပါ။")}><Lightbulb size={17} /> ဇာတ်ညွှန်း / References <span className="side-count">{screenplay?.choices.length || concepts.length || "–"}</span></button>
         <button className={step === "storyboard" ? "side-link active" : "side-link"} onClick={() => storyboard ? setStep("storyboard") : setNotice("Build a storyboard first to use this step.")}><Film size={17} /> Storyboard <span className="side-count">{storyboard?.scenes.length || "–"}</span></button>
+        <button className={step === "shots" ? "side-link active" : "side-link"} onClick={() => storyboard ? setStep("shots") : setNotice("Scene prompts generate လုပ်ပြီးမှ Shot list ကိုဖွင့်နိုင်ပါတယ်.")}><Film size={17} /> Shot list / Flow export <span className="side-count">{storyboard?.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0) || "–"}</span></button>
         {showAdvanced && <button className={assetStudioOpen ? "side-link active" : "side-link"} disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={17} /> Asset Studio <span className="side-count">NEW</span></button>}
         <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
         <div className="saved-list">
@@ -807,7 +809,7 @@ function App() {
 
       <main className="main-panel">
         <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "ဇာတ်ညွှန်းနှင့် Reference အတည်ပြုခြင်း" : "Storyboard editor"}</strong></div>
+          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "ဇာတ်ညွှန်းနှင့် Reference အတည်ပြုခြင်း" : step === "storyboard" ? "Scene prompts" : "Shot list / Flow export"}</strong></div>
           <div className="topbar-actions">
             <button className="primary-button small-primary" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={15} /> Save project</button>
             <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
@@ -828,25 +830,35 @@ function App() {
             <div className="welcome-stat"><div className="welcome-stat-icon"><Zap size={19} /></div><div><strong>One brief</strong><span>Complete video plan</span></div></div>
           </section>
 
-          <div className="stepper">
+          <nav className="stepper" aria-label="Video production workflow">
             {[
-              { id: "brief", number: "01", label: "Brief", icon: FileText },
-              { id: "concepts", number: "02", label: "ဇာတ်ညွှန်း / References", icon: Lightbulb },
-              { id: "storyboard", number: "03", label: "Scene prompts / English", icon: Clapperboard },
+              { id: "brief", number: "01", label: "Video brief", icon: FileText },
+              { id: "concepts", number: "02", label: "Screenplay / refs", icon: Lightbulb },
+              { id: "storyboard", number: "03", label: "Scene prompts", icon: Clapperboard },
+              { id: "shots", number: "04", label: "Shot list / export", icon: Film },
             ].map((item, index) => {
               const Icon = item.icon;
               const active = step === item.id;
-              const complete = (item.id === "brief" && (concepts.length > 0 || Boolean(form.topic.trim()))) || (item.id === "concepts" && (screenplay ? inventoryApproved(screenplay, form) : concepts.length > 0)) || (item.id === "storyboard" && Boolean(storyboard) && pipelineCurrent(screenplay, form, storyboard));
-              return <div className={active ? "step-item active" : complete ? "step-item complete" : "step-item"} key={item.id}>
-                <div className="step-num">{complete && !active ? <Check size={14} /> : <Icon size={14} />}</div><div className="step-copy"><span>{item.number}</span><strong>{item.label}</strong></div>{index < 2 && <div className="step-connector" />}
-              </div>;
+              const complete = (item.id === "brief" && (concepts.length > 0 || Boolean(form.topic.trim())))
+                || (item.id === "concepts" && (screenplay ? inventoryApproved(screenplay, form) : concepts.length > 0))
+                || (item.id === "storyboard" && Boolean(storyboard) && pipelineCurrent(screenplay, form, storyboard))
+                || (item.id === "shots" && Boolean(storyboard?.scenes.some((scene) => scene.shots?.length)));
+              const canVisit = item.id === "brief" || (item.id === "concepts" && Boolean(screenplay || concepts.length))
+                || (item.id === "storyboard" && Boolean(storyboard)) || (item.id === "shots" && Boolean(storyboard));
+              return <button type="button" className={active ? "step-item active" : complete ? "step-item complete" : "step-item"} key={item.id}
+                disabled={!canVisit} aria-current={active ? "step" : undefined}
+                onClick={() => setStep(item.id as "brief" | "concepts" | "storyboard" | "shots")}>
+                <span className="step-num">{complete && !active ? <Check size={14} /> : <Icon size={14} />}</span>
+                <span className="step-copy"><span>{item.number}</span><strong>{item.label}</strong></span>
+                {index < 3 && <span className="step-connector" aria-hidden="true" />}
+              </button>;
             })}
-          </div>
+          </nav>
 
           {error && <div className="alert error-alert" role="alert"><AlertCircle size={17} /><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss"><X size={15} /></button></div>}
           {notice && <div className="alert success-alert" role="status"><CheckCircle2 size={17} /><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}
 
-          <section className="panel brief-panel">
+          {step === "brief" && <section className="panel brief-panel">
             <div className="section-heading">
               <div className="section-icon blue"><FileText size={18} /></div>
               <div><h2>Tell us about your video</h2><p>A clear topic helps the AI create better scenes and more useful prompts.</p></div>
@@ -898,7 +910,7 @@ function App() {
                 <button className="primary-button generate-button" onClick={() => void generateScreenplays()} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "screenplays" ? "ဇာတ်ညွှန်းရေးနေပါတယ်…" : "မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပေး"}</button>
               </div>
             </div>
-          </section>
+          </section>}
 
           {step === "brief" && <section className="panel existing-screenplay-panel">
             <div className="section-heading">
@@ -954,14 +966,14 @@ function App() {
             </div>
           </section>}
 
-          {screenplay && (step === "concepts" || step === "storyboard") && <ScreenplayStudio value={screenplay} form={form} board={storyboard} projectId={projectId} assets={projectAssets} busy={Boolean(busy) || !hydrated} apiKey={apiKey.trim()} model={geminiModel} requireKey={requireKey} onChange={setScreenplay} onBoard={(next) => { remember("Before approved scene generation"); setStoryboard(next); setStep("storyboard"); }} onBusy={setBusy} onError={setError} />}
+          {screenplay && step === "concepts" && <ScreenplayStudio value={screenplay} form={form} board={storyboard} projectId={projectId} assets={projectAssets} busy={Boolean(busy) || !hydrated} apiKey={apiKey.trim()} model={geminiModel} requireKey={requireKey} onChange={setScreenplay} onBoard={(next) => { remember("Before approved scene generation"); setStoryboard(next); setStep("storyboard"); }} onBusy={setBusy} onError={setError} />}
           {!storyboard && history.length > 0 && <div className="workflow-toolbar"><label className="field"><span className="field-label">Previous storyboard versions</span><select className="input" value={versionId} onChange={(event) => setVersionId(event.target.value)}><option value="">Choose a version…</option>{history.map((version) => <option key={version.id} value={version.id}>{version.label} · {new Date(version.createdAt).toLocaleString()}</option>)}</select></label><button className="secondary-button" disabled={!versionId || Boolean(busy)} onClick={restoreVersion}>Restore version</button></div>}
           {pipelineCurrent(screenplay, form, storyboard) && storyboard?.promptLanguage === "my" && step === "storyboard" && <BurmeseDraftEditor referencesLocked={Boolean(screenplay)} board={storyboard} form={form} busy={Boolean(busy) || !hydrated} onChange={setStoryboard} onTranslate={() => void translateDraft()} onSave={() => void saveProject()} onRetryReferences={() => void retryReferences()} />}
           {pipelineCurrent(screenplay, form, storyboard) && storyboard && storyboard.promptLanguage !== "my" && step === "storyboard" && <section className="storyboard-section">
             <div className="section-heading results-heading">
               <div className="section-icon green"><Clapperboard size={18} /></div>
               <div><h2>Your storyboard</h2><p>Edit the prompts and narration before moving each clip into Google Flow.</p></div>
-              <div className="storyboard-actions"><button className="primary-button" disabled={Boolean(busy)} onClick={() => void makeBurmeseDraft()}>မြန်မာမူကြမ်းအဖြစ်ပြောင်းရန်</button><button className="quiet-button" onClick={saveProject}><Save size={15} /> Save</button><button className="quiet-button" onClick={exportPromptPack}><Download size={15} /> Flow .txt</button><button className="quiet-button" onClick={exportJson}><Download size={15} /> JSON</button><button className="primary-button small-primary" onClick={exportMarkdown}><Download size={15} /> Export .md</button></div>
+              <div className="storyboard-actions"><button className="quiet-button" onClick={() => setStep("shots")}><Film size={15} /> Shot breakdown</button><button className="primary-button" disabled={Boolean(busy)} onClick={() => void makeBurmeseDraft()}>မြန်မာမူကြမ်းအဖြစ်ပြောင်းရန်</button><button className="quiet-button" onClick={saveProject}><Save size={15} /> Save</button><button className="quiet-button" onClick={exportPromptPack}><Download size={15} /> Flow .txt</button><button className="quiet-button" onClick={exportJson}><Download size={15} /> JSON</button><button className="primary-button small-primary" onClick={exportMarkdown}><Download size={15} /> Export .md</button></div>
             </div>
             <div className="storyboard-overview">
               <div className="overview-main"><div className="overview-eyebrow">SELECTED CONCEPT</div><h3>{storyboard.projectTitle || selectedConcept?.title || form.topic}</h3><p>{storyboard.logline}</p><div className="overview-meta"><span><Film size={14} /> {storyboard.scenes.length} scenes</span><span><Clock3 size={14} /> {storyboard.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)}s planned</span><span><MonitorPlay size={14} /> {form.aspectRatio}</span></div></div>
@@ -983,6 +995,8 @@ function App() {
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
             <details className="field" open><summary>Flow လုပ်ဆောင်ရန် လမ်းညွှန် · ၆ ဆင့်</summary><p style={{ whiteSpace: "pre-line" }}>{workflowGuideMM()}</p></details>
+            <details className="workspace-advanced">
+              <summary>Advanced tools, reusable references & version history</summary>
             <div className="workflow-toolbar">
               <button className="primary-button" disabled={Boolean(busy) || !hydrated} onClick={() => void retryReferences()}>Prepare / recheck character & background prompts</button>
               <button className="secondary-button" disabled={Boolean(busy)} onClick={() => void downloadFlowScenes()}>Download complete prompt ZIP</button>
@@ -1005,6 +1019,7 @@ function App() {
               <button className="secondary-button" disabled={Boolean(busy) || !selectedSceneIds.length} onClick={() => void regenerateScenes(selectedSceneIds)}>Regenerate selected prompts</button>
               <button className="secondary-button" disabled={Boolean(busy) || !storyboard.scenes.some((scene) => !scene.locked && !scene.flowPrompt.trim())} onClick={() => void regenerateScenes(storyboard.scenes.filter((scene) => !scene.flowPrompt.trim()).map((scene) => scene.id))}>Generate missing prompts</button>
             </div>
+            </details>
             <div className="scene-list">
               {storyboard.scenes.map((scene) => {
                 const sceneAudit = auditScene(scene);
@@ -1023,7 +1038,7 @@ function App() {
                     <button className="quiet-button" disabled={Boolean(busy) || scene.locked} aria-label={"Delete scene " + scene.sceneNumber} onClick={() => removeScene(scene)}><Trash2 size={15} /></button>
                     <select className="input" aria-label={"Review status scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy) || !hydrated} value={scene.reviewStatus || "draft"} onChange={(event) => updateScene(scene.id, { reviewStatus: event.target.value as Scene["reviewStatus"], locked: event.target.value === "approved" })}><option value="draft">Draft</option><option value="review">Needs review</option><option value="approved">Approved · lock</option></select>
                   </div>
-                  <fieldset className="scene-content scene-fieldset" disabled={scene.locked || Boolean(busy) || !hydrated}>
+                  <details className="scene-editor-details"><summary>Scene details, references & Flow prompts · ဖွင့်ရန်နှိပ်ပါ</summary><fieldset className="scene-content scene-fieldset" disabled={scene.locked || Boolean(busy) || !hydrated}>
                     <Field label="Review notes"><input className="input" value={scene.reviewNotes || ""} onChange={(event) => updateScene(scene.id, { reviewNotes: event.target.value })} placeholder="Keep feedback with this scene…" /></Field>
                     <div className="scene-reference-picker"><strong>Character & location references</strong><label><input type="checkbox" checked={scene.assetIds === undefined} onChange={(event) => updateScene(scene.id, { assetIds: event.target.checked ? undefined : [] })} /> Use project reference set</label>{castAssets.map((asset) => <label key={asset.id}><input type="checkbox" checked={sceneReferences(scene, projectAssets).some((item) => item.id === asset.id)} onChange={(event) => { const ids = sceneReferences(scene, projectAssets).map((item) => item.id); if (event.target.checked && ids.length >= 4) { setError("A scene can use up to four reference assets."); return; } updateScene(scene.id, { assetIds: event.target.checked ? [...ids, asset.id] : ids.filter((id) => id !== asset.id) }); }} /><img src={assetAsReference(asset).previewUrl} alt="" />{asset.title}</label>)}{!castAssets.length && <span>Add a character or location in Asset Studio to reuse it here.</span>}</div>
                     <div className="scene-visual-details"><div className="scene-detail"><span>SCENE PURPOSE</span><p>{scene.objective}</p></div><div className="scene-detail"><span>VISUAL ACTION</span><p>{scene.visualDescription}</p></div><div className="scene-detail two-detail"><div><span>CAMERA</span><p>{scene.cameraMovement}</p></div><div><span>LIGHT / MOOD</span><p>{scene.lighting} · {scene.mood}</p></div></div><div className="scene-detail"><span>ACTION BEAT</span><p>{scene.action}</p></div></div>
@@ -1053,12 +1068,14 @@ function App() {
                       <div className="scene-audit-list">{sceneAudit.map((item) => <div className={item.ok ? "scene-audit-line" : "scene-audit-line flagged"} key={item.label}><span>{item.ok ? <Check size={12} /> : <AlertCircle size={12} />}</span><strong>{item.label}</strong><small>{item.detail}</small></div>)}</div>
                     </details>
                     <div className="scene-card-foot"><span><Volume2 size={14} /> {scene.audioNotes || form.audioPolicy}</span><button className="copy-prompt-link" onClick={() => void copyText(promptWithReferences({ ...scene, flowPrompt: sceneVideoPrompt(scene, storyboard!) }, projectAssets), "Scene " + scene.sceneNumber + " prompt")}>{copied === "Scene " + scene.sceneNumber + " prompt" ? <Check size={14} /> : <Copy size={14} />} {copied === "Scene " + scene.sceneNumber + " prompt" ? "Copied" : "Copy Flow prompt"}</button></div>
-                  </fieldset>
+                  </fieldset></details>
                 </article>;
               })}
             </div>
             <div className="end-actions"><button className="secondary-button" onClick={() => setStep("concepts")}><ArrowLeft size={16} /> Change concept</button><button className="quiet-button" onClick={() => void copyText(completePromptText(storyboard, form), "Complete prompt package")}><Copy size={15} /> Copy all prompts</button><button className="primary-button" onClick={exportMarkdown}><Download size={16} /> Export complete storyboard <ChevronRight size={16} /></button></div>
           </section>}
+
+          {storyboard && step === "shots" && pipelineCurrent(screenplay, form, storyboard) && <ShotBreakdownStudio board={storyboard} form={form} apiKey={apiKey.trim()} model={geminiModel.trim() || GEMINI_DEFAULT} busy={Boolean(busy) || !hydrated} requireKey={requireKey} onChange={setStoryboard} onBusy={setBusy} onError={setError} onDownloadZip={() => void downloadFlowScenes()} onSave={() => void saveProject()} />}
 
           <footer className="page-footer"><span>MM Storyboard Studio</span><span>Prompt generation only · Videos are created separately in Google Flow</span><button onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>API & privacy settings</button></footer>
         </div>
