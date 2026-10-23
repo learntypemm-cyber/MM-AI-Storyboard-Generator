@@ -64,6 +64,15 @@ describe("multi-shot breakdown", () => {
     expect(shotBreakdownRequest(scene, board, form, [linkedAsset])).toContain('"handle":"@Cafebg1"');
   });
 
+  it("honors intentional visible-text policy and continuity in the shot request", () => {
+    const intentionalForm = { ...form, textPolicy: "Display exactly OPEN 24/7 on the shop sign. No other readable text." };
+    const request = shotBreakdownRequest(scene, board, intentionalForm);
+    expect(request).toContain("Follow the user text policy in settings.textPolicy.");
+    expect(request).toContain("INTENTIONAL TEXT IN THE IMAGE");
+    expect(request).toContain("Display exactly OPEN 24/7 on the shop sign");
+    expect(request).toContain("each later shot's opening state must plausibly follow the preceding shot's final state");
+  });
+
   it("builds a one-frame still prompt from the approved scene references", () => {
     const generated = shotImagePromptText({ ...shot, imagePrompt: "" }, scene, board, form);
     expect(generated.startsWith("GENERATE THE STORYBOARD IMAGE NOW.")).toBe(true);
