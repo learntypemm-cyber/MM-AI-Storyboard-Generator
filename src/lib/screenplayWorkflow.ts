@@ -94,6 +94,21 @@ export function requiredScreenplaySceneCount(form: Pick<VideoForm, "targetDurati
 
 const SCREENPLAY_HEADING = /^[ \t]*(?:(?:[၀-၉0-9]{1,3}[ \t]*[။.)])|(?:SCENE|SHOT)[ \t]+\d+[ \t]*[:.)-])[ \t]*\S.*$/gim;
 
+export function normalizeExistingScreenplay(screenplay: string): string {
+  const lines = screenplay.replace(/\r\n?/g, "\n").split("\n");
+  const numberedHeading = /^\s*(?:[၀-၉0-9]{1,3}\s*[။.)]|(?:SCENE|SHOT)\s+\d+\s*[:.)-])\s*\S.*$/i;
+  const sluglineHeading = /^\s*(?:(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)\s+\S.*)$/i;
+  const isHeading = (line: string) => numberedHeading.test(line) || sluglineHeading.test(line);
+  if (!lines.some(isHeading)) return lines.join("\n").trim();
+  let sceneNumber = 0;
+  return lines.map((line) => {
+    if (!isHeading(line)) return line;
+    sceneNumber += 1;
+    const heading = line.trim().replace(/^(?:[၀-၉0-9]{1,3}\s*[။.)]\s*|(?:SCENE|SHOT)\s+\d+\s*[:.)-]\s*)/i, "");
+    return sceneNumber + ". " + heading;
+  }).join("\n").trim();
+}
+
 export function screenplaySceneCount(screenplay: string): number {
   return [...screenplay.matchAll(SCREENPLAY_HEADING)].length;
 }
@@ -127,12 +142,12 @@ export const scriptInventorySchema = z.object({ references: z.array(reference).m
   if (new Set(v.references.map(r => r.id)).size !== v.references.length || new Set(v.scenes.map(s => s.id)).size !== v.scenes.length) ctx.addIssue({ code: "custom", message: "Duplicate reference or scene IDs" });
   for (const s of v.scenes) if (s.referenceIds.some(id => !v.references.some(r => r.id === id))) ctx.addIssue({ code: "custom", message: "Scene contains an unknown reference" });
 });
-export const screenplayWorkflowSchema = z.object({ choices: z.array(z.object({ id, title: required, screenplay: text, versions: z.array(text).max(20), polishCandidate: text.optional(), polishFor: text.optional() })).min(1).max(3), selectedId: text, approvedScript: z.string().max(2000000).optional(), approvedInventory: z.string().max(3000000).optional(), inventory: scriptInventorySchema.safeExtend({ source: z.string().max(2000000) }).optional() });
+export const screenplayWorkflowSchema = z.object({ choices: z.array(z.object({ id, title: required, screenplay: text, versions: z.array(text).max(20), sourceType: z.enum(["generated", "existing"]).optional(), polishCandidate: text.optional(), polishFor: text.optional() })).min(1).max(3), selectedId: text, approvedScript: z.string().max(2000000).optional(), approvedInventory: z.string().max(3000000).optional(), inventory: scriptInventorySchema.safeExtend({ source: z.string().max(2000000) }).optional() });
 function stable(value: unknown): unknown { if (Array.isArray(value)) return value.map(stable); if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, stable(v)])); return value; }
 export function scriptSource(w: ScreenplayWorkflow, form: VideoForm): string {
   const choice = w.choices.find(c => c.id === w.selectedId);
   const { referenceImages: _images, ...settings } = form;
-  return JSON.stringify(stable({ choice: choice && { id: choice.id, title: choice.title, screenplay: choice.screenplay }, settings }));
+  return JSON.stringify(stable({ choice: choice && { id: choice.id, title: choice.title, screenplay: choice.screenplay, sourceType: choice.sourceType ?? "generated" }, settings }));
 }
 export function scriptApproved(w: ScreenplayWorkflow, form: VideoForm): boolean { return Boolean(w.choices.find(c => c.id === w.selectedId)?.screenplay.trim() && w.approvedScript === scriptSource(w, form)); }
 export function inventorySource(w: ScreenplayWorkflow, form: VideoForm): string {
@@ -199,8 +214,12 @@ export function screenplayRepairRequest(
 }
 
 export function inventoryRequest(w: ScreenplayWorkflow, form: VideoForm): string {
-  const count = requiredScreenplaySceneCount(form);
-  return "Extract a production inventory ONLY from this approved Burmese screenplay. JSON {references:[{id,kind:'character'|'background'|'prop',title,description}],scenes:[{id,title,location,action,dialogue,durationSeconds,referenceIds:[]} ]}. Write descriptions in Burmese. Use unique short IDs; reuse one reference for each identity/outfit and location. Include visible single-scene characters, important props and environments, no invented extra cast. Character description: face/hair/build, complete wardrobe, palette and identifying details; location: spatial layout, fixed objects, materials, light direction. IMPORTANT: produce EXACTLY " + count + " inventory scenes, one for each numbered screenplay scene in the same order. Never merge two numbered scenes into one inventory scene, never split one numbered scene into multiple scenes, and never omit a numbered scene. Set each durationSeconds to " + form.clipDuration + " to match the requested Google Flow clip length; final editing can trim the combined clips to the target " + form.targetDuration + " seconds. Copy exact dialogue into dialogue; do not paraphrase or omit it. Each shot links at most 3 needed reference IDs; at most 12 references total. No video prompts yet.\n" + scriptSource(w, form);
+  const selected = w.choices.find(c => c.id === w.selectedId);
+  const count = selected?.sourceType === "existing" ? screenplaySceneCount(selected.screenplay) : requiredScreenplaySceneCount(form);
+  const sceneRule = selected?.sourceType === "existing"
+    ? "This is the user's EXISTING screenplay. Preserve its scene count and order exactly; do not rewrite, add, remove, merge or split scenes."
+    : "Never merge two numbered scenes into one inventory scene, never split one numbered scene into multiple scenes, and never omit a numbered scene.";
+  return "Extract a production inventory ONLY from this approved Burmese screenplay. JSON {references:[{id,kind:'character'|'background'|'prop',title,description}],scenes:[{id,title,location,action,dialogue,durationSeconds,referenceIds:[]} ]}. Write descriptions in Burmese. Use unique short IDs; reuse one reference for each identity/outfit and location. Include visible single-scene characters, important props and environments, no invented extra cast. Character description: face/hair/build, complete wardrobe, palette and identifying details; location: spatial layout, fixed objects, materials, light direction. IMPORTANT: produce EXACTLY " + count + " inventory scenes, one for each numbered screenplay scene in the same order. " + sceneRule + " Set each durationSeconds to " + form.clipDuration + " to match the requested Google Flow clip length; final editing can trim the combined clips to the target " + form.targetDuration + " seconds. Copy exact dialogue into dialogue; do not paraphrase or omit it. Each shot links at most 3 needed reference IDs; at most 12 references total. No video prompts yet.\n" + scriptSource(w, form);
 }
 export function approvedSceneRequest(w: ScreenplayWorkflow, form: VideoForm): string {
   return "Generate a Burmese storyboard ONLY from the approved screenplay AND edited inventory below. Return JSON {projectTitle,logline,visualBible,continuityRules:[],globalNegativePrompt,productionNotes:[],scenes:[{id,sceneNumber,title,durationSeconds,objective,visualDescription,shotSize,cameraMovement,lighting,mood,action,flowPrompt,voiceover,onscreenText,audioNotes,transition,referenceAssets:[],negativePrompt,openingFrame,finalFrame,handoff:'CUT'|'CONTINUATION',backgroundAngle:'A'|'B'|'C'|'D',sfx,backgroundMusic}]}. One scene per inventory scene, same IDs, order, duration and exact dialogue. Do not invent characters, wardrobe, locations, props, dialogue or events. Refer to approved reference IDs/names; full identity descriptions must match the registry. Technical keys/enums stay English. Override English-output language in the guidance: ALL descriptions and flowPrompt must be Burmese for review.\n" + sceneDetailRequirements + "\nAPPROVED SOURCE:\n" + inventorySource(w, form);
