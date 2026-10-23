@@ -3,11 +3,12 @@ import { ChevronDown, Clapperboard, Copy, Download, RefreshCw, Save, Scissors } 
 import { generateJson } from "../lib/gemini";
 import { shotBreakdownOutputSchema, shotBreakdownRequest, shotPackageText, sceneShotsText, shotPromptText, shotImagePromptText, validateShotPrompt } from "../lib/multiShot";
 import { downloadText, fileSlug } from "../lib/export";
-import type { Scene, ShotBreakdown, Storyboard, VideoForm } from "../types";
+import type { ImageAsset, Scene, ShotBreakdown, Storyboard, VideoForm } from "../types";
 
 type Props = {
   board: Storyboard;
   form: VideoForm;
+  assets: ImageAsset[];
   apiKey: string;
   model: string;
   busy: boolean;
@@ -21,7 +22,7 @@ type Props = {
 
 const makeId = () => Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
 
-export default function ShotBreakdownStudio({ board, form, apiKey, model, busy, requireKey, onChange, onBusy, onError, onDownloadZip, onSave }: Props) {
+export default function ShotBreakdownStudio({ board, form, assets, apiKey, model, busy, requireKey, onChange, onBusy, onError, onDownloadZip, onSave }: Props) {
   const [message, setMessage] = useState("");
   const shotCount = board.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0);
   const scenesWithShots = board.scenes.filter((scene) => scene.shots?.length).length;
@@ -44,7 +45,7 @@ export default function ShotBreakdownStudio({ board, form, apiKey, model, busy, 
       const raw = await generateJson<unknown>(
         apiKey.trim(),
         model.trim(),
-        shotBreakdownRequest(scene, board, form),
+        shotBreakdownRequest(scene, board, form, assets),
         form.referenceImages,
       );
       const parsed = shotBreakdownOutputSchema.parse(raw);
@@ -100,8 +101,8 @@ export default function ShotBreakdownStudio({ board, form, apiKey, model, busy, 
       <div><strong>အသုံးပြုပုံ</strong><p>Scene တစ်ခုအတွက် ၂–၄ shot prompt ထုတ်ပေးပါမယ်။ Shot တစ်ခုစီဟာ သီးခြား Flow clip အတွက်ဖြစ်ပြီး ရွေးထားတဲ့ clip length ကိုသုံးပါတယ်။ နောက်ဆုံး runtime နဲ့ကိုက်ဖို့ clip များကို video editor မှာ ကိုယ်တိုင် trim / arrange လုပ်ပါ။ Shot prompt ထုတ်ခြင်းက image/video မဖန်တီးပါ။</p></div>
     </div>
     <div className="shot-toolbar">
-      <button className="secondary-button" disabled={!shotCount} onClick={() => void copyText(shotPackageText(board, form), "All shot prompts")}><Copy size={15} /> Copy all shot prompts</button>
-      <button className="secondary-button" disabled={!shotCount} onClick={() => downloadText(fileSlug(board.projectTitle) + "-shot-prompts.txt", shotPackageText(board, form), "text/plain;charset=utf-8")}><Download size={15} /> Download shot TXT</button>
+      <button className="secondary-button" disabled={!shotCount} onClick={() => void copyText(shotPackageText(board, form, assets), "All shot prompts")}><Copy size={15} /> Copy all shot prompts</button>
+      <button className="secondary-button" disabled={!shotCount} onClick={() => downloadText(fileSlug(board.projectTitle) + "-shot-prompts.txt", shotPackageText(board, form, assets), "text/plain;charset=utf-8")}><Download size={15} /> Download shot TXT</button>
       <button className="secondary-button" disabled={busy} onClick={onDownloadZip}><Download size={15} /> Complete Flow ZIP</button>
       <button className="primary-button" disabled={busy} onClick={onSave}><Save size={15} /> Save project</button>
     </div>
@@ -119,7 +120,7 @@ export default function ShotBreakdownStudio({ board, form, apiKey, model, busy, 
         {scene.shots?.length ? <details className="shot-list-details">
           <summary><ChevronDown size={15} /> View / edit {scene.shots.length} shot prompts</summary>
           <div className="shot-cards">
-            {scene.shots.map((shot) => { const issues = validateShotPrompt(shot, form, board, scene); return <details className="shot-card" key={shot.id}>
+            {scene.shots.map((shot) => { const issues = validateShotPrompt(shot, form, board, scene, assets); return <details className="shot-card" key={shot.id}>
               <summary><span className="shot-number">{String(shot.shotNumber).padStart(2, "0")}</span><span className="shot-card-title">{shot.title}</span><span className={issues.length ? "shot-duration warn" : "shot-duration"}>{issues.length ? issues.length + " checks" : shot.durationSeconds + "s"}</span></summary>
               <fieldset className="shot-fields" disabled={busy}>
                 <label className="field"><span className="field-label">Shot title</span><input className="input" value={shot.title} onChange={(event) => updateShot(scene.id, shot.id, { title: event.target.value })} /></label>
@@ -132,7 +133,7 @@ export default function ShotBreakdownStudio({ board, form, apiKey, model, busy, 
                 <label className="field"><span className="field-label">Action</span><textarea className="input" rows={3} value={shot.action} onChange={(event) => updateShot(scene.id, shot.id, { action: event.target.value })} /></label>
                 <label className="field"><span className="field-label">Opening frame</span><textarea className="input" rows={2} value={shot.openingFrame} onChange={(event) => updateShot(scene.id, shot.id, { openingFrame: event.target.value })} /></label>
                 <label className="field"><span className="field-label">Final frame</span><textarea className="input" rows={2} value={shot.finalFrame} onChange={(event) => updateShot(scene.id, shot.id, { finalFrame: event.target.value })} /></label>
-                <label className="field"><span className="field-label">Opening still / storyboard image prompt</span><textarea className="input prompt-editor" rows={6} value={shotImagePromptText(shot, scene, board, form)} onChange={(event) => updateShot(scene.id, shot.id, { imagePrompt: event.target.value })} /></label>
+                <label className="field"><span className="field-label">Opening still / storyboard image prompt</span><textarea className="input prompt-editor" rows={6} value={shotImagePromptText(shot, scene, board, form, assets)} onChange={(event) => updateShot(scene.id, shot.id, { imagePrompt: event.target.value })} /></label>
                 <button type="button" className="secondary-button shot-copy-still" onClick={() => void copyText(shotImagePromptText(shot, scene, board, form), "Shot " + shot.shotNumber + " opening still prompt")}><Copy size={14} /> Copy opening still prompt</button>
                 <label className="field"><span className="field-label">Google Flow video prompt (English)</span><textarea className="input prompt-editor" rows={8} value={shot.flowPrompt} onChange={(event) => updateShot(scene.id, shot.id, { flowPrompt: event.target.value })} /></label>
                 <div className={issues.length ? "shot-validation warning" : "shot-validation valid"}><strong>{issues.length ? issues.length + " pre-generation check(s) to review" : "Pre-generation checks passed"}</strong>{issues.length > 0 && <ul>{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}</div>
@@ -147,13 +148,13 @@ export default function ShotBreakdownStudio({ board, form, apiKey, model, busy, 
                   <label className="field"><span className="field-label">Audio direction</span><textarea className="input" rows={2} value={shot.audioNotes} onChange={(event) => updateShot(scene.id, shot.id, { audioNotes: event.target.value })} /></label>
                 </details>
                 <div className="shot-card-actions">
-                  <button type="button" className="secondary-button" onClick={() => void copyText(shotPromptText(shot, scene, board, form), "Shot " + shot.shotNumber + " prompt")}><Copy size={14} /> Copy full shot prompt</button>
+                  <button type="button" className="secondary-button" onClick={() => void copyText(shotPromptText(shot, scene, board, form, assets), "Shot " + shot.shotNumber + " prompt")}><Copy size={14} /> Copy full shot prompt</button>
                   <button type="button" className="quiet-button" onClick={() => void copyText(shot.flowPrompt, "Shot " + shot.shotNumber + " Flow prompt")}><Copy size={14} /> Copy Flow prompt only</button>
                 </div>
               </fieldset>
             </details>; })}
           </div>
-          <div className="shot-list-actions"><button className="quiet-button" onClick={() => void copyText(sceneShotsText(scene, board, form), "Scene " + scene.sceneNumber + " prompts")}><Copy size={14} /> Copy this scene's shots</button></div>
+          <div className="shot-list-actions"><button className="quiet-button" onClick={() => void copyText(sceneShotsText(scene, board, form, assets), "Scene " + scene.sceneNumber + " prompts")}><Copy size={14} /> Copy this scene's shots</button></div>
         </details> : <p className="shot-empty">Shot list မရှိသေးပါ။ Generate shot list ကိုနှိပ်ပြီး prompt ၂–၄ ခုထုတ်ပါ။</p>}
       </article>)}
     </div>
