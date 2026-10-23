@@ -1,5 +1,5 @@
 import { materializeFullPrompts, fullPromptsReady, scenePromptSource, referencePromptSource } from "./lib/fullPrompts";
-import { screenplayChoicesSchema, scriptSource, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema, screenplayRequest, requiredScreenplaySceneCount, screenplaySceneCount, screenplayCompletenessIssues } from "./lib/screenplayWorkflow";
+import { screenplayChoicesSchema, scriptSource, inventoryRequest, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema, screenplayRequest, requiredScreenplaySceneCount, normalizeExistingScreenplay, screenplaySceneCount, screenplayCompletenessIssues } from "./lib/screenplayWorkflow";
 import { draftSource, translatedBoard, validateTranslation } from "./lib/draftTranslation";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
 import { sceneInstructions, sceneBackground, completePromptText, completePromptTextMyanmar, completePromptTextBilingual, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
@@ -400,6 +400,38 @@ describe("screenplay approval workflow", () => {
     expect(screenplaySceneCount(short)).toBe(1);
     expect(screenplayCompletenessIssues(short, { targetDuration: 90, clipDuration: 8 })[0]).toContain("exactly 12 numbered clip-scenes");
   });
+  it("imports an existing screenplay and keeps its own scene count for inventory", () => {
+    const imported = normalizeExistingScreenplay(
+      "INT. GAMING ROOM - DAY\\nကိုမင်းမင်းက အရေးကြီးစာတမ်းကို အာရုံစိုက်ပြီး ကွန်ပျူတာရှေ့တွင် ရေးသားနေသည်။\\n\\nEXT. STREET - DAY\\nသူက အပြင်သို့ထွက်လာပြီး ဖုန်းကိုကြည့်ကာ ဆုံးဖြတ်ချက်တစ်ခုချသည်။"
+    );
+    expect(screenplaySceneCount(imported)).toBe(2);
+    expect(imported).toContain("1. INT. GAMING ROOM - DAY");
+    expect(imported).toContain("2. EXT. STREET - DAY");
+    const workflow: ScreenplayWorkflow = {
+      choices: [{ id: "existing", title: "My screenplay", screenplay: imported, versions: [], sourceType: "existing" }],
+      selectedId: "existing",
+    };
+    const prompt = inventoryRequest(workflow, { ...form, targetDuration: 90 });
+    expect(prompt).toContain("EXACTLY 2 inventory scenes");
+    expect(prompt).toContain("EXISTING screenplay");
+    expect(prompt).toContain("Preserve its scene count and order exactly");
+    expect(prompt).not.toContain("EXACTLY 12 inventory scenes");
+  });
+
+  it("continues from a screenplay pasted by the user without generating a replacement", async () => {
+    render(<App />);
+    const draft = "INT. GAMING ROOM - DAY\\nကိုမင်းမင်းက ကွန်ပျူတာရှေ့မှာ အရေးကြီးစာတမ်းကို ရေးသားနေသည်။\\n\\nEXT. STREET - DAY\\nကိုမင်းမင်းသည် အပြင်သို့ထွက်လာပြီး ဖုန်းကိုကြည့်ကာ နောက်တစ်ဆင့်ကို ဆုံးဖြတ်သည်။";
+    const inputLabel = "ရှိပြီးသား screenplay ကို ဒီမှာ paste လုပ်ပါ";
+    await waitFor(() => expect((screen.getByLabelText(inputLabel) as HTMLTextAreaElement).disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText(inputLabel), { target: { value: draft } });
+    fireEvent.click(screen.getByRole("button", { name: "ရှိပြီးသား Screenplay မှ ဆက်လုပ်မယ်" }));
+    await waitFor(() => expect(screen.getByLabelText("မြန်မာဇာတ်ညွှန်း")).toBeTruthy());
+    const imported = screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement;
+    expect(imported.value).toContain("1. INT. GAMING ROOM - DAY");
+    expect(imported.value).toContain("2. EXT. STREET - DAY");
+    expect(screen.getByText(/2 \(မူရင်း screenplay\)/)).toBeTruthy();
+  });
+
   it("normalizes Gemini screenplay arrays into valid screenplay strings", () => {
     const lineArray = screenplayChoicesSchema.parse({
       choices: [1, 2, 3].map((n) => ({
