@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown, Clapperboard, Copy, Download, Film, RefreshCw, Save, Scissors } from "lucide-react";
+import { ChevronDown, Clapperboard, Copy, Download, RefreshCw, Save, Scissors } from "lucide-react";
 import { generateJson } from "../lib/gemini";
 import { shotBreakdownOutputSchema, shotBreakdownRequest, shotPackageText, sceneShotsText, shotPromptText } from "../lib/multiShot";
 import { downloadText, fileSlug } from "../lib/export";
@@ -44,7 +44,7 @@ export default function ShotBreakdownStudio({ board, form, apiKey, model, busy, 
       const raw = await generateJson<unknown>(
         apiKey.trim(),
         model.trim(),
-        (await import("../lib/multiShot")).shotBreakdownRequest(scene, board, form),
+        shotBreakdownRequest(scene, board, form),
         form.referenceImages,
       );
       const parsed = shotBreakdownOutputSchema.parse(raw);
