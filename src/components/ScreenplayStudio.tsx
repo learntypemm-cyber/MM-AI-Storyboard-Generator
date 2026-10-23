@@ -61,12 +61,47 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
   const patchRef = (id: string, patch: Partial<NonNullable<ScreenplayWorkflow['inventory']>['references'][number]>) => onChange({ ...value, inventory: { ...value.inventory!, references: value.inventory!.references.map(r => r.id === id ? { ...r, ...patch } : r) } });
   const patchScene = (id: string, patch: Partial<NonNullable<ScreenplayWorkflow['inventory']>['scenes'][number]>) => onChange({ ...value, inventory: { ...value.inventory!, scenes: value.inventory!.scenes.map(s => s.id === id ? { ...s, ...patch } : s) } });
   const referenceSource = (r: NonNullable<ScreenplayWorkflow['inventory']>['references'][number]) => JSON.stringify([2, referencePromptSource({ ...r, prompt: r.description }, form), r.fullPrompt ?? referencePromptMM({ ...r, prompt: r.description }, form)]);
-  const translateReference = (id: string) => run("reference-translation", async () => {
-    if (!inventoryApproved(value, form)) return;
-    const ref = value.inventory!.references.find(r => r.id === id)!;
-    const raw = await generateJson<unknown>(apiKey, model, "Translate this complete approved reference image prompt into English exactly, preserving every layout, label, identity, lighting and design instruction. No additions or summarizing. Return JSON {description:string}.\n" + (ref.fullPrompt ?? referencePromptMM({ ...ref, prompt: ref.description }, form)));
-    const result = z.object({ description: z.string().trim().min(1).max(100000) }).parse(raw);
-    patchRef(id, { englishDescription: result.description, englishSource: referenceSource(ref) });
+  const translateAllReferences = () => run("reference-translation-all", async () => {
+    if (!inventoryApproved(value, form)) throw new Error("Reference စာရင်းကို အရင်အတည်ပြုပါ။");
+    const refs = value.inventory?.references || [];
+    if (!refs.length) throw new Error("English ပြောင်းရန် Reference မရှိသေးပါ။");
+    const inputs = refs.map(ref => ({
+      id: ref.id,
+      kind: ref.kind,
+      title: ref.title,
+      prompt: ref.fullPrompt ?? referencePromptMM({ ...ref, prompt: ref.description }, form),
+    }));
+    const raw = await generateJson<unknown>(apiKey, model, [
+      "Translate EVERY reference image prompt in the input in ONE batch. Do not make separate requests. Return JSON only: {references:[{id:string, englishPrompt:string}]}.",
+      "Return exactly one result for each input reference, preserving its ID exactly and preserving the complete prompt structure, layout, dimensions, labels, identity, appearance, lighting, camera views, continuity constraints and negative instructions.",
+      "Translate all Burmese instructions into precise natural English. Do not summarize, shorten, skip details, add ideas, change names or translate IDs. The englishPrompt must be the full usable image-generation prompt, not just the description.",
+      "INPUT REFERENCES:",
+      JSON.stringify({ references: inputs }),
+    ].join("\\n"));
+    const result = z.object({
+      references: z.array(z.object({
+        id: z.string().min(1).max(200),
+        englishPrompt: z.string().trim().min(1).max(100000),
+      })).max(12),
+    }).parse(raw);
+    const expectedIds = new Set(refs.map(ref => ref.id));
+    const returnedIds = result.references.map(ref => ref.id);
+    if (result.references.length !== refs.length || new Set(returnedIds).size !== refs.length || returnedIds.some(id => !expectedIds.has(id))) {
+      throw new Error("Gemini က Reference အားလုံးကို မပြည့်စုံဘဲ ပြန်ပေးထားပါတယ်။ မူရင်း Prompt များမပျက်ပါ။ ပြန်ကြိုးစားပါ။");
+    }
+    const translatedById = new Map(result.references.map(ref => [ref.id, ref.englishPrompt]));
+    onChange({
+      ...value,
+      inventory: {
+        ...value.inventory!,
+        references: refs.map(ref => ({
+          ...ref,
+          englishDescription: translatedById.get(ref.id)!,
+          englishSource: referenceSource(ref),
+        })),
+      },
+    });
+    setMessage("Reference " + refs.length + " ခုလုံးကို တစ်ခါတည်း English ပြောင်းပြီးပါပြီ။");
   });
   const upload = async (id: string, file?: File) => {
     if (!file || busy || !current) return;
@@ -103,6 +138,12 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
     {current && value.inventory && <>
       <h2>၃။ Character / Background / Scene စာရင်း ပြင်ဆင်ပါ</h2>
       <p>ဇာတ်ညွှန်းမှာ မပါသောလူ/နေရာကို ထပ်မထည့်ပါနှင့်။ ပြောင်းချင်လျှင် အပေါ်ကဇာတ်ညွှန်းကို အရင်ပြင်ပါ။ ကြိုက်တဲ့ reference ပုံကို Flow မှာထုတ်ပြီး ဒီမှာတွဲသိမ်းနိုင်ပါတယ်။</p>
+      <div className="workflow-toolbar">
+        <div className="field-hint">{value.inventory.references.filter(ref => ref.englishDescription && ref.englishSource === referenceSource(ref)).length} / {value.inventory.references.length} reference prompts English ပြောင်းပြီးပါပြီ။ အားလုံးကို တစ်ခါတည်း ပြောင်းနိုင်ပါတယ်။</div>
+        <button className="primary-button" disabled={busy || !approved || value.inventory.references.length === 0 || value.inventory.references.every(ref => Boolean(ref.englishDescription && ref.englishSource === referenceSource(ref)))} onClick={() => void translateAllReferences()}>
+          {busy && !["", "null"].includes(String(busy)) ? "လုပ်ဆောင်နေပါတယ်…" : "Reference အားလုံးကို English တစ်ခါတည်းပြောင်းမယ်"}
+        </button>
+      </div>
       {value.inventory.references.map((ref, i) => {
         const peers = value.inventory!.references.filter(r => r.kind === ref.kind);
         const code = ({ character: 'C', background: 'B', prop: 'P' }[ref.kind]) + String(peers.findIndex(r => r.id === ref.id) + 1).padStart(2, '0');
@@ -118,7 +159,7 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
           <button className="secondary-button" onClick={() => patchRef(ref.id, { fullPromptSource: referencePromptSource({ ...ref, prompt: ref.description }, form) })}>Reference prompt စစ်ပြီးပြီ</button>
           <button className="secondary-button" onClick={() => patchRef(ref.id, { fullPrompt: undefined, fullPromptSource: undefined })}>Reference prompt ကို ဖော်ပြချက်မှ ပြန်စီမယ်</button>
           <p>Scene {value.inventory!.scenes.map((s, n) => s.referenceIds.includes(ref.id) ? n + 1 : null).filter(Boolean).join(', ')} တွင်သုံးမယ်။</p>
-          <button className="secondary-button" disabled={busy || !approved || englishReady} onClick={() => void translateReference(ref.id)}>Reference image prompt ကို English ပြောင်းရန်</button>
+          {englishReady && approved && <p role="status">English prompt ပြီးပါပြီ — အထက်က ခလုတ်ဖြင့် Reference အားလုံးကို တစ်ခါတည်း ပြန်ပြောင်းနိုင်ပါတယ်။</p>}
           <details><summary>မြန်မာ Reference image prompt အပြည့်အစုံ</summary><textarea className="input" rows={10} readOnly value={imagePromptMy} /><button className="secondary-button" onClick={() => { void navigator.clipboard.writeText(imagePromptMy).then(() => setMessage("မြန်မာ Reference prompt copied.")).catch(() => onError("Copy မရပါ။ Prompt ကို ကိုယ်တိုင်ရွေးချယ်ပါ။")); }}>မြန်မာ Prompt ကို Copy လုပ်ရန်</button><button className="secondary-button" onClick={() => downloadText(code + "-my.txt", imagePromptMy, "text/plain;charset=utf-8")}>မြန်မာ TXT</button></details>
           {englishReady && approved && <details open><summary>English Reference image prompt အပြည့်အစုံ</summary><textarea className="input" rows={10} readOnly value={imagePromptEn} /><button className="secondary-button" onClick={() => { void navigator.clipboard.writeText(imagePromptEn).then(() => setMessage("English reference prompt copied.")).catch(() => onError("Copy မရပါ။ Reference TXT download ကိုသုံးပါ။")); }}>Copy English prompt</button><button className="secondary-button" onClick={() => downloadText(code + "-en.txt", imagePromptEn, "text/plain;charset=utf-8")}>English Reference TXT</button></details>}
           <label className="field">Flow မှာထုတ်ထားသော reference ပုံတွဲရန်<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { void upload(ref.id, e.target.files?.[0]); e.currentTarget.value = ''; }} /></label>
