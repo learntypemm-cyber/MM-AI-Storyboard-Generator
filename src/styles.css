@@ -637,3 +637,13 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .shot-scene-actions button { width: 100%; }
   .shot-fields .three-columns { grid-template-columns: 1fr; }
 }
+
+.shot-duration.warn { color: #b17a25; font-weight: 800; }
+.shot-validation { margin: 10px 0 15px; padding: 11px 12px; border-radius: 8px; font-size: 10px; line-height: 1.7; }
+.shot-validation strong { display: block; font-size: 10px; }
+.shot-validation ul { margin: 5px 0 0; padding-left: 17px; }
+.shot-validation li + li { margin-top: 3px; }
+.shot-validation.warning { border: 1px solid #f1e0b8; background: #fffaf0; color: #8b6824; }
+.shot-validation.valid { border: 1px solid #d9efe6; background: #f5fcf8; color: #24785f; }
+.shot-copy-still { margin: -7px 0 14px; align-self: flex-start; }
+.optional-integration > .comfy-ui-studio, .optional-integration > div { padding: 15px; }
