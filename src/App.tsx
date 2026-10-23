@@ -426,7 +426,7 @@ function App() {
     if (!storyboard || busy) return;
     setBusy("flow-download");
     try {
-      const blob = await promptPackageZip(storyboard, form);
+      const blob = await promptPackageZip(storyboard, form, projectAssets);
       const url = URL.createObjectURL(blob); const link = document.createElement("a");
       link.href = url; link.download = fileSlug(storyboard.projectTitle) + "-flow-scenes.zip"; link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -1075,7 +1075,7 @@ function App() {
             <div className="end-actions"><button className="secondary-button" onClick={() => setStep("concepts")}><ArrowLeft size={16} /> Change concept</button><button className="quiet-button" onClick={() => void copyText(completePromptText(storyboard, form), "Complete prompt package")}><Copy size={15} /> Copy all prompts</button><button className="primary-button" onClick={exportMarkdown}><Download size={16} /> Export complete storyboard <ChevronRight size={16} /></button></div>
           </section>}
 
-          {storyboard && step === "shots" && pipelineCurrent(screenplay, form, storyboard) && <ShotBreakdownStudio board={storyboard} form={form} apiKey={apiKey.trim()} model={geminiModel.trim() || GEMINI_DEFAULT} busy={Boolean(busy) || !hydrated} requireKey={requireKey} onChange={setStoryboard} onBusy={setBusy} onError={setError} onDownloadZip={() => void downloadFlowScenes()} onSave={() => void saveProject()} />}
+          {storyboard && step === "shots" && pipelineCurrent(screenplay, form, storyboard) && <ShotBreakdownStudio board={storyboard} form={form} assets={projectAssets} apiKey={apiKey.trim()} model={geminiModel.trim() || GEMINI_DEFAULT} busy={Boolean(busy) || !hydrated} requireKey={requireKey} onChange={setStoryboard} onBusy={setBusy} onError={setError} onDownloadZip={() => void downloadFlowScenes()} onSave={() => void saveProject()} />}
 
           <footer className="page-footer"><span>MM Storyboard Studio</span><span>Prompt generation only · Videos are created separately in Google Flow</span><button onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>API & privacy settings</button></footer>
         </div>
