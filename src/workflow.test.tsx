@@ -215,6 +215,7 @@ describe("editor workflow", () => {
     expect((screen.getAllByLabelText("Scene title")[1] as HTMLInputElement).value).toBe("New scene");
     fireEvent.click(screen.getByRole("button", { name: "Delete scene 2" }));
     expect(screen.getAllByLabelText("Scene title")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Video brief" }));
     fireEvent.click(screen.getByRole("button", { name: /Production settings/ }));
     fireEvent.change(screen.getByLabelText("Preset name"), { target: { value: "My preset" } });
     fireEvent.click(screen.getByRole("button", { name: "Save preset" }));
