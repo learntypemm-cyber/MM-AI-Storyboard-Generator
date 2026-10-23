@@ -987,14 +987,14 @@ function App() {
               <button className="secondary-button" onClick={() => void copyText(buildContactSheetPrompt(form, storyboard), "Storyboard contact sheet prompt")}><Copy size={15} /> {copied === "Storyboard contact sheet prompt" ? "Copied" : "Copy contact-sheet prompt"}</button>
             </div>
             {storyboard.productionNotes.length > 0 && <div className="production-notes"><Lightbulb size={16} /><div><strong>Production notes</strong>{storyboard.productionNotes.map((note, index) => <p key={index}>{note}</p>)}</div></div>}
-            <ComfyUIStudio key={projectId} onBusyChange={onComfyBusy} scenes={boardForExport().scenes} storyboard={storyboard} />
+            <details className="workspace-advanced optional-integration"><summary>Optional integration · ComfyUI workflow</summary><ComfyUIStudio key={projectId} onBusyChange={onComfyBusy} scenes={boardForExport().scenes} storyboard={storyboard} /></details>
             {compatibility && <div className="compatibility-note"><AlertCircle size={16} /><span>{compatibility}</span></div>}
             <div className="audit-panel">
               <div className="audit-heading"><div><strong><CheckCircle2 size={16} /> Pre-generation check</strong><span>Quick automated checks before you spend Flow credits.</span></div><span className={auditCount === 0 && allAudits.every((item) => item.ok) ? "audit-status pass" : "audit-status warn"}>{auditCount === 0 && allAudits.every((item) => item.ok) ? "LOOKS GOOD" : auditCount + " SCENE FLAGS"}</span></div>
               <div className="audit-grid">{allAudits.map((item) => <div className="audit-item" key={item.label}><span className={item.ok ? "audit-check ok" : "audit-check issue"}>{item.ok ? <Check size={12} /> : <AlertCircle size={12} />}</span><div><strong>{item.label}</strong><p>{item.detail}</p></div></div>)}</div>
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
-            <details className="field" open><summary>Flow လုပ်ဆောင်ရန် လမ်းညွှန် · ၆ ဆင့်</summary><p style={{ whiteSpace: "pre-line" }}>{workflowGuideMM()}</p></details>
+            <details className="field"><summary>Flow လုပ်ဆောင်ရန် လမ်းညွှန် · ၆ ဆင့်</summary><p style={{ whiteSpace: "pre-line" }}>{workflowGuideMM()}</p></details>
             <details className="workspace-advanced">
               <summary>Advanced tools, reusable references & version history</summary>
             <div className="workflow-toolbar">
