@@ -1,3 +1,4 @@
+import { referencePromptMM, referencePromptSource } from "./fullPrompts";
 import { z } from "zod";
 import type { ScreenplayWorkflow, Storyboard, VideoForm } from "../types";
 import { sceneDetailRequirements } from "./promptGuidance";
@@ -120,7 +121,7 @@ export function screenplayCompletenessIssues(screenplay: string, form: Pick<Vide
   }
   return issues;
 }
-const reference = z.object({ id, kind: z.enum(["character", "background", "prop"]), title: required, description: required, englishDescription: text.optional(), englishSource: text.optional(), imageRevision: text.optional() });
+const reference = z.object({ id, kind: z.enum(["character", "background", "prop"]), title: required, description: required, fullPrompt: text.optional(), fullPromptSource: text.optional(), englishDescription: text.optional(), englishSource: text.optional(), imageRevision: text.optional() });
 const shot = z.object({ id, title: required, location: required, action: required, dialogue: text, durationSeconds: z.number().positive().max(600), referenceIds: z.array(id).max(3) });
 export const scriptInventorySchema = z.object({ references: z.array(reference).max(12), scenes: z.array(shot).min(1).max(200) }).superRefine((v, ctx) => {
   if (new Set(v.references.map(r => r.id)).size !== v.references.length || new Set(v.scenes.map(s => s.id)).size !== v.scenes.length) ctx.addIssue({ code: "custom", message: "Duplicate reference or scene IDs" });
@@ -209,7 +210,7 @@ export function bindApprovedBoard(raw: Storyboard, w: ScreenplayWorkflow, form: 
   const source = w.inventory;
   if (!Array.isArray(raw.scenes) || raw.scenes.length !== source.scenes.length || new Set(raw.scenes.map(s => s.id)).size !== source.scenes.length || source.scenes.some(s => !raw.scenes.some(t => t.id === s.id))) throw new Error("Scene generation changed the approved scene list. Your approvals are preserved; retry.");
   return { ...raw, promptLanguage: "my", englishJson: undefined, englishSource: undefined, pipelineSource: inventorySource(w, form),
-    referencePlan: source.references.map(r => ({ id: r.id, kind: r.kind, title: r.title, prompt: r.description, sceneIds: source.scenes.filter(s => s.referenceIds.includes(r.id)).map(s => s.id) })),
+    referencePlan: source.references.map(r => ({ id: r.id, kind: r.kind, title: r.title, prompt: r.description, fullPrompt: r.fullPrompt ?? referencePromptMM({ ...r, prompt: r.description }, form), fullPromptSource: referencePromptSource({ ...r, prompt: r.description }, form), sceneIds: source.scenes.filter(s => s.referenceIds.includes(r.id)).map(s => s.id) })),
     scenes: source.scenes.map((s, i) => ({ ...raw.scenes.find(t => t.id === s.id)!, id: s.id, sceneNumber: i + 1, title: s.title, durationSeconds: s.durationSeconds, action: s.action, voiceover: s.dialogue, assetIds: [...s.referenceIds], referenceAssets: s.referenceIds.map(id => source.references.find(r => r.id === id)!.title), locked: false, reviewStatus: "draft" })),
   };
 }

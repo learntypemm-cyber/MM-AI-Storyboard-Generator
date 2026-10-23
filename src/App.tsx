@@ -1,3 +1,4 @@
+import { materializeFullPrompts } from "./lib/fullPrompts";
 import ScreenplayStudio from "./components/ScreenplayStudio";
 import { screenplayChoicesSchema, screenplayRepairSchema, screenplayRequest, screenplayRepairRequest, screenplayCompletenessIssues, requiredScreenplaySceneCount, pipelineCurrent, inventorySource, inventoryApproved } from "./lib/screenplayWorkflow";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
@@ -371,9 +372,9 @@ function App() {
   };
   const translateDraft = async () => {
     if (!storyboard || busy || !hydrated || !requireKey()) return;
-    const draft = storyboard;
     setBusy("translation"); setError("");
     try {
+      const draft = materializeFullPrompts(storyboard, form);
       const raw = await generateJson<unknown>(apiKey.trim(), geminiModel, translationPrompt(draft));
       const english = validateTranslation(raw, draft);
       setStoryboard({ ...draft, englishJson: JSON.stringify(english), englishSource: draftSource(draft, form) });

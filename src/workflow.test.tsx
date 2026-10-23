@@ -1,3 +1,4 @@
+import { materializeFullPrompts, fullPromptsReady, scenePromptSource, referencePromptSource } from "./lib/fullPrompts";
 import { screenplayChoicesSchema, scriptSource, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema, screenplayRequest, requiredScreenplaySceneCount, screenplaySceneCount, screenplayCompletenessIssues } from "./lib/screenplayWorkflow";
 import { draftSource, translatedBoard, validateTranslation } from "./lib/draftTranslation";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
@@ -696,4 +697,69 @@ it("persists screenplay approvals through ZIP and rejects unapproved scene gener
   expect(archive.project.screenplay?.choices[0].versions).toEqual(["မူဟောင်း"]);
   expect(pipelineCurrent(workflow, { ...form, targetDuration: 30 }, output)).toBe(false);
   expect(() => bindApprovedBoard({ ...board(), scenes: [scene("wrong")] }, workflow, form)).toThrow("changed");
+});
+
+
+it("shows the entire Burmese package before translation and exports translated prompts verbatim", async () => {
+  const draft = board(); draft.promptLanguage = "my";
+  draft.referencePlan = [{ id: "may", kind: "character", title: "မေ", prompt: "အင်္ကျီအနီဝတ်ထားသည်", sceneIds: ["one"] }, { id: "cafe", kind: "background", title: "ဆိုင်", prompt: "သစ်သားစားပွဲ", sceneIds: ["one"] }];
+  const full = materializeFullPrompts(draft, form);
+  expect(full.referencePlan![0].fullPrompt).toContain("Name: မေ");
+  expect(full.referencePlan![0].fullPrompt).toContain("အမူအရာလေးမျိုး");
+  expect(full.referencePlan![1].fullPrompt).toContain("2×2");
+  expect(full.scenes[0].fullImagePrompt).toContain("9:16");
+  expect(full.scenes[0].fullVideoPrompt).toContain("SFX:");
+  const raw = structuredClone(full);
+  raw.referencePlan![0].fullPrompt = "Approved complete character sheet translation.";
+  raw.scenes[0].fullImagePrompt = "Approved complete opening image translation.";
+  raw.scenes[0].fullVideoPrompt = "Approved complete video translation.";
+  const english = validateTranslation(raw, full);
+  expect(referenceImagePrompt(english.referencePlan![0], form)).toBe(raw.referencePlan![0].fullPrompt);
+  expect(sceneImagePrompt(english.scenes[0], english, form)).toBe(raw.scenes[0].fullImagePrompt);
+  expect(sceneVideoPrompt(english.scenes[0], english)).toBe(raw.scenes[0].fullVideoPrompt);
+  const zip = await JSZip.loadAsync(await new Promise<ArrayBuffer>((resolve, reject) => { const reader = new FileReader(); void promptPackageZip(english, form).then(blob => { reader.onload = () => resolve(reader.result as ArrayBuffer); reader.onerror = reject; reader.readAsArrayBuffer(blob); }); }));
+  expect(await zip.file("scene-01/video-prompt.txt")!.async("string")).toBe(raw.scenes[0].fullVideoPrompt);
+  delete raw.scenes[0].fullImagePrompt;
+  expect(() => validateTranslation(raw, full)).toThrow("blank");
+});
+
+it("retains edited full prompts, blocks stale translation, and survives archive round trips", async () => {
+  const full = materializeFullPrompts(board(), form);
+  full.scenes[0].fullVideoPrompt = "ကိုယ်တိုင်ပြင်ထားသော video prompt";
+  full.scenes[0].action = "အသစ်ပြင်ထားသောလှုပ်ရှားမှု";
+  expect(fullPromptsReady(full, form)).toBe(false);
+  expect(() => materializeFullPrompts(full, form)).toThrow();
+  expect(full.scenes[0].fullVideoPrompt).toBe("ကိုယ်တိုင်ပြင်ထားသော video prompt");
+  full.scenes[0].fullPromptSource = scenePromptSource(full.scenes[0], full, form);
+  expect(fullPromptsReady(full, form)).toBe(true);
+  const project = { id: "full-prompts", title: "Coffee", savedAt: "2026-10-23", form, concepts: [], selectedConceptId: "", storyboard: full };
+  const archive = await readArchive(new File([await createArchive({ format: "mm-storyboard", version: 1, project, references: [], assets: [], presets: [] })], "full.zip"));
+  expect(fullPromptsReady(archive.project.storyboard!, form)).toBe(true);
+  expect(archive.project.storyboard!.scenes[0].fullVideoPrompt).toBe(full.scenes[0].fullVideoPrompt);
+  expect(fullPromptsReady(full, { ...form, aspectRatio: "16:9" })).toBe(false);
+});
+
+it("edits full Burmese prompts without API calls and invalidates prior English", () => {
+  const full = materializeFullPrompts({ ...board(), promptLanguage: "my" }, form);
+  full.englishJson = JSON.stringify(validateTranslation(structuredClone(full), full));
+  full.englishSource = draftSource(full, form);
+  const change = vi.fn(); const translate = vi.fn();
+  render(<BurmeseDraftEditor board={full} form={form} busy={false} onChange={change} onTranslate={translate} onSave={() => {}} onRetryReferences={() => {}} />);
+  fireEvent.change(screen.getAllByLabelText("Video prompt အပြည့်အစုံ")[0], { target: { value: "အသစ်ပြင်ထားသည်" } });
+  const updated = change.mock.calls[0][0];
+  expect(updated.scenes[0].fullVideoPrompt).toBe("အသစ်ပြင်ထားသည်");
+  expect(translatedBoard(updated, form)).toBeNull();
+  expect(translate).not.toHaveBeenCalled();
+});
+
+it("preserves approved full reference prompts in the scene package", () => {
+  const workflow: ScreenplayWorkflow = { choices: [{ id: "choice", title: "Coffee", screenplay: "မေ", versions: [] }], selectedId: "choice" };
+  workflow.approvedScript = scriptSource(workflow, form);
+  const ref = { id: "may", kind: "character" as const, title: "မေ", description: "အင်္ကျီအနီ", fullPrompt: "ပြင်ထားသော reference sheet prompt", fullPromptSource: "" };
+  ref.fullPromptSource = referencePromptSource({ ...ref, prompt: ref.description }, form);
+  workflow.inventory = { source: scriptSource(workflow, form), references: [ref], scenes: [{ id: "one", title: "Coffee", location: "Cafe", action: "Drink", dialogue: "Hello", durationSeconds: 8, referenceIds: [ref.id] }] };
+  workflow.approvedInventory = inventorySource(workflow, form);
+  const output = bindApprovedBoard({ ...board(), scenes: [scene("one")] }, workflow, form);
+  expect(output.referencePlan![0].fullPrompt).toBe(ref.fullPrompt);
+  expect(fullPromptsReady(output, form)).toBe(true);
 });
