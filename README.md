@@ -1,11 +1,13 @@
 # MM AI Storyboard Generator
 
-MM Storyboard Studio converts a short idea into three creative concepts, a complete scene-by-scene storyboard, and copy-ready Google Flow / Veo prompts. It is designed for LearnTypeMM tutorials, product explainers, Burmese-language educational clips, TikTok, Facebook Reels, YouTube Shorts, and longer YouTube videos.
+MM Storyboard Studio converts a short idea or existing screenplay into a production-ready storyboard and multi-shot Google Flow prompt package. It helps plan what to generate, check visual continuity, and export copy-ready still-image and video prompts; you generate media in Flow and assemble the clips yourself. It is designed for LearnTypeMM tutorials, product explainers, Burmese-language educational clips, TikTok, Facebook Reels, YouTube Shorts, and longer YouTube videos.
 
 ## What it does
 
 - Generate three genuinely different video concepts from a single brief.
 - Build a structured storyboard with scene goals, visual direction, shot size, camera movement, lighting, mood, action, and transition.
+- Break each storyboard scene into 2–4 independent shot prompts with a dedicated opening-still prompt, action, framing, camera movement, timing, audio directions, and closing state.
+- Review the opening still in Google Flow before copying that shot’s video prompt. Editing the visual brief clears the approval flag so the still can be reviewed again.
 - Write English Google Flow prompts, Burmese or bilingual voiceover, and exact captions separately for editing.
 - Keep repeated people and places consistent with a visual bible, continuity rules, canonical reference handles, and self-contained prompts.
 - Add screenshots or reference images to ground the plan in real product UI.
@@ -26,11 +28,13 @@ Requirements: Node.js 22.22.2+, 24.15.0+, or 26+ and a Gemini API key with acces
 3. Open the local address printed by Vite.
 4. Open Settings and add your Gemini API key.
 5. Enter a topic, choose a visual style, and press Generate 3 concepts.
-6. Select a concept and choose Build this storyboard.
-7. Use **Copy contact-sheet prompt** to prepare a visual reference sheet, then copy each scene prompt into Google Flow.
-8. Export **Flow .txt** for a complete prompt pack, including each scene's voiceover, captions, and editing notes.
-9. Optionally expand **Generate images or videos with ComfyUI**, load your own API-format workflow, map its prompt node, and generate one scene or the full batch. Use the merge action when two or more video outputs are available.
-10. Edit Burmese captions and any real LearnTypeMM screen recordings into the finished tutorial.
+6. Select a concept and approve its scene-by-scene storyboard.
+7. Go to **Shot list / export** and generate 2–4 separate shot cards per scene. Edit each shot's still prompt and video prompt as needed.
+8. Copy the **Opening still prompt** into Google Flow, create the still manually, compare it with the approved character/location references, and mark **Opening still reviewed**. The video prompt copy buttons unlock for that shot only after review.
+9. Copy the approved shot's **Google Flow video prompt** and generate the clip manually. Repeat for the remaining shots, then trim and assemble the clips yourself in a video editor.
+10. Export **shot-prompts.txt** or **Complete Flow ZIP**. The ZIP contains per-shot image prompts, video prompts, details, plus the existing scene and reference prompt package.
+11. Optionally expand the ComfyUI integration if you deliberately want to use a separate ComfyUI server. This is separate from the manual Google Flow workflow.
+12. Add the final Burmese captions and any real LearnTypeMM screen recordings in your editor.
 
 Run `npm test` for the production workflow regression suite. To create a production build, run npm run build. To preview the build, run npm run preview.
 
