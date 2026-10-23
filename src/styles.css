@@ -546,3 +546,94 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .screenplay-studio .scene-card h3 { padding: 12px 16px 0; }
 .screenplay-studio textarea { line-height: 1.9; }
 .screenplay-studio fieldset label { line-height: 1.8; }
+
+
+/* Clear, stage-based workflow and compact prompt editors */
+.stepper { gap: 8px; align-items: stretch; }
+.step-item {
+  appearance: none; flex: 1 1 0; min-width: 0; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left;
+}
+.step-item:disabled { cursor: not-allowed; opacity: .48; }
+.step-item:focus-visible { outline: 3px solid rgba(50,103,237,.24); outline-offset: 4px; }
+.step-num { flex: 0 0 30px; }
+.step-copy { min-width: 0; }
+.step-copy strong { font-size: 10px; line-height: 1.45; }
+.step-connector { flex: 1 1 18px; width: auto; min-width: 10px; margin: 0 4px; }
+.workspace-advanced { margin: 16px 18px 0; border: 1px solid #e5eaf3; border-radius: 10px; background: #fbfcfe; }
+.workspace-advanced > summary {
+  cursor: pointer; padding: 13px 15px; color: #506582; font-size: 11px; font-weight: 800; line-height: 1.6;
+}
+.workspace-advanced[open] > summary { border-bottom: 1px solid #e8edf5; }
+.workspace-advanced .workflow-toolbar { padding: 14px; }
+.scene-editor-details { margin: 12px 16px 16px; border-top: 1px solid #edf0f5; }
+.scene-editor-details > summary { padding: 13px 0 2px; cursor: pointer; color: #536986; font-weight: 800; font-size: 11px; }
+.scene-editor-details[open] > summary { margin-bottom: 14px; }
+.scene-editor-details .scene-content { padding-top: 0; }
+
+/* Dedicated multi-shot stage */
+.shot-workspace { margin-top: 22px; border: 1px solid #e5eaf3; border-radius: 14px; background: #fff; box-shadow: var(--shadow); overflow: hidden; }
+.shot-workspace-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; padding: 24px; border-bottom: 1px solid #edf1f6; }
+.shot-title-lockup { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.shot-title-icon { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border-radius: 12px; background: #edf3ff; color: #3267ed; }
+.shot-eyebrow { color: #8a99b0; font-size: 9px; letter-spacing: 1.3px; font-weight: 800; }
+.shot-title-lockup h2 { margin: 6px 0 7px; color: #1e3456; font: 800 21px/1.35 Manrope, sans-serif; letter-spacing: -.5px; }
+.shot-title-lockup p { max-width: 760px; margin: 0; color: #7e8ea7; font-size: 11px; line-height: 1.8; }
+.shot-header-stats { min-width: 128px; display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 5px 8px; padding: 12px 14px; border: 1px solid #e8edf4; border-radius: 10px; background: #fbfcff; }
+.shot-header-stats strong { color: #315fcf; font: 800 16px/1.2 Manrope, sans-serif; }
+.shot-header-stats span { color: #8d9ab0; font-size: 9px; white-space: nowrap; }
+.shot-progress { height: 4px; background: #eef2fa; }
+.shot-progress > span { display: block; height: 100%; background: #3267ed; transition: width .2s ease; }
+.shot-workflow-note { display: flex; gap: 10px; align-items: flex-start; margin: 18px 20px 0; padding: 13px 15px; border: 1px solid #e3ebff; border-radius: 10px; background: #f7f9ff; color: #526a9b; }
+.shot-workflow-note > svg { flex: 0 0 auto; margin-top: 2px; color: #4c71d8; }
+.shot-workflow-note strong { display: block; color: #365aa4; font-size: 11px; }
+.shot-workflow-note p { margin: 4px 0 0; color: #6e7e9d; font-size: 10px; line-height: 1.8; }
+.shot-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 17px 20px; border-bottom: 1px solid #edf1f6; }
+.shot-scene-list { display: grid; gap: 12px; padding: 18px 20px 22px; background: #fafbfe; }
+.shot-scene-card { min-width: 0; border: 1px solid #e3e9f3; border-radius: 11px; background: #fff; overflow: hidden; }
+.shot-scene-heading { padding: 16px 17px 5px; }
+.shot-scene-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: #95a3b8; font-size: 8px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+.shot-scene-meta span + span { padding-left: 8px; border-left: 1px solid #e4eaf3; letter-spacing: 0; font-weight: 600; text-transform: none; }
+.shot-scene-heading h3 { margin: 7px 0 5px; color: #293f60; font: 800 14px/1.4 Manrope, sans-serif; }
+.shot-scene-heading p { margin: 0; color: #8492a8; font-size: 10px; line-height: 1.7; }
+.shot-scene-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 17px 15px; }
+.shot-state { color: #8b98ad; font-size: 10px; }
+.shot-state.ready { color: #218669; font-weight: 700; }
+.shot-empty { margin: 0; padding: 0 17px 17px; color: #909db0; font-size: 10px; line-height: 1.75; }
+.shot-list-details { border-top: 1px solid #edf1f7; background: #fcfdff; }
+.shot-list-details > summary { display: flex; align-items: center; gap: 7px; cursor: pointer; padding: 12px 17px; color: #3e5c96; font-size: 10px; font-weight: 800; }
+.shot-cards { display: grid; gap: 9px; padding: 0 14px 14px; }
+.shot-card { min-width: 0; border: 1px solid #e4eaf3; border-radius: 9px; background: #fff; overflow: hidden; }
+.shot-card > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 13px; color: #566984; font-size: 10px; }
+.shot-number { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: #edf3ff; color: #3466d9; font-weight: 800; }
+.shot-card-title { flex: 1; min-width: 0; font-weight: 800; line-height: 1.6; }
+.shot-duration { flex: 0 0 auto; color: #8a99b1; font-size: 9px; }
+.shot-fields { min-width: 0; margin: 0; padding: 15px; border: 0; border-top: 1px solid #edf1f6; }
+.shot-fields .field { margin-bottom: 13px; }
+.shot-fields .input { font-size: 11px; }
+.shot-fields .prompt-editor { min-height: 170px; }
+.shot-extra-fields { margin: 10px 0 13px; }
+.shot-extra-fields > summary { cursor: pointer; color: #607692; font-size: 10px; font-weight: 800; padding: 8px 0; }
+.shot-card-actions, .shot-list-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+.shot-list-actions { padding: 0 14px 14px; }
+.shot-status { padding: 10px 18px; color: #258267; font-size: 11px; line-height: 1.7; }
+
+@media (max-width: 1050px) {
+  .shot-workspace-header { padding: 18px; }
+  .shot-header-stats { min-width: 108px; }
+  .shot-title-lockup h2 { font-size: 18px; }
+}
+@media (max-width: 720px) {
+  .stepper { overflow-x: auto; justify-content: flex-start; padding: 12px; }
+  .step-item { flex: 0 0 150px; gap: 7px; }
+  .step-connector { flex: 0 0 12px; min-width: 12px; margin: 0 1px; }
+  .step-copy strong { white-space: normal; font-size: 9px; }
+  .shot-workspace-header { flex-direction: column; }
+  .shot-header-stats { display: flex; align-items: baseline; flex-wrap: wrap; min-width: 0; gap: 6px 8px; }
+  .shot-header-stats strong { margin-left: 4px; }
+  .shot-toolbar { align-items: stretch; }
+  .shot-toolbar > button { flex: 1 1 145px; white-space: normal; }
+  .shot-scene-actions { align-items: flex-start; flex-direction: column; }
+  .shot-scene-actions button { width: 100%; }
+  .shot-fields .three-columns { grid-template-columns: 1fr; }
+}
