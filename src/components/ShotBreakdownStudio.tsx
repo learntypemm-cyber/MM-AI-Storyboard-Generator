@@ -26,6 +26,7 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
   const [message, setMessage] = useState("");
   const shotCount = board.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0);
   const scenesWithShots = board.scenes.filter((scene) => scene.shots?.length).length;
+  const shotsApproved = board.scenes.reduce((sum, scene) => sum + (scene.shots || []).filter((shot) => shot.imageApproved).length, 0);
 
   const updateShots = (sceneId: string, update: (shots: ShotBreakdown[]) => ShotBreakdown[]) => {
     onChange({
@@ -96,7 +97,7 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
           <p>Screenplay scene တစ်ခုစီကို ရိုက်ကွက်အသေးများခွဲပြီး prompt တစ်ခုချင်းစီကို ပြင်၊ copy လုပ်ပါ။ ပုံနှင့် video ကို Google Flow မှာ ကိုယ်တိုင်ထုတ်ပြီး editing မှာ ကိုယ်တိုင်ပေါင်းပါ။</p>
         </div>
       </div>
-      <div className="shot-header-stats"><strong>{scenesWithShots}/{board.scenes.length}</strong><span>scenes planned</span><strong>{shotCount}</strong><span>shot prompts</span></div>
+      <div className="shot-header-stats"><strong>{scenesWithShots}/{board.scenes.length}</strong><span>scenes planned</span><strong>{shotCount}</strong><span>shot prompts</span><strong>{shotsApproved}/{shotCount}</strong><span>stills approved</span></div>
     </div>
     <div className="shot-progress" aria-label="Shot breakdown progress">
       <span style={{ width: (board.scenes.length ? scenesWithShots / board.scenes.length * 100 : 0) + "%" }} />
