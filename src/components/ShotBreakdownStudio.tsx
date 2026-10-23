@@ -53,6 +53,7 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
         ...shot,
         id: makeId(),
         shotNumber: index + 1,
+        imageApproved: false,
         durationSeconds: form.clipDuration,
         referenceAssets: shot.referenceAssets.length ? shot.referenceAssets : scene.referenceAssets,
       }));
@@ -69,7 +70,11 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
   };
 
   const updateShot = (sceneId: string, shotId: string, patch: Partial<ShotBreakdown>) => {
-    updateShots(sceneId, (shots) => shots.map((shot) => shot.id === shotId ? { ...shot, ...patch } : shot));
+    const visualFields: Array<keyof ShotBreakdown> = ["title", "purpose", "shotSize", "cameraMovement", "action", "openingFrame", "finalFrame", "imagePrompt", "flowPrompt", "referenceAssets"];
+    const changedVisuals = visualFields.some((field) => field in patch);
+    updateShots(sceneId, (shots) => shots.map((shot) => shot.id === shotId
+      ? { ...shot, ...patch, ...(changedVisuals && !("imageApproved" in patch) ? { imageApproved: false } : {}) }
+      : shot));
   };
 
   const copyText = async (value: string, label: string) => {
@@ -121,7 +126,7 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
           <summary><ChevronDown size={15} /> View / edit {scene.shots.length} shot prompts</summary>
           <div className="shot-cards">
             {scene.shots.map((shot) => { const issues = validateShotPrompt(shot, form, board, scene, assets); return <details className="shot-card" key={shot.id}>
-              <summary><span className="shot-number">{String(shot.shotNumber).padStart(2, "0")}</span><span className="shot-card-title">{shot.title}</span><span className={issues.length ? "shot-duration warn" : "shot-duration"}>{issues.length ? issues.length + " checks" : shot.durationSeconds + "s"}</span></summary>
+              <summary><span className="shot-number">{String(shot.shotNumber).padStart(2, "0")}</span><span className="shot-card-title">{shot.title}</span><span className={issues.length || !shot.imageApproved ? "shot-duration warn" : "shot-duration"}>{!shot.imageApproved ? "Review still" : issues.length ? issues.length + " checks" : shot.durationSeconds + "s"}</span></summary>
               <fieldset className="shot-fields" disabled={busy}>
                 <label className="field"><span className="field-label">Shot title</span><input className="input" value={shot.title} onChange={(event) => updateShot(scene.id, shot.id, { title: event.target.value })} /></label>
                 <label className="field"><span className="field-label">Purpose</span><textarea className="input" rows={2} value={shot.purpose} onChange={(event) => updateShot(scene.id, shot.id, { purpose: event.target.value })} /></label>
@@ -135,6 +140,7 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
                 <label className="field"><span className="field-label">Final frame</span><textarea className="input" rows={2} value={shot.finalFrame} onChange={(event) => updateShot(scene.id, shot.id, { finalFrame: event.target.value })} /></label>
                 <label className="field"><span className="field-label">Opening still / storyboard image prompt</span><textarea className="input prompt-editor" rows={6} value={shotImagePromptText(shot, scene, board, form, assets)} onChange={(event) => updateShot(scene.id, shot.id, { imagePrompt: event.target.value })} /></label>
                 <button type="button" className="secondary-button shot-copy-still" onClick={() => void copyText(shotImagePromptText(shot, scene, board, form, assets), "Shot " + shot.shotNumber + " opening still prompt")}><Copy size={14} /> Copy opening still prompt</button>
+                <label className="shot-approval"><input type="checkbox" checked={Boolean(shot.imageApproved)} onChange={(event) => updateShot(scene.id, shot.id, { imageApproved: event.target.checked })} /><span><strong>{shot.imageApproved ? "Opening still reviewed" : "Opening still not reviewed"}</strong><small>Flow မှာ still ပုံကို ကိုယ်တိုင်ထုတ်ပြီး frame, character နဲ့ location ကို စစ်ပြီးမှ အမှန်ခြစ်ပါ။ Prompt ပြောင်းလျှင် approval ပြန်ပျက်သွားပါမယ်။</small></span></label>
                 <label className="field"><span className="field-label">Google Flow video prompt (English)</span><textarea className="input prompt-editor" rows={8} value={shot.flowPrompt} onChange={(event) => updateShot(scene.id, shot.id, { flowPrompt: event.target.value })} /></label>
                 <div className={issues.length ? "shot-validation warning" : "shot-validation valid"}><strong>{issues.length ? issues.length + " pre-generation check(s) to review" : "Pre-generation checks passed"}</strong>{issues.length > 0 && <ul>{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}</div>
                 <details className="field shot-extra-fields"><summary>Audio, references & negative prompt</summary>
@@ -148,8 +154,8 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
                   <label className="field"><span className="field-label">Audio direction</span><textarea className="input" rows={2} value={shot.audioNotes} onChange={(event) => updateShot(scene.id, shot.id, { audioNotes: event.target.value })} /></label>
                 </details>
                 <div className="shot-card-actions">
-                  <button type="button" className="secondary-button" onClick={() => void copyText(shotPromptText(shot, scene, board, form, assets), "Shot " + shot.shotNumber + " prompt")}><Copy size={14} /> Copy full shot prompt</button>
-                  <button type="button" className="quiet-button" onClick={() => void copyText(shot.flowPrompt, "Shot " + shot.shotNumber + " Flow prompt")}><Copy size={14} /> Copy Flow prompt only</button>
+                  <button type="button" className="secondary-button" disabled={!shot.imageApproved} title={!shot.imageApproved ? "Review and approve the opening still first" : "Copy the complete shot package"} onClick={() => void copyText(shotPromptText(shot, scene, board, form, assets), "Shot " + shot.shotNumber + " prompt")}><Copy size={14} /> Copy full shot prompt</button>
+                  <button type="button" className="quiet-button" disabled={!shot.imageApproved} title={!shot.imageApproved ? "Review and approve the opening still first" : "Copy the video prompt"} onClick={() => void copyText(shot.flowPrompt, "Shot " + shot.shotNumber + " Flow prompt")}><Copy size={14} /> Copy Flow prompt only</button>
                 </div>
               </fieldset>
             </details>; })}
