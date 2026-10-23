@@ -402,7 +402,7 @@ describe("screenplay approval workflow", () => {
   });
   it("imports an existing screenplay and keeps its own scene count for inventory", () => {
     const imported = normalizeExistingScreenplay(
-      "INT. GAMING ROOM - DAY\\nကိုမင်းမင်းက အရေးကြီးစာတမ်းကို အာရုံစိုက်ပြီး ကွန်ပျူတာရှေ့တွင် ရေးသားနေသည်။\\n\\nEXT. STREET - DAY\\nသူက အပြင်သို့ထွက်လာပြီး ဖုန်းကိုကြည့်ကာ ဆုံးဖြတ်ချက်တစ်ခုချသည်။"
+      "INT. GAMING ROOM - DAY\nကိုမင်းမင်းက အရေးကြီးစာတမ်းကို အာရုံစိုက်ပြီး ကွန်ပျူတာရှေ့တွင် ရေးသားနေသည်။\n\nEXT. STREET - DAY\nသူက အပြင်သို့ထွက်လာပြီး ဖုန်းကိုကြည့်ကာ ဆုံးဖြတ်ချက်တစ်ခုချသည်။"
     );
     expect(screenplaySceneCount(imported)).toBe(2);
     expect(imported).toContain("1. INT. GAMING ROOM - DAY");
@@ -420,7 +420,7 @@ describe("screenplay approval workflow", () => {
 
   it("continues from a screenplay pasted by the user without generating a replacement", async () => {
     render(<App />);
-    const draft = "INT. GAMING ROOM - DAY\\nကိုမင်းမင်းက ကွန်ပျူတာရှေ့မှာ အရေးကြီးစာတမ်းကို ရေးသားနေသည်။\\n\\nEXT. STREET - DAY\\nကိုမင်းမင်းသည် အပြင်သို့ထွက်လာပြီး ဖုန်းကိုကြည့်ကာ နောက်တစ်ဆင့်ကို ဆုံးဖြတ်သည်။";
+    const draft = "INT. GAMING ROOM - DAY\nကိုမင်းမင်းက ကွန်ပျူတာရှေ့မှာ အရေးကြီးစာတမ်းကို ရေးသားနေသည်။\n\nEXT. STREET - DAY\nကိုမင်းမင်းသည် အပြင်သို့ထွက်လာပြီး ဖုန်းကိုကြည့်ကာ နောက်တစ်ဆင့်ကို ဆုံးဖြတ်သည်။";
     const inputLabel = "ရှိပြီးသား screenplay ကို ဒီမှာ paste လုပ်ပါ";
     await waitFor(() => expect((screen.getByLabelText(inputLabel) as HTMLTextAreaElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText(inputLabel), { target: { value: draft } });
