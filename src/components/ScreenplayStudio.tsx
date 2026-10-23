@@ -4,7 +4,7 @@ import type { ImageAsset, ScreenplayWorkflow, Storyboard, VideoForm } from "../t
 import { generateJson } from "../lib/gemini";
 import { scriptSource, scriptApproved, inventorySource, inventoryCurrent, inventoryApproved, scriptInventorySchema, inventoryRequest, approvedSceneRequest, bindApprovedBoard, pipelineCurrent, requiredScreenplaySceneCount, screenplaySceneCount, screenplayCompletenessIssues } from "../lib/screenplayWorkflow";
 import { storyboardSchema } from "../lib/projectArchive";
-import { referenceImagePrompt, referenceImagePromptMyanmar } from "../lib/automaticAssets";
+import { referencePromptMM, referencePromptSource } from "../lib/fullPrompts";
 import { putAsset, assetAsReference } from "../lib/assetStore";
 import { downloadText, fileSlug } from "../lib/export";
 
@@ -60,10 +60,11 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
   });
   const patchRef = (id: string, patch: Partial<NonNullable<ScreenplayWorkflow['inventory']>['references'][number]>) => onChange({ ...value, inventory: { ...value.inventory!, references: value.inventory!.references.map(r => r.id === id ? { ...r, ...patch } : r) } });
   const patchScene = (id: string, patch: Partial<NonNullable<ScreenplayWorkflow['inventory']>['scenes'][number]>) => onChange({ ...value, inventory: { ...value.inventory!, scenes: value.inventory!.scenes.map(s => s.id === id ? { ...s, ...patch } : s) } });
-  const referenceSource = (r: NonNullable<ScreenplayWorkflow['inventory']>['references'][number]) => JSON.stringify({ title: r.title, kind: r.kind, description: r.description });
+  const referenceSource = (r: NonNullable<ScreenplayWorkflow['inventory']>['references'][number]) => JSON.stringify([2, referencePromptSource({ ...r, prompt: r.description }, form), r.fullPrompt ?? referencePromptMM({ ...r, prompt: r.description }, form)]);
   const translateReference = (id: string) => run("reference-translation", async () => {
+    if (!inventoryApproved(value, form)) return;
     const ref = value.inventory!.references.find(r => r.id === id)!;
-    const raw = await generateJson<unknown>(apiKey, model, "Translate this approved reference design into English exactly, preserving identity and all design details. No additions. Return JSON {description:string}.\n" + ref.description);
+    const raw = await generateJson<unknown>(apiKey, model, "Translate this complete approved reference image prompt into English exactly, preserving every layout, label, identity, lighting and design instruction. No additions or summarizing. Return JSON {description:string}.\n" + (ref.fullPrompt ?? referencePromptMM({ ...ref, prompt: ref.description }, form)));
     const result = z.object({ description: z.string().trim().min(1).max(100000) }).parse(raw);
     patchRef(id, { englishDescription: result.description, englishSource: referenceSource(ref) });
   });
@@ -107,15 +108,19 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
         const code = ({ character: 'C', background: 'B', prop: 'P' }[ref.kind]) + String(peers.findIndex(r => r.id === ref.id) + 1).padStart(2, '0');
         const image = assets.find(a => a.id === ref.id);
         const englishReady = Boolean(ref.englishDescription && ref.englishSource === referenceSource(ref));
-        const imagePromptMy = referenceImagePromptMyanmar({ id: ref.id, kind: ref.kind, title: ref.title, prompt: ref.description, sceneIds: [] }, form);
-        const imagePromptEn = englishReady ? referenceImagePrompt({ id: ref.id, kind: ref.kind, title: ref.title, prompt: ref.englishDescription!, sceneIds: [] }, form) : "";
+        const imagePromptEn = englishReady ? ref.englishDescription! : "";
+        const imagePromptMy = ref.fullPrompt ?? referencePromptMM({ ...ref, prompt: ref.description }, form);
         return <article className="scene-card" key={ref.id}><h3>{code} · {ref.kind}</h3><fieldset className="scene-content scene-fieldset" disabled={busy}>
-          <label className="field">Reference {i + 1} နာမည်<input className="input" value={ref.title} onChange={e => patchRef(ref.id, { title: e.target.value, englishDescription: undefined, englishSource: undefined })} /></label>
-          <label className="field">Reference {i + 1} ဖော်ပြချက်<textarea className="input" rows={7} value={ref.description} onChange={e => patchRef(ref.id, { description: e.target.value, englishDescription: undefined, englishSource: undefined })} /></label>
+          <label className="field">Reference {i + 1} နာမည်<input className="input" value={ref.title} onChange={e => patchRef(ref.id, { title: e.target.value })} /></label>
+          <label className="field">Reference {i + 1} ဖော်ပြချက်<textarea className="input" rows={7} value={ref.description} onChange={e => patchRef(ref.id, { description: e.target.value })} /></label>
+          <label className="field">Reference {i + 1} မြန်မာ prompt အပြည့်အစုံ<textarea className="input" rows={14} value={ref.fullPrompt ?? referencePromptMM({ ...ref, prompt: ref.description }, form)} onChange={e => patchRef(ref.id, { fullPrompt: e.target.value, fullPromptSource: ref.fullPromptSource ?? referencePromptSource({ ...ref, prompt: ref.description }, form) })} /></label>
+          {ref.fullPrompt !== undefined && ref.fullPromptSource !== referencePromptSource({ ...ref, prompt: ref.description }, form) && <p role="alert">ဖော်ပြချက်ပြောင်းထားပါတယ်။ Prompt ကိုပြန်စစ်ပါ။</p>}
+          <button className="secondary-button" onClick={() => patchRef(ref.id, { fullPromptSource: referencePromptSource({ ...ref, prompt: ref.description }, form) })}>Reference prompt စစ်ပြီးပြီ</button>
+          <button className="secondary-button" onClick={() => patchRef(ref.id, { fullPrompt: undefined, fullPromptSource: undefined })}>Reference prompt ကို ဖော်ပြချက်မှ ပြန်စီမယ်</button>
           <p>Scene {value.inventory!.scenes.map((s, n) => s.referenceIds.includes(ref.id) ? n + 1 : null).filter(Boolean).join(', ')} တွင်သုံးမယ်။</p>
-          <button className="secondary-button" disabled={busy || englishReady} onClick={() => void translateReference(ref.id)}>Reference image prompt ကို English ပြောင်းရန်</button>
+          <button className="secondary-button" disabled={busy || !approved || englishReady} onClick={() => void translateReference(ref.id)}>Reference image prompt ကို English ပြောင်းရန်</button>
           <details><summary>မြန်မာ Reference image prompt အပြည့်အစုံ</summary><textarea className="input" rows={10} readOnly value={imagePromptMy} /><button className="secondary-button" onClick={() => { void navigator.clipboard.writeText(imagePromptMy).then(() => setMessage("မြန်မာ Reference prompt copied.")).catch(() => onError("Copy မရပါ။ Prompt ကို ကိုယ်တိုင်ရွေးချယ်ပါ။")); }}>မြန်မာ Prompt ကို Copy လုပ်ရန်</button><button className="secondary-button" onClick={() => downloadText(code + "-my.txt", imagePromptMy, "text/plain;charset=utf-8")}>မြန်မာ TXT</button></details>
-          {englishReady && <details open><summary>English Reference image prompt အပြည့်အစုံ</summary><textarea className="input" rows={10} readOnly value={imagePromptEn} /><button className="secondary-button" onClick={() => { void navigator.clipboard.writeText(imagePromptEn).then(() => setMessage("English reference prompt copied.")).catch(() => onError("Copy မရပါ။ Reference TXT download ကိုသုံးပါ။")); }}>Copy English prompt</button><button className="secondary-button" onClick={() => downloadText(code + "-en.txt", imagePromptEn, "text/plain;charset=utf-8")}>English Reference TXT</button></details>}
+          {englishReady && approved && <details open><summary>English Reference image prompt အပြည့်အစုံ</summary><textarea className="input" rows={10} readOnly value={imagePromptEn} /><button className="secondary-button" onClick={() => { void navigator.clipboard.writeText(imagePromptEn).then(() => setMessage("English reference prompt copied.")).catch(() => onError("Copy မရပါ။ Reference TXT download ကိုသုံးပါ။")); }}>Copy English prompt</button><button className="secondary-button" onClick={() => downloadText(code + "-en.txt", imagePromptEn, "text/plain;charset=utf-8")}>English Reference TXT</button></details>}
           <label className="field">Flow မှာထုတ်ထားသော reference ပုံတွဲရန်<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { void upload(ref.id, e.target.files?.[0]); e.currentTarget.value = ''; }} /></label>
           {image && <><img style={{ maxWidth: 260, maxHeight: 200, objectFit: 'contain' }} src={assetAsReference(image).previewUrl} alt={ref.title} />{image.prompt !== ref.description && <p role="alert">ဖော်ပြချက်ပြောင်းထားလို့ ပုံအဟောင်းနဲ့ ကိုက်မကိုက် ပြန်စစ်ပါ။</p>}</>}
         </fieldset></article>;
@@ -126,7 +131,7 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
         {value.inventory!.references.map(ref => <label key={ref.id}><input type="checkbox" checked={scene.referenceIds.includes(ref.id)} onChange={e => { if (e.target.checked && scene.referenceIds.length >= 3) { onError('Scene တစ်ခုမှာ reference ၃ ခုအထိရွေးနိုင်ပါတယ်။'); return; } patchScene(scene.id, { referenceIds: e.target.checked ? [...scene.referenceIds, ref.id] : scene.referenceIds.filter(id => id !== ref.id) }); }} />{ref.title}</label>)}
       </fieldset></details>)}
       <p>Scene စုစုပေါင်းကြာချိန်: {value.inventory.scenes.reduce((sum, s) => sum + s.durationSeconds, 0)}s · Target: {form.targetDuration}s</p>
-      <button className="primary-button" disabled={busy || approved} onClick={() => { try { scriptInventorySchema.parse(value.inventory); onChange({ ...value, approvedInventory: inventorySource(value, form) }); } catch { onError('နာမည်၊ ဖော်ပြချက်နှင့် scene စာရင်းကို အပြည့်ဖြည့်ပါ။'); } }}>Character / Background / Scene စာရင်း အတည်ပြုမယ်</button>
+      <button className="primary-button" disabled={busy || approved} onClick={() => { try { if (value.inventory!.references.some(r => r.fullPrompt !== undefined && (!r.fullPrompt.trim() || r.fullPromptSource !== referencePromptSource({ ...r, prompt: r.description }, form)))) { onError("Reference prompt အပြည့်အစုံကို ပြန်စစ်ပြီး အတည်ပြုပါ။"); return; } scriptInventorySchema.parse(value.inventory); onChange({ ...value, approvedInventory: inventorySource(value, form) }); } catch { onError('နာမည်၊ ဖော်ပြချက်နှင့် scene စာရင်းကို အပြည့်ဖြည့်ပါ။'); } }}>Character / Background / Scene စာရင်း အတည်ပြုမယ်</button>
       <p role="status">{approved ? 'Reference စာရင်း အတည်ပြုပြီးပါပြီ။ ပုံထုတ်ရန် prompt ယူနိုင်ပြီး scene prompts ဆက်ထုတ်နိုင်ပါပြီ။' : 'ပြင်ထားသော reference နှင့် scene စာရင်းကို အတည်ပြုရန်လိုသည်။'}</p>
       <button className="primary-button" disabled={busy || !approved} onClick={() => void generate()}>အတည်ပြုထားသောစာရင်းဖြင့် Scene prompts ထုတ်မယ်</button>
       {board && !pipelineCurrent(value, form, board) && <p role="alert">Scene prompts အဟောင်းဖြစ်နေပါပြီ။ အတည်ပြုထားသောစာရင်းဖြင့် ပြန်ထုတ်ပါ။</p>}

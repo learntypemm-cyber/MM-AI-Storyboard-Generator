@@ -9,7 +9,7 @@ function canonical(value: unknown): unknown {
 export function draftSource(board: Storyboard, form: VideoForm): string {
   const { englishJson: _json, englishSource: _source, ...draft } = board;
   const { referenceImages: _images, ...settings } = form;
-  return JSON.stringify(canonical({ draft, settings }));
+  return JSON.stringify(canonical({ version: 2, draft, settings }));
 }
 export function translatedBoard(board: Storyboard, form: VideoForm): Storyboard | null {
   if (!board.englishJson || board.englishSource !== draftSource(board, form)) return null;
@@ -20,7 +20,7 @@ export function validateTranslation(raw: unknown, original: Storyboard): Storybo
   if (translated.scenes.length !== original.scenes.length || new Set(translated.scenes.map(s => s.id)).size !== original.scenes.length || original.scenes.some(s => !translated.scenes.some(t => t.id === s.id))) throw new Error("Translation omitted or changed scene IDs. Your Burmese draft is preserved; retry translation.");
   const refs = original.referencePlan || [];
   if ((translated.referencePlan || []).length !== refs.length || new Set(translated.referencePlan?.map(r => r.id)).size !== refs.length || refs.some(r => !translated.referencePlan?.some(t => t.id === r.id))) throw new Error("Translation omitted reference prompts. Your draft is preserved.");
-  const fields = ["title", "objective", "visualDescription", "shotSize", "cameraMovement", "lighting", "mood", "action", "flowPrompt", "audioNotes", "transition", "negativePrompt", "openingFrame", "finalFrame", "sfx", "backgroundMusic"] as const;
+  const fields = ["title", "objective", "visualDescription", "shotSize", "cameraMovement", "lighting", "mood", "action", "flowPrompt", "audioNotes", "transition", "negativePrompt", "openingFrame", "finalFrame", "sfx", "backgroundMusic", "fullImagePrompt", "fullVideoPrompt"] as const;
   return { ...original, promptLanguage: undefined, englishJson: undefined, englishSource: undefined,
     projectTitle: translated.projectTitle, logline: translated.logline, visualBible: translated.visualBible,
     continuityRules: translated.continuityRules, globalNegativePrompt: translated.globalNegativePrompt, productionNotes: translated.productionNotes,
@@ -31,10 +31,11 @@ export function validateTranslation(raw: unknown, original: Storyboard): Storybo
       // IDs, timing, angles, locks, links and exact spoken words remain user-owned.
       return { ...scene, ...text, voiceover: scene.voiceover, onscreenText: scene.onscreenText };
     }),
-    referencePlan: refs.map(ref => { const next = translated.referencePlan!.find(r => r.id === ref.id)!; if (!next.title.trim() || !next.prompt.trim()) throw new Error("Translation left a reference blank."); return { ...ref, title: next.title, prompt: next.prompt }; }),
+    referencePlan: refs.map(ref => { const next = translated.referencePlan!.find(r => r.id === ref.id)!; if (!next.title.trim() || !next.prompt.trim()) throw new Error("Translation left a reference blank."); if (ref.fullPrompt?.trim() && !next.fullPrompt?.trim()) throw new Error("Translation omitted the complete reference prompt."); return { ...ref, title: next.title, prompt: next.prompt, fullPrompt: next.fullPrompt }; }),
   };
 }
 export function translationPrompt(board: Storyboard): string {
-  const { englishJson: _json, englishSource: _source, ...draft } = board;
-  return "Translate this approved Burmese storyboard and ALL reference design prompts into precise English for Google Flow. Return the complete identical JSON structure, not a summary. Do not add ideas, actions, camera moves, characters or objects. Preserve scene/reference IDs, scene order, duration, angle, handoff, reference links, technical fields, and the exact voiceover/dialogue and caption text in their original language. Translate only descriptive text, including timed flowPrompt beats, sfx and music. English flowPrompt begins NO TEXT IN THE IMAGE. (unless the draft explicitly requests visible text). Preserve all detail and timing. Omit promptLanguage, englishSource and englishJson.\n" + JSON.stringify(draft);
+  const { englishJson: _json, englishSource: _source, pipelineSource: _pipeline, ...draft } = board;
+  const payload = { ...draft, referencePlan: draft.referencePlan?.map(({ fullPromptSource: _stamp, ...ref }) => ref), scenes: draft.scenes.map(({ fullPromptSource: _stamp, ...scene }) => scene) };
+  return "Translate this approved Burmese storyboard and ALL reference design prompts into precise English for Google Flow. Return the complete identical JSON structure, not a summary. Do not add ideas, actions, camera moves, characters or objects. Preserve scene/reference IDs, scene order, duration, angle, handoff, reference links, technical fields, and the exact voiceover/dialogue and caption text in their original language. Translate only descriptive text, including timed flowPrompt beats, sfx and music. Translate fullPrompt, fullImagePrompt and fullVideoPrompt IN FULL, including every layout, label, camera, timing, continuity and audio instruction. These are the final copyable prompts: do not append anything or replace them with summaries. Preserve exact spoken dialogue inside these prompts in its original language. Preserve all detail and timing. Omit promptLanguage, englishSource and englishJson.\n" + JSON.stringify(payload);
 }

@@ -1,3 +1,4 @@
+import { referencePromptMM, sceneImagePromptMM, sceneVideoPromptMM } from "./fullPrompts";
 import JSZip from "jszip";
 import type { ReferencePlanItem, Scene, Storyboard, VideoForm } from "../types";
 import { referenceImagePrompt, referenceImagePromptMyanmar } from "./automaticAssets";
@@ -34,6 +35,7 @@ function referenceDescriptions(scene: Scene, board: Storyboard): string {
   return scenePlanReferences(scene, board).map((item) => referenceCode(item, board) + " (" + item.title + "): " + item.prompt).join("\n");
 }
 export function sceneImagePrompt(scene: Scene, board: Storyboard, form: VideoForm): string {
+  if (scene.fullImagePrompt !== undefined) return scene.fullImagePrompt;
   return ["GENERATE ONE FINISHED SCENE IMAGE NOW. NO TEXT IN THE IMAGE.",
     "Create a single opening-frame still, not a collage or written plan. Do not render reference codes as text.",
     "Opening frame: " + (scene.openingFrame || scene.visualDescription),
@@ -49,6 +51,7 @@ export function sceneImagePrompt(scene: Scene, board: Storyboard, form: VideoFor
   ].join("\n\n");
 }
 export function sceneVideoPrompt(scene: Scene, board: Storyboard): string {
+  if (scene.fullVideoPrompt !== undefined) return scene.fullVideoPrompt;
   const previous = previousContinuousScene(scene, board);
   const time = (seconds: number) => String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
   const timedPrompt = /\d{2}:\d{2}/.test(scene.flowPrompt) ? scene.flowPrompt : scene.flowPrompt + "\n\n(00:00-" + time(scene.durationSeconds) + ")\n[Camera shot] " + scene.shotSize + "\n[Action] " + scene.action;
@@ -108,6 +111,7 @@ function referenceDescriptionsMyanmar(scene: Scene, board: Storyboard): string {
   return scenePlanReferences(scene, board).map((item) => referenceCode(item, board) + " (" + item.title + "): " + item.prompt).join("\n");
 }
 export function sceneImagePromptMyanmar(scene: Scene, board: Storyboard, form: VideoForm): string {
+  if (scene.fullImagePrompt !== undefined) return scene.fullImagePrompt;
   return [
     "ဤဇာတ်ကွက်အတွက် အပြီးသတ်အဖွင့်ပုံတစ်ပုံတည်းကို ဖန်တီးပါ။ ပုံထဲတွင် မလိုအပ်သောစာသား မပါစေရ။",
     "Collage သို့မဟုတ် စာဖြင့်ရှင်းပြထားသော plan မဟုတ်ဘဲ ဗီဒီယိုစတင်ချိန်၏ တစ်ကွက်တည်း still image ဖြစ်ရမည်။ Reference code များကို ပုံထဲတွင် မရေးပါနှင့်။",
@@ -126,6 +130,7 @@ export function sceneImagePromptMyanmar(scene: Scene, board: Storyboard, form: V
   ].filter(Boolean).join("\n\n");
 }
 export function sceneVideoPromptMyanmar(scene: Scene, board: Storyboard): string {
+  if (scene.fullVideoPrompt !== undefined) return scene.fullVideoPrompt;
   const previous = previousContinuousScene(scene, board);
   const time = (seconds: number) => String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
   const timedPrompt = /\d{2}:\d{2}/.test(scene.flowPrompt) ? scene.flowPrompt : scene.flowPrompt + "\n\n(00:00-" + time(scene.durationSeconds) + ")\n[ကင်မရာရိုက်ကွက်] " + scene.shotSize + "\n[လုပ်ဆောင်ချက်] " + scene.action;
@@ -156,6 +161,7 @@ export function sceneVideoPromptMyanmar(scene: Scene, board: Storyboard): string
   ].filter(Boolean).join("\n\n");
 }
 export function completePromptTextMyanmar(board: Storyboard, form: VideoForm): string {
+  board = { ...board, referencePlan: board.referencePlan?.map(r => ({ ...r, fullPrompt: r.fullPrompt ?? referencePromptMM(r, form) })), scenes: board.scenes.map(s => ({ ...s, fullImagePrompt: s.fullImagePrompt ?? sceneImagePromptMM(s, board, form), fullVideoPrompt: s.fullVideoPrompt ?? sceneVideoPromptMM(s, board, form) })) };
   return [
     "မြန်မာဗားရှင်း — ပြည့်စုံသော Flow Prompt Package",
     workflowGuideMM(),

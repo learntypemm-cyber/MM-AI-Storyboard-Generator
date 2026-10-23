@@ -7,6 +7,7 @@ const text = z.string().max(100_000);
 const id = z.string().min(1).max(200);
 const image = z.object({ name: text, mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/i), data: z.string().max(30_000_000).regex(/^[A-Za-z0-9+/]*={0,2}$/) });
 const scene = z.object({
+  fullImagePrompt: text.optional(), fullVideoPrompt: text.optional(), fullPromptSource: text.optional(),
   backgroundAngle: z.enum(["A", "B", "C", "D"]).optional(), sfx: text.optional(), backgroundMusic: text.optional(),
   preparationMode: z.enum(["text-to-video", "image-to-video"]).optional(),
   id, sceneNumber: z.number().int().positive(), title: text, durationSeconds: z.number().positive().max(600), objective: text,
@@ -15,7 +16,7 @@ const scene = z.object({
   negativePrompt: text, openingFrame: text, finalFrame: text, handoff: z.enum(["CUT", "CONTINUATION"]),
   locked: z.boolean().optional(), reviewStatus: z.enum(["draft", "review", "approved"]).optional(), reviewNotes: text.optional(), assetIds: z.array(id).max(4).optional(),
 });
-const board = z.object({ pipelineSource: z.string().max(3000000).optional(), promptLanguage: z.literal("my").optional(), englishSource: z.string().max(2000000).optional(), englishJson: z.string().max(2000000).optional(), referencePlan: z.array(z.object({ id, kind: z.enum(["character", "background", "prop"]), title: text, prompt: text, sceneIds: z.array(id).max(200) })).max(12).optional(), projectTitle: text, logline: text, visualBible: text, continuityRules: z.array(text), globalNegativePrompt: text, productionNotes: z.array(text), scenes: z.array(scene).max(200) });
+const board = z.object({ pipelineSource: z.string().max(3000000).optional(), promptLanguage: z.literal("my").optional(), englishSource: z.string().max(2000000).optional(), englishJson: z.string().max(2000000).optional(), referencePlan: z.array(z.object({ id, kind: z.enum(["character", "background", "prop"]), title: text, prompt: text, fullPrompt: text.optional(), fullPromptSource: text.optional(), sceneIds: z.array(id).max(200) })).max(12).optional(), projectTitle: text, logline: text, visualBible: text, continuityRules: z.array(text), globalNegativePrompt: text, productionNotes: z.array(text), scenes: z.array(scene).max(200) });
 export const presetSettingsSchema = z.object({
   goal: text, platform: z.enum(["TikTok", "Facebook Reels", "YouTube Shorts", "YouTube"]), targetDuration: z.number().positive().max(7200),
   language: z.enum(["Burmese", "English", "Burmese + English"]), audience: text,

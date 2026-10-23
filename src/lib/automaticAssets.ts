@@ -23,6 +23,7 @@ export function validateReferencePlan(value: unknown, board: Storyboard): Refere
 }
 
 export function referenceImagePrompt(item: ReferencePlanItem, form: VideoForm): string {
+  if (item.fullPrompt !== undefined) return item.fullPrompt;
   const style = form.visualStyle === "3D animation" ? "3D Pixar/Disney animation style, warm color palette, high-detail smooth glossy 3D render, expressive skin and hair" : form.visualStyle;
   const requirements = form.referenceNotes ? "User reference requirements: " + form.referenceNotes : "";
   const description = "Subject design: " + item.prompt + "\nUse the description for identity and appearance only; the sheet layout and label rules below take precedence over any older layout or no-label instructions in that description.";
@@ -78,6 +79,7 @@ const visualStyleMyanmar: Record<VideoForm["visualStyle"], string> = {
 };
 
 export function referenceImagePromptMyanmar(item: ReferencePlanItem, form: VideoForm): string {
+  if (item.fullPrompt !== undefined) return item.fullPrompt;
   const style = visualStyleMyanmar[form.visualStyle];
   const requirements = form.referenceNotes ? "အသုံးပြုသူ၏ ထပ်ဆောင်းလိုအပ်ချက်များ: " + form.referenceNotes : "";
   if (item.kind === "character") return [

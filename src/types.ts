@@ -22,13 +22,14 @@ export type Scene = {
   assetIds?: string[];
   id: string; sceneNumber: number; title: string; durationSeconds: number; objective: string;
   visualDescription: string; shotSize: string; cameraMovement: string; lighting: string; mood: string;
+  fullImagePrompt?: string; fullVideoPrompt?: string; fullPromptSource?: string;
   action: string; flowPrompt: string; voiceover: string; onscreenText: string; audioNotes: string;
   transition: string; referenceAssets: string[]; negativePrompt: string; openingFrame: string;
   finalFrame: string; handoff: "CUT" | "CONTINUATION";
 };
-export type ReferencePlanItem = { id: string; kind: "character" | "background" | "prop"; title: string; prompt: string; sceneIds: string[] };
+export type ReferencePlanItem = { fullPrompt?: string; fullPromptSource?: string; id: string; kind: "character" | "background" | "prop"; title: string; prompt: string; sceneIds: string[] };
 export type ScreenplayChoice = { id: string; title: string; screenplay: string; versions: string[]; polishCandidate?: string; polishFor?: string };
-export type ScriptReference = { id: string; kind: "character" | "background" | "prop"; title: string; description: string; englishDescription?: string; englishSource?: string; imageRevision?: string };
+export type ScriptReference = { fullPrompt?: string; fullPromptSource?: string; id: string; kind: "character" | "background" | "prop"; title: string; description: string; englishDescription?: string; englishSource?: string; imageRevision?: string };
 export type ScriptScene = { id: string; title: string; location: string; action: string; dialogue: string; durationSeconds: number; referenceIds: string[] };
 export type ScreenplayWorkflow = { choices: ScreenplayChoice[]; selectedId: string; approvedScript?: string; inventory?: { source: string; references: ScriptReference[]; scenes: ScriptScene[] }; approvedInventory?: string };
 export type Storyboard = {
