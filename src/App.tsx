@@ -626,7 +626,7 @@ function App() {
       await preserveCurrentProject();
       setMediaReady(true); lastEdit.current = { label: "", time: 0 };
       setProjectId(makeId()); setHistory([]); setSelectedSceneIds([]); setVersionId("");
-      setForm(DEFAULT_FORM); setScreenplay(undefined); setConcepts([]); setSelectedConceptId(""); setStoryboard(null);
+      setForm(DEFAULT_FORM); setScreenplay(undefined); setExistingScreenplayDraft(""); setExistingScreenplayTitle(""); setConcepts([]); setSelectedConceptId(""); setStoryboard(null);
       setStep("brief"); setNotice("Ready for a new topic. Your previous draft is saved in My projects."); setShowAdvanced(false);
     } catch (caught) {
       setError("Could not save your draft. Your current work is still open. " + (caught instanceof Error ? caught.message : "Export a ZIP backup."));
@@ -909,7 +909,7 @@ function App() {
             <div className="form-content">
               <Field label="Screenplay ခေါင်းစဉ် (optional)"><input className="input" maxLength={120} value={existingScreenplayTitle} onChange={(event) => setExistingScreenplayTitle(event.target.value)} placeholder="ဥပမာ — ကိုမင်းမင်း၏ ဇာတ်လမ်း" /></Field>
               <Field label="ရှိပြီးသား screenplay ကို ဒီမှာ paste လုပ်ပါ" hint="Scene heading ဥပမာ — ၁။ INT. GAMING ROOM - DAY သို့မဟုတ် INT. GAMING ROOM - DAY။ Scene အရေအတွက်ကို မူရင်းအတိုင်း ထိန်းထားပါမယ်။">
-                <textarea className="input topic-input" rows={12} maxLength={100000} value={existingScreenplayDraft} onChange={(event) => setExistingScreenplayDraft(event.target.value)} placeholder={"၁။ INT. ROOM - DAY\nဇာတ်ကောင်က ...\n\n၂။ EXT. STREET - DAY\nဇာတ်ကောင်က ..."} />
+                <textarea className="input topic-input" aria-label="ရှိပြီးသား screenplay ကို ဒီမှာ paste လုပ်ပါ" rows={12} maxLength={100000} value={existingScreenplayDraft} onChange={(event) => setExistingScreenplayDraft(event.target.value)} placeholder={"၁။ INT. ROOM - DAY\nဇာတ်ကောင်က ...\n\n၂။ EXT. STREET - DAY\nဇာတ်ကောင်က ..."} />
               </Field>
               <div className="workflow-toolbar">
                 <label className="upload-button"><Upload size={15} /> TXT / MD ဖိုင်တင်မယ်<input type="file" accept=".txt,.md,.fountain,text/plain,text/markdown" disabled={Boolean(busy) || !hydrated} onChange={(event) => {
