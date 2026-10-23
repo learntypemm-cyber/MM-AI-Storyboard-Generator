@@ -70,7 +70,7 @@ export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: Vide
 }
 
 export function shotImagePromptText(shot: ShotBreakdown, scene: Scene, board: Storyboard, form: VideoForm): string {
-  if (shot.imagePrompt && /^GENERATE THE STORYBOARD IMAGE NOW\./i.test(shot.imagePrompt.trim())) return shot.imagePrompt;
+  if (shot.imagePrompt?.trim()) return shot.imagePrompt;
   const references = (board.referencePlan || [])
     .filter((reference) => !reference.sceneIds.length || reference.sceneIds.includes(scene.id))
     .map((reference) => reference.kind + " " + reference.title + ": " + reference.prompt);
