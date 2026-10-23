@@ -647,3 +647,11 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .shot-validation.valid { border: 1px solid #d9efe6; background: #f5fcf8; color: #24785f; }
 .shot-copy-still { margin: -7px 0 14px; align-self: flex-start; }
 .optional-integration > .comfy-ui-studio, .optional-integration > div { padding: 15px; }
+
+.shot-approval { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 16px; padding: 12px 13px; border: 1px solid #e2e9f3; border-radius: 9px; background: #fbfcff; cursor: pointer; }
+.shot-approval input { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; accent-color: #278b6b; }
+.shot-approval span { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.shot-approval strong { color: #4d6280; font-size: 10px; }
+.shot-approval small { color: #8b98ad; font-size: 9px; line-height: 1.7; }
+.shot-approval:has(input:checked) { border-color: #d1ebdf; background: #f6fcf8; }
+.shot-approval:has(input:checked) strong { color: #267d62; }
