@@ -31,6 +31,6 @@ describe("generateJson", () => {
     }), { status: 200, headers: { "Content-Type": "application/json" } })));
 
     await expect(generateJson("test-key", "gemini-3.8-flash", "Return a large JSON object."))
-      .rejects.toThrow(/65,536-token output limit/);
+      .rejects.toThrow(/output token limit \(65,536 tokens\)/);
   });
 });
