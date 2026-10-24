@@ -49,13 +49,15 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
     const next = { ...value, approvedScript: scriptSource(value, form) };
     onChange(next);
     const raw = await generateJson<unknown>(apiKey, model, inventoryRequest(next, form), form.referenceImages);
-    const normalized = normalizeInventoryReferenceIds(raw);\n    const parsed = scriptInventorySchema.parse(normalized.value);
+    const normalized = normalizeInventoryReferenceIds(raw);
+    const parsed = scriptInventorySchema.parse(normalized.value);
     const expectedInventoryScenes = selected.sourceType === "existing" ? selectedSceneCount : expectedSceneCount;
     if (parsed.scenes.length !== expectedInventoryScenes) {
       throw new Error("Scene စာရင်းက " + parsed.scenes.length + " ခုပဲ ရလာပါတယ်။ ဒီဇာတ်ညွှန်းအတွက် " + expectedInventoryScenes + " ခုလိုအပ်ပါတယ်။ ပြန်စမ်းကြည့်ပါ။");
     }
     const ids = new Map(parsed.references.map(r => [r.id, crypto.randomUUID()]));
-    onChange({ ...next, approvedInventory: undefined, inventory: { source: scriptSource(next, form), references: parsed.references.map(r => ({ id: ids.get(r.id)!, title: r.title, kind: r.kind, description: r.description })), scenes: parsed.scenes.map(s => ({ ...s, id: crypto.randomUUID(), referenceIds: s.referenceIds.map(id => ids.get(id)!) })) } });\n    if (normalized.trimmedSceneNumbers.length) setMessage("AI က reference ၃ ခုထက်ပိုထည့်ထားတဲ့ Scene " + normalized.trimmedSceneNumbers.join(", ") + " ကို တစ်ခုလျှင် reference ၃ ခုအထိ အလိုအလျောက်လျှော့ထားပါတယ်။ Character / Background / Prop ရွေးချယ်မှုတွေကို အောက်မှာ စစ်ဆေးပြီး လိုအပ်ရင် ပြင်ဆင်ပါ။");
+    onChange({ ...next, approvedInventory: undefined, inventory: { source: scriptSource(next, form), references: parsed.references.map(r => ({ id: ids.get(r.id)!, title: r.title, kind: r.kind, description: r.description })), scenes: parsed.scenes.map(s => ({ ...s, id: crypto.randomUUID(), referenceIds: s.referenceIds.map(id => ids.get(id)!) })) } });
+    if (normalized.trimmedSceneNumbers.length) setMessage("AI က reference ၃ ခုထက်ပိုထည့်ထားတဲ့ Scene " + normalized.trimmedSceneNumbers.join(", ") + " ကို တစ်ခုလျှင် reference ၃ ခုအထိ အလိုအလျောက်လျှော့ထားပါတယ်။ Character / Background / Prop ရွေးချယ်မှုတွေကို အောက်မှာ စစ်ဆေးပြီး လိုအပ်ရင် ပြင်ဆင်ပါ။");
   });
   const generate = () => run("storyboard", async () => {
     if (!inventoryApproved(value, form)) return;
