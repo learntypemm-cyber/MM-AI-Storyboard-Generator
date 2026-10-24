@@ -3,7 +3,7 @@ import type { ImageAsset, Scene, ShotBreakdown, Storyboard, VideoForm } from "..
 import { assetHandle } from "./assetStore";
 
 const promptText = z.string().trim().min(1).max(30000);
-const generatedShotSchema = z.object({
+export const generatedShotSchema = z.object({
   shotNumber: z.number().int().positive(),
   title: promptText,
   purpose: promptText,
@@ -24,7 +24,7 @@ const generatedShotSchema = z.object({
 });
 
 export const shotBreakdownOutputSchema = z.object({
-  shots: z.array(generatedShotSchema).min(2).max(4),
+  shots: z.array(generatedShotSchema).min(1).max(4),
 }).superRefine((value, context) => {
   const numbers = value.shots.map((shot) => shot.shotNumber);
   if (new Set(numbers).size !== numbers.length) {
@@ -32,7 +32,67 @@ export const shotBreakdownOutputSchema = z.object({
   }
 });
 
-export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: VideoForm, assets: ImageAsset[] = []): string {
+export function shotReferences(shot: ShotBreakdown, scene: Scene, board: Storyboard, assets: ImageAsset[]) {
+  const registry = (board.referencePlan || []).filter(ref => !ref.sceneIds.length || ref.sceneIds.includes(scene.id));
+  const names = shot.referenceAssets;
+  return registry.filter(ref => {
+    const asset = assets.find(item => item.id === ref.id);
+    return names.includes(ref.title) || names.includes(ref.id) || Boolean(asset && names.includes(assetHandle(asset)));
+  })
+    .map(ref => ({ ...ref, asset: assets.find(a => a.id === ref.id) }));
+}
+
+// Stable content snapshots avoid invalidating shots for review notes or unrelated assets.
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, canonical(v)]));
+  return value;
+}
+const imageFingerprints = new WeakMap<ImageAsset, string>();
+function imageFingerprint(asset: ImageAsset) {
+  const cached = imageFingerprints.get(asset);
+  if (cached) return cached;
+  const data = asset.data;
+  let hash = 2166136261;
+  for (let i = 0; i < data.length; i++) hash = Math.imul(hash ^ data.charCodeAt(i), 16777619);
+  const result = data.length + ":" + (hash >>> 0).toString(16);
+  imageFingerprints.set(asset, result);
+  return result;
+}
+export function shotSourceSnapshot(shot: ShotBreakdown, scene: Scene, board: Storyboard, form: VideoForm, assets: ImageAsset[] = []): string {
+  const { shots: _shots, locked: _locked, reviewStatus: _status, reviewNotes: _notes, fullPromptSource: _stamp, ...sourceScene } = scene;
+  const references = shotReferences(shot, scene, board, assets).map(({ asset, ...ref }) => ({ ...ref, fullPromptSource: undefined,
+    image: asset ? { id: asset.id, title: asset.title, handle: assetHandle(asset), prompt: asset.prompt, fingerprint: imageFingerprint(asset) } : null }));
+  const position = scene.shots?.findIndex(item => item.id === shot.id) ?? -1;
+  const previous = position > 0 ? scene.shots![position - 1] : undefined;
+  return JSON.stringify(canonical({ scene: sourceScene, references, incomingState: previous ? { id: previous.id, finalFrame: previous.finalFrame } : null, visualBible: board.visualBible, continuityRules: board.continuityRules,
+    negative: board.globalNegativePrompt, settings: { visualStyle: form.visualStyle, aspectRatio: form.aspectRatio, flowModel: form.flowModel, generationMode: form.generationMode, clipDuration: form.clipDuration, audioPolicy: form.audioPolicy, textPolicy: form.textPolicy, language: form.language } }));
+}
+export function shotNeedsReview(shot: ShotBreakdown, scene: Scene, board: Storyboard, form: VideoForm, assets: ImageAsset[] = []): boolean {
+  return !shot.sourceSnapshot || shot.sourceSnapshot !== shotSourceSnapshot(shot, scene, board, form, assets);
+}
+export function shotTranslationSource(shot: ShotBreakdown): string {
+  const { englishJson: _json, englishSource: _source, imageApproved: _approved, sourceSnapshot: _snapshot, ...draft } = shot;
+  return JSON.stringify(canonical(draft));
+}
+export function translatedShot(shot: ShotBreakdown): ShotBreakdown | null {
+  if (!shot.englishJson || shot.englishSource !== shotTranslationSource(shot)) return null;
+  try {
+    const parsed = generatedShotSchema.safeParse(JSON.parse(shot.englishJson));
+    return parsed.success ? { ...shot, ...parsed.data, id: shot.id, promptLanguage: undefined } : null;
+  } catch { return null; }
+}
+export function validateShotTranslation(raw: unknown, shot: ShotBreakdown): ShotBreakdown {
+  const value = generatedShotSchema.parse(raw);
+  if (value.shotNumber !== shot.shotNumber || value.durationSeconds !== shot.durationSeconds || value.voiceover !== shot.voiceover || JSON.stringify(value.referenceAssets) !== JSON.stringify(shot.referenceAssets)) throw new Error("Translation changed timing, references or spoken words. Your Burmese draft is preserved.");
+  for (const name of shot.referenceAssets) if (shot.flowPrompt.includes(name) && !value.flowPrompt.includes(name)) throw new Error("Translation changed a reference name. Your Burmese draft is preserved.");
+  return { ...shot, englishJson: JSON.stringify(value), englishSource: shotTranslationSource(shot) };
+}
+export function shotTranslationRequest(shot: ShotBreakdown): string {
+  return "Translate ALL descriptive fields of this approved Burmese shot into complete English, including imagePrompt, flowPrompt, frames, action, audio directions and negative prompt. Return one shot JSON object with the identical fields. Do not summarize or invent details. Preserve exact English character names, referenceAssets, @handles, shotNumber, durationSeconds, timecodes and every spoken line verbatim in its original language, including voiceover and speech inside flowPrompt.\n" + JSON.stringify(generatedShotSchema.parse(shot));
+}
+
+export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: VideoForm, assets: ImageAsset[] = [], count: number | "auto" = "auto"): string {
   const references = (board.referencePlan || [])
     .filter((reference) => !reference.sceneIds.length || reference.sceneIds.includes(scene.id))
     .map((reference) => {
@@ -50,6 +110,7 @@ export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: Vide
       cameraMovement: scene.cameraMovement, lighting: scene.lighting, mood: scene.mood, action: scene.action,
       flowPrompt: scene.flowPrompt, voiceover: scene.voiceover, audioNotes: scene.audioNotes,
       openingFrame: scene.openingFrame, finalFrame: scene.finalFrame, referenceAssets: scene.referenceAssets,
+      sfx: scene.sfx, backgroundMusic: scene.backgroundMusic, backgroundAngle: scene.backgroundAngle, handoff: scene.handoff,
     },
     availableReferences: references,
     settings: {
@@ -60,14 +121,14 @@ export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: Vide
   };
   return [
     "You are a professional film director and Google Flow prompt engineer. Return valid JSON only: {shots:[...]}.",
-    "Break the ONE supplied screenplay scene into 2 to 4 distinct, chronological, filmable shots. These shot cards are individual clip prompts the user will manually generate in Google Flow and assemble in an external video editor. Do not create images or videos.",
+    "Break the ONE supplied screenplay scene into " + (count === "auto" ? "1 to 4 distinct, chronological, filmable shots. Prefer ONE shot for a simple action; add coverage only when necessary" : count + " distinct, chronological, filmable shots") + ". These shot cards are individual clip prompts the user will manually generate in Google Flow and assemble in an external video editor. Do not create images or videos.",
     "Preserve the original scene's story, character identities, wardrobe, props, location, dialogue and outcome. Do not invent characters, plot events, products or locations. Ensure chronological continuity across the shot list: each later shot's opening state must plausibly follow the preceding shot's final state, including who holds which prop, body position, wardrobe and physical condition. Describe that incoming state in full inside each prompt; never use vague previous-shot references. Vary framing intentionally (establishing wide, medium action, close-up insert, or reaction) only when each angle adds a clear storytelling purpose. Avoid redundant coverage.",
-    "Each shot must stand alone as a complete copy-paste English video prompt. Follow the user text policy in settings.textPolicy. For the default no-readable-text policy, start flowPrompt with exactly 'NO TEXT IN THE IMAGE.'. Only use 'INTENTIONAL TEXT IN THE IMAGE: ...' when the user explicitly specifies exact words and where they should appear. Never invent text. Include subject appearance, exact environment, one clear primary action, composition, shot size, camera movement, lighting, mood, temporal movement, and explicit opening and final frames. Never say 'same as the previous shot' or 'as before', and never rely on hidden model memory. Do not ask Flow to render camera labels, shot numbers, subtitles, readable UI, grids, reference labels or watermarks unless the user explicitly requests that exact visible text.",
+    "Each shot must stand alone as a complete, detailed Burmese draft that can later be translated into a copy-paste English video prompt. Keep required policy markers exact. Follow the user text policy in settings.textPolicy. For the default no-readable-text policy, start flowPrompt with exactly 'NO TEXT IN THE IMAGE.'. Only use 'INTENTIONAL TEXT IN THE IMAGE: ...' when the user explicitly specifies exact words and where they should appear. Never invent text. Include subject appearance, exact environment, one clear primary action, composition, shot size, camera movement, lighting, mood, temporal movement, and explicit opening and final frames. Never say 'same as the previous shot' or 'as before', and never rely on hidden model memory. Do not ask Flow to render camera labels, shot numbers, subtitles, readable UI, grids, reference labels or watermarks unless the user explicitly requests that exact visible text.",
     "Use 2 to 4 contiguous timed action ranges inside each flowPrompt, beginning at 00:00 and ending at 00:" + String(form.clipDuration).padStart(2, "0") + ". These are directions within one continuous setup, not a sequence of cuts; avoid camera resets. No gaps, overlaps or invented action. Time labels must never appear as visible text.",
     "When a provided reference has a handle, repeat that exact canonical @Handle in every applicable imagePrompt and flowPrompt; never invent, rename or alter a provided handle. Keep exact asset titles in referenceAssets. These prompts will be used with the matching reference image attachments.",
     "Also return imagePrompt for a pre-generation still QA gate. It must begin exactly with 'GENERATE THE STORYBOARD IMAGE NOW.' then direct the model to create exactly ONE opening-frame still, not a contact sheet, collage or video. Apply the same text policy as settings.textPolicy: default to 'NO TEXT IN THE IMAGE.', or allow intentional text only when exact words and placement are explicitly supplied. Preserve the provided identities, wardrobe, environment, props, lighting, composition, aspect ratio and attached reference images. The still should be reviewed before the user generates the video.",
     "Each shot durationSeconds must equal " + form.clipDuration + " seconds, matching the chosen Flow clip setting. Shots are separate clips; the user will manually trim and assemble them to keep the scene at approximately " + scene.durationSeconds + " seconds. Use aspect ratio " + form.aspectRatio + ". Do not put multiple hard cuts or different camera setups inside one shot prompt.",
-    "Keep voiceover/dialogue in " + form.language + " and include it only if the supplied scene needs it. Technical fields and flowPrompt should be in precise natural English. Only use the supplied reference registry; list exact reference titles in referenceAssets. Include useful negativePrompt, audioNotes, sfx and backgroundMusic fields.",
+    "IMPORTANT OUTPUT LANGUAGE OVERRIDE: Write ALL descriptive fields, imagePrompt and flowPrompt IN BURMESE IN FULL, not a summary. Keep the required English text-policy markers, timecodes, English character names and exact reference titles/handles unchanged. English translation is a later user-requested step. Preserve spoken dialogue/voiceover verbatim in its original language, distribute it chronologically across shots without omitting, inventing or repeating lines. Preserve supplied sfx and backgroundMusic. Only use the supplied reference registry; list only references actually visible in this shot. Include complete negativePrompt, audioNotes, sfx and backgroundMusic fields.",
     "Return exactly this structure. shotNumber starts at 1 and increases by one. Return every field:",
     '{"shots":[{"shotNumber":1,"title":"string","purpose":"string","shotSize":"string","cameraMovement":"string","action":"string","durationSeconds":' + form.clipDuration + ',"openingFrame":"string","finalFrame":"string","imagePrompt":"GENERATE THE STORYBOARD IMAGE NOW. Create one opening still. NO TEXT IN THE IMAGE. ...","flowPrompt":"NO TEXT IN THE IMAGE. ...","referenceAssets":["exact reference title"],"negativePrompt":"string","voiceover":"string","audioNotes":"string","sfx":"string","backgroundMusic":"string"}]}',
     "SOURCE DATA (use only this information):",
@@ -77,12 +138,8 @@ export function shotBreakdownRequest(scene: Scene, board: Storyboard, form: Vide
 
 export function shotImagePromptText(shot: ShotBreakdown, scene: Scene, board: Storyboard, form: VideoForm, assets: ImageAsset[] = []): string {
   if (shot.imagePrompt?.trim()) return shot.imagePrompt;
-  const references = (board.referencePlan || [])
-    .filter((reference) => !reference.sceneIds.length || reference.sceneIds.includes(scene.id))
-    .map((reference) => {
-      const asset = assets.find((item) => item.id === reference.id);
-      return (asset ? assetHandle(asset) + " - " : "") + reference.kind + " " + reference.title + ": " + reference.prompt;
-    });
+  const references = shotReferences(shot, scene, board, assets)
+    .map((reference) => (reference.asset ? assetHandle(reference.asset) + " - " : "") + reference.kind + " " + reference.title + ": " + reference.prompt);
   return [
     "GENERATE THE STORYBOARD IMAGE NOW.",
     "Create exactly ONE finished still image for the opening frame of Scene " + scene.sceneNumber + ", Shot " + shot.shotNumber + ". Do not create a contact sheet, collage, grid, storyboard layout or video.",
@@ -109,10 +166,16 @@ export function validateShotPrompt(shot: ShotBreakdown, form: VideoForm, board: 
   const imagePrompt = shotImagePromptText(shot, scene, board, form, assets).trim();
   const issues: string[] = [];
   if (!/^NO TEXT IN THE IMAGE\./i.test(firstLine) && !/^INTENTIONAL TEXT IN THE IMAGE:\s*\S/i.test(firstLine)) issues.push("Add a text policy on the first line.");
-  if (words < 80) issues.push("Video prompt is short; add subject, action, camera, lighting and continuity details.");
-  if (!/opening frame|first frame/i.test(prompt)) issues.push("Opening-frame direction is missing.");
-  if (!/final frame|last frame/i.test(prompt)) issues.push("Final-frame direction is missing.");
+  if (shot.promptLanguage !== "my" && words < 80) issues.push("Video prompt is short; add subject, action, camera, lighting and continuity details.");
+  if (!/opening frame|first frame|အဖွင့်|အစပုံ/i.test(prompt)) issues.push("Opening-frame direction is missing.");
+  if (!/final frame|last frame|အဆုံး|နောက်ဆုံး/i.test(prompt)) issues.push("Final-frame direction is missing.");
   if (ranges.length < 2 || !/00:00\s*[-–]/.test(prompt) || !ranges.some((range) => range.endsWith(endTime))) issues.push("Use contiguous time-coded action ranges from 00:00 through " + endTime + ".");
+  let previousEnd = 0;
+  for (const range of ranges) {
+    const [start, end] = range.split(/\s*[-–]\s*/).map(time => { const [m, s] = time.split(":").map(Number); return s < 60 ? m * 60 + s : NaN; });
+    if (start !== previousEnd || !Number.isFinite(end) || end <= start || end > shot.durationSeconds) { issues.push("Timing has a gap, overlap or invalid range. Keep action ranges continuous and ordered."); break; }
+    previousEnd = end;
+  }
   if (/as before|same as (?:the )?previous|same person as|continue from previous shot/i.test(prompt)) issues.push("Replace vague previous-shot references with explicit details and attached references.");
   if (/(?:#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})\b|\b\d{3,4}\s?K\b)/i.test(prompt)) issues.push("Replace hex colours and Kelvin values with plain visual descriptions.");
   if (prompt.includes("—")) issues.push("Replace em dashes with a full stop, comma or regular hyphen.");
@@ -120,10 +183,10 @@ export function validateShotPrompt(shot: ShotBreakdown, form: VideoForm, board: 
   if (promptHandles.some((handle) => !/^@[A-Z][A-Za-z0-9]*$/.test(handle))) issues.push("Use canonical @PascalCase reference handles without spaces or hyphens.");
   if (!shot.title.trim() || !shot.action.trim()) issues.push("Shot title and action are required.");
   if (!/^GENERATE THE STORYBOARD IMAGE NOW\./i.test(imagePrompt)) issues.push("Opening still prompt must start with GENERATE THE STORYBOARD IMAGE NOW.");
-  const requiredHandles = (board.referencePlan || [])
-    .filter((reference) => !reference.sceneIds.length || reference.sceneIds.includes(scene.id))
-    .filter((reference) => ["character", "background"].includes(reference.kind))
-    .map((reference) => assets.find((asset) => asset.id === reference.id))
+  const linkedReferences = shotReferences(shot, scene, board, assets);
+  for (const name of shot.referenceAssets) if (!linkedReferences.some(ref => ref.title === name || ref.id === name || (ref.asset && assetHandle(ref.asset) === name))) issues.push("Unknown reference: " + name + ". Choose a reference from this scene's registry.");
+  const requiredHandles = linkedReferences
+    .map((reference) => reference.asset)
     .filter((asset): asset is ImageAsset => Boolean(asset))
     .map(assetHandle);
   for (const handle of requiredHandles) {
@@ -141,10 +204,14 @@ export function validateShotPrompt(shot: ShotBreakdown, form: VideoForm, board: 
 }
 
 export function shotPromptText(shot: ShotBreakdown, scene: Scene, board?: Storyboard, form?: VideoForm, assets: ImageAsset[] = []): string {
+  const stale = board && form && shotNeedsReview(shot, scene, board, form, assets);
+  shot = translatedShot(shot) || shot;
   const stillPrompt = board && form ? shotImagePromptText(shot, scene, board, form, assets) : (shot.imagePrompt || "GENERATE THE STORYBOARD IMAGE NOW. Create one opening still. NO TEXT IN THE IMAGE.");
   return [
     "SCENE " + String(scene.sceneNumber).padStart(2, "0") + " - " + scene.title,
     "SHOT " + String(shot.shotNumber).padStart(2, "0") + " - " + shot.title,
+    "Prompt language: " + (shot.promptLanguage === "my" ? "BURMESE DRAFT - English translation not prepared" : "ENGLISH"),
+    "Source review: " + (stale ? "REVIEW REQUIRED - source changed or legacy source is unknown" : "Current"),
     "Purpose: " + shot.purpose,
     "Duration: " + shot.durationSeconds + " seconds",
     "Shot size: " + shot.shotSize,
@@ -153,8 +220,9 @@ export function shotPromptText(shot: ShotBreakdown, scene: Scene, board?: Storyb
     "Final frame: " + shot.finalFrame,
     "OPENING STILL PROMPT",
     stillPrompt,
-    "Still review status: " + (shot.imageApproved ? "APPROVED" : "NOT APPROVED - review the opening still in Google Flow before using the video prompt."),
+    "Still review status: " + (shot.imageApproved && !stale ? "APPROVED" : "NOT APPROVED - review the opening still in Google Flow before using the video prompt."),
     "References: " + (shot.referenceAssets.join("; ") || "Use the approved scene reference list."),
+    "Attach the matching reference images manually in Flow. A name or @handle alone does not upload or bind an image.",
     "GOOGLE FLOW VIDEO PROMPT",
     shot.flowPrompt,
     "Negative prompt: " + shot.negativePrompt,

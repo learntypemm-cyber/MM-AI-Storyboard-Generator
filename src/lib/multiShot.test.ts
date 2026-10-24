@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ImageAsset, Scene, ShotBreakdown, Storyboard, VideoForm } from "../types";
 import { shotBreakdownOutputSchema, shotBreakdownRequest, shotImagePromptText, shotPackageText, validateShotPrompt } from "./multiShot";
+import { shotSourceSnapshot, shotNeedsReview, shotReferences, shotTranslationSource, validateShotTranslation, translatedShot } from "./multiShot";
+import { storyboardSchema } from "./projectArchive";
 
 const form: VideoForm = {
   topic: "A coffee shop story", goal: "Tell a warm story", platform: "YouTube Shorts",
@@ -48,6 +50,52 @@ const shot: ShotBreakdown = {
 };
 
 describe("multi-shot breakdown", () => {
+  it("allows a single shot and prepares Burmese drafts before translation", () => {
+    expect(shotBreakdownOutputSchema.parse({ shots: [shot] }).shots).toHaveLength(1);
+    expect(shotBreakdownRequest(scene, board, form, [], 1)).toContain("into 1 distinct");
+    expect(shotBreakdownRequest(scene, board, form)).toContain("IN BURMESE IN FULL");
+  });
+
+  it("tracks source changes but ignores review notes and unrelated references", () => {
+    const tracked = { ...shot, sourceSnapshot: shotSourceSnapshot(shot, scene, board, form) };
+    expect(shotNeedsReview(tracked, scene, board, form)).toBe(false);
+    expect(shotNeedsReview(tracked, { ...scene, reviewNotes: "Keep", locked: true }, board, form)).toBe(false);
+    expect(shotNeedsReview(tracked, { ...scene, action: "Put the cup down" }, board, form)).toBe(true);
+    expect(shotNeedsReview(tracked, scene, { ...board, referencePlan: board.referencePlan!.map(ref => ({ ...ref, prompt: "A dark cafe" })) }, form)).toBe(true);
+    expect(shotNeedsReview(tracked, scene, { ...board, referencePlan: [...board.referencePlan!, { id: "elsewhere", kind: "background", title: "Beach", prompt: "Beach", sceneIds: ["scene-2"] }] }, form)).toBe(false);
+    expect(shotNeedsReview(tracked, scene, board, { ...form, audioPolicy: "No speech" })).toBe(true);
+    expect(shotNeedsReview(shot, scene, board, form)).toBe(true);
+  });
+
+  it("flags replacement images with unchanged IDs and resolves only shot references", () => {
+    const asset: ImageAsset = { id: "bg1", kind: "background", title: "Cafe", prompt: "Cafe", data: "AAAA", mimeType: "image/png", createdAt: "today", useAsReference: false };
+    const tracked = { ...shot, sourceSnapshot: shotSourceSnapshot(shot, scene, board, form, [asset]) };
+    expect(shotNeedsReview(tracked, scene, board, form, [{ ...asset, data: "BBBB" }])).toBe(true);
+    expect(shotReferences({ ...shot, referenceAssets: [] }, scene, board, [asset])).toEqual([]);
+  });
+
+  it("rejects timing gaps despite valid first and last timecodes", () => {
+    expect(validateShotPrompt({ ...shot, flowPrompt: longFlowPrompt.replace("00:03-00:08", "00:04-00:08") }, form, board, scene).some(issue => issue.includes("gap, overlap"))).toBe(true);
+  });
+
+  it("keeps Burmese and invalidates English after creative edits", () => {
+    const draft: ShotBreakdown = { ...shot, promptLanguage: "my", action: "ခွက်ယူသည်" };
+    const translated = validateShotTranslation(shot, draft);
+    expect(translated.action).toBe(draft.action);
+    expect(translatedShot(translated)?.action).toBe(shot.action);
+    expect(translatedShot({ ...translated, action: "ခွက်ချသည်" })).toBeNull();
+    expect(shotTranslationSource({ ...draft, imageApproved: true })).toBe(shotTranslationSource(draft));
+    expect(() => validateShotTranslation({ ...shot, voiceover: "Invented speech" }, draft)).toThrow();
+    expect(translatedShot({ ...translated, englishJson: "not JSON" })).toBeNull();
+  });
+
+  it("preserves snapshots and bilingual drafts through save schema and exports", () => {
+    const draft = validateShotTranslation(shot, { ...shot, promptLanguage: "my", sourceSnapshot: shotSourceSnapshot(shot, scene, board, form) });
+    const saved = storyboardSchema.parse({ ...board, scenes: [{ ...scene, shots: [draft] }] });
+    expect(saved.scenes[0].shots?.[0]).toEqual(draft);
+    expect(shotPackageText(saved, form)).toContain("Prompt language: ENGLISH");
+    expect(shotPackageText(saved, form)).toContain("does not upload or bind an image");
+  });
   it("requires an image prompt and a self-contained video prompt for each generated shot", () => {
     const parsed = shotBreakdownOutputSchema.parse({ shots: [{ ...shot }, { ...shot, shotNumber: 2 }] });
     expect(parsed.shots[0].imagePrompt).toContain("GENERATE THE STORYBOARD IMAGE NOW.");
@@ -56,7 +104,7 @@ describe("multi-shot breakdown", () => {
 
   it("asks for a small, chronological shot list without changing the source scene", () => {
     const request = shotBreakdownRequest(scene, board, form);
-    expect(request).toContain("2 to 4 distinct, chronological");
+    expect(request).toContain("1 to 4 distinct, chronological");
     expect(request).toContain("GENERATE THE STORYBOARD IMAGE NOW.");
     expect(request).toContain('"sceneNumber":' + scene.sceneNumber);
     expect(request).toContain('"clipDurationSeconds":8');

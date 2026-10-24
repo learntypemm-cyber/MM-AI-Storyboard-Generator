@@ -10,6 +10,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import "fake-indexeddb/auto";
 import JSZip from "jszip";
 import App from "./App";
+import ShotBreakdownStudio from "./components/ShotBreakdownStudio";
 import { prepareAutomaticAssets, validateReferencePlan, flowSceneBundle, referenceImagePrompt, referenceImagePromptMyanmar, referencePromptPack, translateAssetDescriptionBilingual } from "./lib/automaticAssets";
 import { generateJson, listGeminiModels, probeGeminiModel } from "./lib/gemini";
 import { checkpoint, patchScene, reorderScene, sceneRepairPatch } from "./lib/boardEditing";
@@ -32,6 +33,26 @@ const concept = { id: "concept", title: "Coffee time", style: "Cinema", hook: "W
 
 beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 afterEach(() => { cleanup(); });
+
+it("allows copying unreviewed shots and shows source changes without spending API calls", async () => {
+  const clipboard = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: clipboard } });
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const source = scene("one", true);
+  const shot = { id: "shot1", shotNumber: 1, title: "Cup", purpose: "Lift cup", shotSize: "Medium", cameraMovement: "Static", action: "Lift cup", durationSeconds: 8, openingFrame: "Cup on table", finalFrame: "Cup raised", flowPrompt: completeRegeneratedFlowPrompt, referenceAssets: [], negativePrompt: "No text", voiceover: "Hello", audioNotes: "Quiet", sfx: "Cup", backgroundMusic: "None", imageApproved: false };
+  render(<ShotBreakdownStudio board={{ ...board(), scenes: [{ ...source, shots: [shot] }] }} form={form} assets={[]} apiKey="" model="" busy={false} requireKey={vi.fn()} onChange={vi.fn()} onBusy={vi.fn()} onError={vi.fn()} onDownloadZip={vi.fn()} onSave={vi.fn()} />);
+  expect(screen.getByLabelText("Shots per scene")).toBeTruthy();
+  expect((screen.getByRole("button", { name: "Regenerate shot list" }) as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(screen.getByText(/View \/ edit 1 shot prompts/));
+  fireEvent.click(screen.getByText("Cup", { selector: ".shot-card-title" }));
+  const copy = screen.getByRole("button", { name: "Copy full shot prompt" }) as HTMLButtonElement;
+  expect(copy.disabled).toBe(false);
+  fireEvent.click(copy);
+  await waitFor(() => expect(clipboard).toHaveBeenCalled());
+  expect(clipboard.mock.calls[0][0]).toContain("REVIEW REQUIRED");
+  expect(screen.getByText("Source changed · ပြန်စစ်ရန်")).toBeTruthy();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
 
 describe("scene protection and identity", () => {
   it("accepts only valid creative fields from model repairs", () => {
@@ -429,7 +450,9 @@ describe("screenplay approval workflow", () => {
     const inputLabel = "ရှိပြီးသား screenplay ကို ဒီမှာ paste လုပ်ပါ";
     await waitFor(() => expect((screen.getByLabelText(inputLabel) as HTMLTextAreaElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText(inputLabel), { target: { value: draft } });
-    fireEvent.click(screen.getByRole("button", { name: "ရှိပြီးသား Screenplay မှ ဆက်လုပ်မယ်" }));
+    const continueButton = screen.getByRole("button", { name: "ရှိပြီးသား Screenplay မှ ဆက်လုပ်မယ်" }) as HTMLButtonElement;
+    await waitFor(() => expect(continueButton.disabled).toBe(false));
+    fireEvent.click(continueButton);
     await waitFor(() => expect(screen.getByLabelText("မြန်မာဇာတ်ညွှန်း")).toBeTruthy());
     const imported = screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement;
     expect(imported.value).toContain("1. INT. GAMING ROOM - DAY");
