@@ -15,6 +15,7 @@ export type VideoConcept = {
   whyItWorks: string; storyArc: string[]; estimatedDuration: number;
 };
 export type ShotBreakdown = {
+  sourceSnapshot?: string; promptLanguage?: "my"; englishJson?: string; englishSource?: string;
   id: string; shotNumber: number; title: string; purpose: string; shotSize: string; cameraMovement: string;
   action: string; durationSeconds: number; openingFrame: string; finalFrame: string; imagePrompt?: string; imageApproved?: boolean; flowPrompt: string;
   referenceAssets: string[]; negativePrompt: string; voiceover: string; audioNotes: string; sfx: string; backgroundMusic: string;

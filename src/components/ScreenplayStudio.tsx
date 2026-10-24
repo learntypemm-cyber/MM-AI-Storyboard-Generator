@@ -61,7 +61,9 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
     if (!inventoryApproved(value, form)) return;
     const raw = await generateJson<unknown>(apiKey, model, approvedSceneRequest(value, form), form.referenceImages);
     const parsed = storyboardSchema.parse(raw);
-    onBoard(bindApprovedBoard(parsed, value, form));
+    const nextBoard = bindApprovedBoard(parsed, value, form);
+    // Preserve edited shots for stable scenes; their snapshots flag stale inputs.
+    onBoard({ ...nextBoard, scenes: nextBoard.scenes.map(scene => ({ ...scene, shots: board?.scenes.find(previous => previous.id === scene.id)?.shots })) });
     setMessage("အတည်ပြုထားသော ဇာတ်ညွှန်းနှင့် reference စာရင်းအတိုင်း မြန်မာ scene prompts ထုတ်ပြီးပါပြီ။");
   });
   const patchRef = (id: string, patch: Partial<NonNullable<ScreenplayWorkflow['inventory']>['references'][number]>) => onChange({ ...value, inventory: { ...value.inventory!, references: value.inventory!.references.map(r => r.id === id ? { ...r, ...patch } : r) } });
