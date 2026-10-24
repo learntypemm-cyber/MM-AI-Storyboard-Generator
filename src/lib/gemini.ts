@@ -175,7 +175,7 @@ export async function generateJson<T>(
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
-      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 16384 },
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 65536 },
     }),
     signal,
   });
@@ -191,7 +191,7 @@ export async function generateJson<T>(
   }
   const candidate = payload.candidates?.[0];
   if (candidate?.finishReason === "MAX_TOKENS") {
-    throw new Error("Gemini reached the output token limit before finishing the JSON. The app now allows up to 16,384 output tokens; try generating fewer scenes or choose a model with a larger output limit.");
+    throw new Error("Gemini reached the model's 65,536-token output limit before finishing the JSON. Try generating fewer scenes per request or choose a model with a larger supported output limit.");
   }
   const output = candidate?.content?.parts?.map((part) => part.text || "").join("\n");
   if (!output) {
