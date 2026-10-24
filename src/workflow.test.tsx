@@ -258,7 +258,7 @@ describe("Gemini JSON generation", () => {
     );
     await expect(generateJson("key", "gemini-test-flash", "Return a complete storyboard JSON object")).rejects.toThrow(/output token limit/i);
     const body = JSON.parse(String(request.mock.calls[0][1]?.body));
-    expect(body.generationConfig.maxOutputTokens).toBe(16384);
+    expect(body.generationConfig.maxOutputTokens).toBe(65536);
   });
 
   it("does not accept malformed partial JSON as a generated prompt package", async () => {

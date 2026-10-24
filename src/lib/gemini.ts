@@ -191,7 +191,7 @@ export async function generateJson<T>(
   }
   const candidate = payload.candidates?.[0];
   if (candidate?.finishReason === "MAX_TOKENS") {
-    throw new Error("Gemini reached the model's 65,536-token output limit before finishing the JSON. Try generating fewer scenes per request or choose a model with a larger supported output limit.");
+    throw new Error("Gemini reached the output token limit (65,536 tokens) before finishing the JSON. Try generating fewer scenes per request or choose a model with a larger supported output limit.");
   }
   const output = candidate?.content?.parts?.map((part) => part.text || "").join("\n");
   if (!output) {
