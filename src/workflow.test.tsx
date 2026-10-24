@@ -1,5 +1,5 @@
 import { materializeFullPrompts, fullPromptsReady, scenePromptSource, referencePromptSource } from "./lib/fullPrompts";
-import { screenplayChoicesSchema, scriptSource, inventoryRequest, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema, screenplayRequest, requiredScreenplaySceneCount, normalizeExistingScreenplay, screenplaySceneCount, screenplayCompletenessIssues } from "./lib/screenplayWorkflow";
+import { screenplayChoicesSchema, scriptSource, inventoryRequest, inventorySource, inventoryApproved, pipelineCurrent, bindApprovedBoard, scriptInventorySchema, screenplayWorkflowSchema, screenplayRequest, requiredScreenplaySceneCount, normalizeExistingScreenplay, screenplaySceneCount, screenplayCompletenessIssues, normalizeInventoryReferenceIds } from "./lib/screenplayWorkflow";
 import { draftSource, translatedBoard, validateTranslation } from "./lib/draftTranslation";
 import BurmeseDraftEditor from "./components/BurmeseDraftEditor";
 import { sceneInstructions, sceneBackground, completePromptText, completePromptTextMyanmar, completePromptTextBilingual, promptPackageZip, referenceCode, sceneImagePrompt, scenePreparationMode, sceneVideoPrompt } from "./lib/promptPackage";
@@ -491,6 +491,26 @@ describe("screenplay approval workflow", () => {
     expect(objectArray.choices[0].screenplay).toContain("1. INT. BEDROOM - DAY");
     expect(objectArray.choices[0].screenplay).toContain("မေမီ: အဖြေကို မှတ်မိပြီ။");
   });
+  it("limits generated scene references to three unique IDs and reports scenes needing review", () => {
+    const inventory = {
+      references: [
+        { id: "may", kind: "character", title: "May", description: "Main character" },
+        { id: "cafe", kind: "background", title: "Cafe", description: "Cafe interior" },
+        { id: "cup", kind: "prop", title: "Cup", description: "Ceramic cup" },
+        { id: "sign", kind: "prop", title: "Sign", description: "Wall sign" },
+      ],
+      scenes: [
+        { id: "one", title: "Cafe", location: "Cafe", action: "May drinks tea", dialogue: "", durationSeconds: 8, referenceIds: ["may", "cafe", "cup", "sign", "cafe"] },
+        { id: "two", title: "Close-up", location: "Cafe", action: "A cup on a table", dialogue: "", durationSeconds: 8, referenceIds: ["cup", "cafe"] },
+      ],
+    };
+    const normalized = normalizeInventoryReferenceIds(inventory);
+    expect(normalized.trimmedSceneNumbers).toEqual([1]);
+    expect((normalized.value as typeof inventory).scenes[0].referenceIds).toEqual(["may", "cafe", "cup"]);
+    expect((normalized.value as typeof inventory).scenes[1].referenceIds).toEqual(["cup", "cafe"]);
+    expect(scriptInventorySchema.safeParse(normalized.value).success).toBe(true);
+  });
+
   it("requires exactly three complete screenplay choices", () => {
     expect(() => screenplayWorkflowSchema.parse({ choices: [], selectedId: "" })).toThrow();
     expect(() => screenplayChoicesSchema.parse({ choices: [1, 2].map(n => ({ title: String(n), screenplay: "Draft" })) })).toThrow();

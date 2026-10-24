@@ -138,6 +138,30 @@ export function screenplayCompletenessIssues(screenplay: string, form: Pick<Vide
 }
 const reference = z.object({ id, kind: z.enum(["character", "background", "prop"]), title: required, description: required, fullPrompt: text.optional(), fullPromptSource: text.optional(), englishDescription: text.optional(), englishSource: text.optional(), imageRevision: text.optional() });
 const shot = z.object({ id, title: required, location: required, action: required, dialogue: text, durationSeconds: z.number().positive().max(600), referenceIds: z.array(id).max(3) });
+/** Keep AI-generated inventory compatible with the three-reference-per-scene limit.
+ * Keeps reference IDs in their original priority order, removes duplicates, and
+ * reports which scene numbers had to be shortened so the UI can ask users to review them.
+ */
+export function normalizeInventoryReferenceIds(value: unknown): { value: unknown; trimmedSceneNumbers: number[] } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, trimmedSceneNumbers: [] };
+  const root = value as Record<string, unknown>;
+  if (!Array.isArray(root.scenes)) return { value, trimmedSceneNumbers: [] };
+
+  const trimmedSceneNumbers: number[] = [];
+  const scenes = root.scenes.map((scene, index) => {
+    if (!scene || typeof scene !== "object" || Array.isArray(scene)) return scene;
+    const record = scene as Record<string, unknown>;
+    if (!Array.isArray(record.referenceIds)) return scene;
+
+    const originalIds = record.referenceIds;
+    const uniqueIds = originalIds.filter((referenceId, position, all) => all.indexOf(referenceId) === position);
+    if (originalIds.length > 3 || uniqueIds.length > 3) trimmedSceneNumbers.push(index + 1);
+    return { ...record, referenceIds: uniqueIds.slice(0, 3) };
+  });
+
+  return { value: { ...root, scenes }, trimmedSceneNumbers };
+}
+
 export const scriptInventorySchema = z.object({ references: z.array(reference).max(12), scenes: z.array(shot).min(1).max(200) }).superRefine((v, ctx) => {
   if (new Set(v.references.map(r => r.id)).size !== v.references.length || new Set(v.scenes.map(s => s.id)).size !== v.scenes.length) ctx.addIssue({ code: "custom", message: "Duplicate reference or scene IDs" });
   for (const s of v.scenes) if (s.referenceIds.some(id => !v.references.some(r => r.id === id))) ctx.addIssue({ code: "custom", message: "Scene contains an unknown reference" });
@@ -219,7 +243,7 @@ export function inventoryRequest(w: ScreenplayWorkflow, form: VideoForm): string
   const sceneRule = selected?.sourceType === "existing"
     ? "This is the user's EXISTING screenplay. Preserve its scene count and order exactly; do not rewrite, add, remove, merge or split scenes."
     : "Never merge two numbered scenes into one inventory scene, never split one numbered scene into multiple scenes, and never omit a numbered scene.";
-  return "Extract a production inventory ONLY from this approved Burmese screenplay. JSON {references:[{id,kind:'character'|'background'|'prop',title,description}],scenes:[{id,title,location,action,dialogue,durationSeconds,referenceIds:[]} ]}. Write descriptions in Burmese. Use unique short IDs; reuse one reference for each identity/outfit and location. Include visible single-scene characters, important props and environments, no invented extra cast. Character description: face/hair/build, complete wardrobe, palette and identifying details; location: spatial layout, fixed objects, materials, light direction. IMPORTANT: produce EXACTLY " + count + " inventory scenes, one for each numbered screenplay scene in the same order. " + sceneRule + " Set each durationSeconds to " + form.clipDuration + " to match the requested Google Flow clip length; final editing can trim the combined clips to the target " + form.targetDuration + " seconds. Copy exact dialogue into dialogue; do not paraphrase or omit it. Each shot links at most 3 needed reference IDs; at most 12 references total. No video prompts yet.\n" + scriptSource(w, form);
+  return "Extract a production inventory ONLY from this approved Burmese screenplay. JSON {references:[{id,kind:'character'|'background'|'prop',title,description}],scenes:[{id,title,location,action,dialogue,durationSeconds,referenceIds:[]} ]}. Write descriptions in Burmese. Use unique short IDs; reuse one reference for each identity/outfit and location. Include visible single-scene characters, important props and environments, no invented extra cast. Character description: face/hair/build, complete wardrobe, palette and identifying details; location: spatial layout, fixed objects, materials, light direction. IMPORTANT: produce EXACTLY " + count + " inventory scenes, one for each numbered screenplay scene in the same order. " + sceneRule + " Set each durationSeconds to " + form.clipDuration + " to match the requested Google Flow clip length; final editing can trim the combined clips to the target " + form.targetDuration + " seconds. Copy exact dialogue into dialogue; do not paraphrase or omit it. Each shot links at most 3 needed reference IDs. List them in priority order: main visible character(s) first, then the location/background, then only an essential visible prop if space remains. Include only references actually visible or materially needed in that scene; never attach the full reference registry to every scene. At most 12 references total. No video prompts yet.\n" + scriptSource(w, form);
 }
 export function approvedSceneRequest(w: ScreenplayWorkflow, form: VideoForm): string {
   return "Generate a Burmese storyboard ONLY from the approved screenplay AND edited inventory below. Return JSON {projectTitle,logline,visualBible,continuityRules:[],globalNegativePrompt,productionNotes:[],scenes:[{id,sceneNumber,title,durationSeconds,objective,visualDescription,shotSize,cameraMovement,lighting,mood,action,flowPrompt,voiceover,onscreenText,audioNotes,transition,referenceAssets:[],negativePrompt,openingFrame,finalFrame,handoff:'CUT'|'CONTINUATION',backgroundAngle:'A'|'B'|'C'|'D',sfx,backgroundMusic}]}. One scene per inventory scene, same IDs, order, duration and exact dialogue. Do not invent characters, wardrobe, locations, props, dialogue or events. Refer to approved reference IDs/names; full identity descriptions must match the registry. Technical keys/enums stay English. Override English-output language in the guidance: ALL descriptions and flowPrompt must be Burmese for review.\n" + sceneDetailRequirements + "\nAPPROVED SOURCE:\n" + inventorySource(w, form);
