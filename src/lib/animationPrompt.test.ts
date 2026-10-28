@@ -49,6 +49,20 @@ describe("cinematic animation prompts", () => {
     expect((output.match(/0:02–0:05/g) || [])).toHaveLength(1);
   });
 
+  it("reads AI-generated inline action times rather than duplicating an invented competing timeline", () => {
+    const inline = "00:00-00:03 Bobo walks toward the entrance. 00:03-00:06 Myamya turns and says hello. 00:06-00:08 Bobo raises his arms.";
+    const parsed = existingTimedBeats(inline, 8);
+    expect(parsed).toHaveLength(3);
+    expect(parsed[0].description).toBe("Bobo walks toward the entrance.");
+    expect(parsed[1].description).toBe("Myamya turns and says hello.");
+    const video = cinematicAnimationPrompt({ ...scene, flowPrompt: inline }, board, settings);
+    for (const range of ["0:00–0:03", "0:03–0:06", "0:06–0:08"]) expect(video).toContain(range);
+    expect(video).not.toContain("0:00–0:02");
+    expect(video).not.toContain("SCENE DIRECTION:");
+    expect(video).not.toContain("ADDITIONAL SCENE DETAIL:");
+    expect((video.match(/Myamya turns and says hello\./g) || [])).toHaveLength(1);
+  });
+
   it("rejects malformed timeline ranges and adapts legacy scenes to clip duration without new events", () => {
     expect(existingTimedBeats("00:00-00:02\nFirst\n00:04-00:08\nSecond", 8)).toHaveLength(0);
     const short = cinematicAnimationPrompt({ ...scene, durationSeconds: 4 }, board, settings);
