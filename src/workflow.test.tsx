@@ -236,7 +236,7 @@ describe("editor workflow", () => {
     expect((screen.getAllByLabelText("Scene title")[1] as HTMLInputElement).value).toBe("New scene");
     fireEvent.click(screen.getByRole("button", { name: "Delete scene 2" }));
     expect(screen.getAllByLabelText("Scene title")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Video brief" }));
+    fireEvent.click(screen.getByRole("button", { name: /Video brief/ }));
     fireEvent.click(screen.getByRole("button", { name: /Production settings/ }));
     fireEvent.change(screen.getByLabelText("Preset name"), { target: { value: "My preset" } });
     fireEvent.click(screen.getByRole("button", { name: "Save preset" }));
@@ -446,6 +446,7 @@ describe("screenplay approval workflow", () => {
 
   it("continues from a screenplay pasted by the user without generating a replacement", async () => {
     render(<App />);
+    fireEvent.click(screen.getByText("Screenplay ရေးပြီးသားရှိလား?"));
     const draft = "INT. GAMING ROOM - DAY\nကိုမင်းမင်းက ကွန်ပျူတာရှေ့မှာ အရေးကြီးစာတမ်းကို ရေးသားနေသည်။\n\nEXT. STREET - DAY\nကိုမင်းမင်းသည် အပြင်သို့ထွက်လာပြီး ဖုန်းကိုကြည့်ကာ နောက်တစ်ဆင့်ကို ဆုံးဖြတ်သည်။";
     const inputLabel = "ရှိပြီးသား screenplay ကို ဒီမှာ paste လုပ်ပါ";
     await waitFor(() => expect((screen.getByLabelText(inputLabel) as HTMLTextAreaElement).disabled).toBe(false));

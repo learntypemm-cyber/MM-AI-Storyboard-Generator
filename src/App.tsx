@@ -7,7 +7,7 @@ import { sceneDetailRequirements } from "./lib/promptGuidance";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight,
+  AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, MoreHorizontal,
   Clapperboard, Copy, Download, FileText, Film, FolderOpen, KeyRound,
   LayoutDashboard, Lightbulb, MonitorPlay, Plus, RefreshCw, Save, Settings,
   Sparkles, Trash2, Upload, Volume2, Wand2, X, Zap, Clock3, ArrowUp, ArrowDown, Lock, Unlock, History,
@@ -789,12 +789,6 @@ function App() {
           <div><div className="brand-name">MM Storyboard</div><div className="brand-subtitle">FLOW PROMPT STUDIO</div></div>
         </div>
         <button className="new-project-button" disabled={Boolean(busy) || !hydrated} onClick={newProject}><Plus size={17} /> New project <span>⌘ K</span></button>
-        <div className="sidebar-label">WORKSPACE</div>
-        <button className={step === "brief" ? "side-link active" : "side-link"} onClick={() => setStep("brief")}><LayoutDashboard size={17} /> Video brief</button>
-        <button className={step === "concepts" ? "side-link active" : "side-link"} onClick={() => screenplay || concepts.length ? setStep("concepts") : setNotice("ဇာတ်ညွှန်း ၃ မျိုး အရင်ထုတ်ပါ။")}><Lightbulb size={17} /> ဇာတ်ညွှန်း / References <span className="side-count">{screenplay?.choices.length || concepts.length || "–"}</span></button>
-        <button className={step === "storyboard" ? "side-link active" : "side-link"} onClick={() => boardCurrent ? setStep("storyboard") : setNotice(storyboard ? "Screenplay သို့မဟုတ် references ပြောင်းထားလို့ storyboard အဟောင်းဖြစ်နေပါပြီ။ Scene prompts ကိုပြန်အတည်ပြုပါ။" : "Build a storyboard first to use this step.")}><Film size={17} /> Storyboard <span className="side-count">{storyboard?.scenes.length || "–"}</span></button>
-        <button className={step === "shots" ? "side-link active" : "side-link"} onClick={() => boardCurrent ? setStep("shots") : setNotice(storyboard ? "Storyboard အဟောင်းဖြစ်နေပါပြီ။ Scene prompts ကိုပြန်အတည်ပြုပြီးမှ Shot list ကိုသုံးပါ။" : "Scene prompts generate လုပ်ပြီးမှ Shot list ကိုဖွင့်နိုင်ပါတယ်.")}><Film size={17} /> Shot list / Flow export <span className="side-count">{storyboard?.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0) || "–"}</span></button>
-        {showAdvanced && <button className={assetStudioOpen ? "side-link active" : "side-link"} disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={17} /> Asset Studio <span className="side-count">NEW</span></button>}
         <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
         <div className="saved-list">
           {savedProjects.slice(0, 4).map((project) => <button className="saved-item" key={project.id} disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)} title={project.title}><FolderOpen size={15} /><span>{project.title}</span></button>)}
@@ -812,12 +806,17 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "ဇာတ်ညွှန်းနှင့် Reference အတည်ပြုခြင်း" : step === "storyboard" ? "Scene prompts" : "Shot list / Flow export"}</strong></div>
           <div className="topbar-actions">
-            <button className="primary-button small-primary" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={15} /> Save project</button>
-            <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
-            <label className="quiet-button archive-upload">Import ZIP<input type="file" accept=".zip" disabled={Boolean(busy) || !hydrated} onChange={(event) => { void importZip(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
-            <button className="secondary-button" onClick={() => setLibraryOpen(true)}><FolderOpen size={16} /> My projects</button>
-            <button className="settings-button" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}><Settings size={16} /> Settings</button>
-            <div className={apiKey ? "avatar-dot online" : "avatar-dot"}>M</div>
+            <button className="primary-button small-primary" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={15} /> Save</button>
+            <details className="topbar-more">
+              <summary className="secondary-button more-menu-trigger"><MoreHorizontal size={16} /> More</summary>
+              <div className="topbar-more-menu">
+                <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
+                <label className="quiet-button archive-upload"><Upload size={15} /> Import ZIP<input type="file" accept=".zip" disabled={Boolean(busy) || !hydrated} onChange={(event) => { void importZip(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
+                <button className="secondary-button" onClick={() => setLibraryOpen(true)}><FolderOpen size={15} /> My projects</button>
+                <button className="settings-button" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}><Settings size={15} /> Settings</button>
+                {showAdvanced && <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={15} /> Asset Studio</button>}
+              </div>
+            </details>
           </div>
         </header>
 
@@ -836,7 +835,7 @@ function App() {
               { id: "brief", number: "01", label: "Video brief", icon: FileText },
               { id: "concepts", number: "02", label: "Screenplay / refs", icon: Lightbulb },
               { id: "storyboard", number: "03", label: "Scene prompts", icon: Clapperboard },
-              { id: "shots", number: "04", label: "Shot list / export", icon: Film },
+              { id: "shots", number: "04", label: "Flow prompts", icon: Film },
             ].map((item, index) => {
               const Icon = item.icon;
               const active = step === item.id;
@@ -907,18 +906,17 @@ function App() {
               </div>}
               <div className="brief-footer">
                 <div className="footer-info"><span className="secure-icon"><KeyRound size={14} /></span><span>{apiKey ? "Gemini API is configured" : "Set up a Gemini API key to start"} <button className="inline-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>{apiKey ? "Manage key" : "Set up API key"}</button></span></div>
-                <span className="field-hint">ခေါင်းစဉ် → ဇာတ်ညွှန်း ၃ မျိုး → ရွေး/ပြင်/အတည်ပြု → Character / Background → Scene prompts</span>
                 <button className="primary-button generate-button" onClick={() => void generateScreenplays()} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "screenplays" ? "ဇာတ်ညွှန်းရေးနေပါတယ်…" : "မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပေး"}</button>
               </div>
             </div>
           </section>}
 
-          {step === "brief" && <section className="panel existing-screenplay-panel">
-            <div className="section-heading">
+          {step === "brief" && <details className="panel existing-screenplay-panel">
+            <summary className="section-heading existing-screenplay-summary">
               <div className="section-icon purple"><FileText size={18} /></div>
-              <div><h2>Screenplay ရေးပြီးသားရှိလား?</h2><p>AI ကို screenplay အသစ်ရေးခိုင်းစရာမလိုပါ။ ရှိပြီးသားစာသားကနေ Character / Background / Scene စာရင်းကို ဆက်ထုတ်နိုင်ပါတယ်။</p></div>
-              <div className="panel-kicker">USE YOUR SCRIPT</div>
-            </div>
+              <div><h2>Screenplay ရေးပြီးသားရှိလား?</h2><p>ရှိပြီးသားစာသားကို အသုံးပြုချင်ရင် ဒီနေရာကိုဖွင့်ပါ။</p></div>
+              <div className="panel-kicker">OPTIONAL · EXPAND</div>
+            </summary>
             <div className="form-content">
               <Field label="Screenplay ခေါင်းစဉ် (optional)"><input className="input" maxLength={120} value={existingScreenplayTitle} onChange={(event) => setExistingScreenplayTitle(event.target.value)} placeholder="ဥပမာ — ကိုမင်းမင်း၏ ဇာတ်လမ်း" /></Field>
               <Field label="ရှိပြီးသား screenplay ကို ဒီမှာ paste လုပ်ပါ" hint="Scene heading ဥပမာ — ၁။ INT. GAMING ROOM - DAY သို့မဟုတ် INT. GAMING ROOM - DAY။ Scene အရေအတွက်ကို မူရင်းအတိုင်း ထိန်းထားပါမယ်။">
@@ -941,7 +939,7 @@ function App() {
                 <button className="primary-button" disabled={Boolean(busy) || !hydrated || !existingScreenplayDraft.trim()} onClick={() => void startFromExistingScreenplay()}><ChevronRight size={16} />ရှိပြီးသား Screenplay မှ ဆက်လုပ်မယ်</button>
               </div>
             </div>
-          </section>}
+          </details>}
 
           {!screenplay && concepts.length > 0 && (step === "concepts" || step === "storyboard") && <section className="results-section">
             <div className="section-heading results-heading">

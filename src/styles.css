@@ -332,7 +332,7 @@ textarea.input { resize: vertical; min-height: 64px; }
   .topbar { min-height: 58px; padding: 0 15px; }
   .breadcrumb span { display: none; }
   .topbar-actions { gap: 6px; }
-  .topbar-actions .quiet-button { display: none; }
+  .topbar-actions > .quiet-button { display: none; }
   .settings-button { padding: 8px; font-size: 0; }
   .settings-button svg { width: 17px; height: 17px; }
   .page-content { padding: 22px 12px; }
@@ -696,3 +696,40 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .shot-runtime-estimate.warning strong { color: #926b23; }
 .shot-runtime-estimate.warning span { color: #79633b; }
 .shot-runtime-estimate.warning small { color: #917a4b; }
+
+
+/* UX cleanup: one workflow navigator, one primary header action, and optional details on demand. */
+.topbar-more { position: relative; }
+.topbar-more > summary { list-style: none; cursor: pointer; }
+.topbar-more > summary::-webkit-details-marker { display: none; }
+.topbar-more[open] > summary { border-color: #b9c9ed; color: #2b5bce; background: #f7f9ff; }
+.topbar-more-menu {
+  position: absolute; z-index: 120; top: calc(100% + 8px); right: 0;
+  display: grid; gap: 4px; min-width: 190px; padding: 7px;
+  background: #fff; border: 1px solid #e3e9f2; border-radius: 11px;
+  box-shadow: 0 14px 36px rgba(27, 48, 86, .14);
+}
+.topbar-more-menu > button, .topbar-more-menu > label {
+  display: flex; width: 100%; min-height: 38px; justify-content: flex-start;
+  padding: 9px 11px; text-align: left; border-radius: 7px; font-size: 11px;
+}
+.topbar-more-menu .settings-button { padding: 9px 11px; font-size: 11px; }
+.topbar-more-menu .archive-upload { padding-right: 11px; }
+.existing-screenplay-summary { list-style: none; cursor: pointer; }
+.existing-screenplay-summary::-webkit-details-marker { display: none; }
+.existing-screenplay-summary:focus-visible { outline: 3px solid rgba(50, 103, 237, .24); outline-offset: -3px; }
+.existing-screenplay-summary .panel-kicker { margin-left: auto; white-space: nowrap; }
+.page-content { padding-top: 24px; }
+.welcome-row { margin-bottom: 17px; }
+.welcome-row h1 { margin-top: 9px; margin-bottom: 6px; font-size: clamp(26px, 2.5vw, 32px); letter-spacing: -1px; }
+.welcome-stat { display: none; }
+.stepper { padding: 11px 15px; margin-bottom: 15px; box-shadow: none; }
+.step-connector { margin-left: 15px; margin-right: 15px; }
+@media (max-width: 650px) {
+  .topbar-more-menu { position: fixed; top: 58px; right: 12px; min-width: 195px; }
+  .topbar-more-menu .settings-button { padding: 9px 11px; font-size: 11px; }
+  .existing-screenplay-summary { padding-right: 12px; }
+  .existing-screenplay-summary .panel-kicker { font-size: 8px; letter-spacing: .3px; padding: 5px 6px; }
+  .stepper { padding: 10px 8px; box-shadow: none; }
+  .step-connector { width: 8px; margin-left: 2px; margin-right: 2px; }
+}
