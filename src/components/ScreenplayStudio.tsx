@@ -12,7 +12,7 @@ type Props = { value: ScreenplayWorkflow; form: VideoForm; board: Storyboard | n
 const englishCharacterName = (value: string) => /^[A-Za-z][A-Za-z0-9 _'-]{0,79}$/.test(value.trim());
 export default function ScreenplayStudio({ value, form, board, projectId, assets, busy, apiKey, model, requireKey, onChange, onBoard, onBusy, onError }: Props) {
   const [message, setMessage] = useState("");
-  const [studioTab, setStudioTab] = useState<"concepts" | "script" | "references" | "review">("concepts");
+  const [studioTab, setStudioTab] = useState<"concepts" | "script" | "references" | "review">(value.inventory ? "references" : value.selectedId ? "script" : "concepts");
   const [selectedRefId, setSelectedRefId] = useState<string | null>(null);
   const [selectedInventorySceneId, setSelectedInventorySceneId] = useState<string | null>(null);
   const selected = value.choices.find(c => c.id === value.selectedId);
@@ -61,6 +61,7 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
     }
     const ids = new Map(parsed.references.map(r => [r.id, crypto.randomUUID()]));
     onChange({ ...next, approvedInventory: undefined, inventory: { source: scriptSource(next, form), references: parsed.references.map(r => ({ id: ids.get(r.id)!, title: r.title, kind: r.kind, description: r.description })), scenes: parsed.scenes.map(s => ({ ...s, id: crypto.randomUUID(), referenceIds: s.referenceIds.map(id => ids.get(id)!) })) } });
+    setStudioTab("references");
     if (normalized.trimmedSceneNumbers.length) setMessage("AI က reference ၃ ခုထက်ပိုထည့်ထားတဲ့ Scene " + normalized.trimmedSceneNumbers.join(", ") + " ကို တစ်ခုလျှင် reference ၃ ခုအထိ အလိုအလျောက်လျှော့ထားပါတယ်။ Character / Background / Prop ရွေးချယ်မှုတွေကို အောက်မှာ စစ်ဆေးပြီး လိုအပ်ရင် ပြင်ဆင်ပါ။");
   });
   const generate = () => run("storyboard", async () => {
@@ -202,7 +203,7 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
           <label className="field">Flow မှာထုတ်ထားသော reference ပုံတွဲရန်<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { void upload(ref.id, e.target.files?.[0]); e.currentTarget.value = ''; }} /></label>
           {image && <><img style={{ maxWidth: 260, maxHeight: 200, objectFit: 'contain' }} src={assetAsReference(image).previewUrl} alt={ref.title} />{image.prompt !== ref.description && <p role="alert">ဖော်ပြချက်ပြောင်းထားလို့ ပုံအဟောင်းနဲ့ ကိုက်မကိုက် ပြန်စစ်ပါ။</p>}</>}
         </fieldset></article>;
-      })}</div>}
+      })}<button type="button" className="primary-button script-next-step" onClick={() => setStudioTab("review")}>Review scenes & approve →</button></div>}
       {studioTab === "review" && <div className="script-review-workspace">
       <nav className="script-inventory-scene-list" aria-label="Review inventory scenes">
         {value.inventory.scenes.map((scene,i) => <button type="button" key={scene.id} className={(selectedInventorySceneId || value.inventory!.scenes[0]?.id) === scene.id ? "active" : ""} onClick={() => setSelectedInventorySceneId(scene.id)}>Scene {i+1} · {scene.title}</button>)}
