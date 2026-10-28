@@ -58,13 +58,45 @@ export function auditScene(scene: Scene): AuditItem[] {
   ];
 }
 
+/** Detect missing planned references and conflicting scene state before Flow export.
+ * This is a deterministic safety net, not a substitute for visual review.
+ */
+export function auditSceneContinuity(scene: Scene, board: Storyboard): AuditItem[] {
+  const planned = board.referencePlan || [];
+  const linked = planned.filter(ref => ref.sceneIds.includes(scene.id));
+  const combined = [scene.openingFrame, scene.visualDescription, scene.action, scene.flowPrompt].join(" ").toLowerCase();
+  const characterRefs = planned.filter(ref => ref.kind === "character");
+  const missing = characterRefs.filter(ref => {
+    const name = ref.title.trim().toLowerCase();
+    if (!name || !new RegExp("(^|[^\\\\p{L}\\\\p{N}])" + name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\export function auditStoryboard(storyboard: Storyboard | null, form: VideoForm): AuditItem[] {") + "($|[^\\\\p{L}\\\\p{N}])", "iu").test(combined)) return false;
+    return !linked.some(entry => entry.id === ref.id);
+  });
+  const hasBackground = linked.some(ref => ref.kind === "background");
+  const backgroundRefs = planned.filter(ref => ref.kind === "background");
+  const mentionedBackground = backgroundRefs.filter(ref => ref.title.trim() && combined.includes(ref.title.trim().toLowerCase()));
+  const missingBackground = mentionedBackground.filter(ref => !linked.some(entry => entry.id === ref.id));
+  const beforeAction = /before (?:the )?(?:fireworks|balloon|action|launch) (?:begin|start)/i.test(scene.openingFrame);
+  const underway = /(?:fireworks (?:explode|burst)|balloon (?:ascends|rises))/i.test(scene.visualDescription);
+  return [
+    {label:"Character reference coverage",ok:missing.length===0,detail:missing.length ? "Missing character reference: "+missing.map(r=>r.title).join(", ") : "All named planned characters are linked."},
+    {label:"Location reference coverage",ok:missingBackground.length===0,detail:missingBackground.length ? "Missing background reference: "+missingBackground.map(r=>r.title).join(", ") : hasBackground ? "A background is linked." : "No known planned background referenced."},
+    {label:"Opening-state consistency",ok:!(beforeAction&&underway),detail:beforeAction&&underway ? "Opening frame says before action but visual description depicts action underway." : "No known opening-state conflict detected."}
+  ];
+}
+
 export function auditStoryboard(storyboard: Storyboard | null, form: VideoForm): AuditItem[] {
   if (!storyboard || !storyboard.scenes.length) return [];
   const audits = storyboard.scenes.map(auditScene);
+  const continuityAudits = storyboard.scenes.map(scene => auditSceneContinuity(scene, storyboard));
   const total = storyboard.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0);
   const negative = storyboard.globalNegativePrompt.toLowerCase();
 
   return [
+    {
+      label: "Reference and opening-state continuity",
+      ok: continuityAudits.every(items => items.every(item => item.ok)),
+      detail: continuityAudits.filter(items => items.every(item => item.ok)).length + " of " + continuityAudits.length + " scenes pass deterministic continuity checks."
+    },
     {
       label: "Scene prompts",
       ok: audits.every((items) => items.every((item) => item.ok)),
