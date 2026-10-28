@@ -814,6 +814,26 @@ it("keeps Burmese drafts and translated English separate, invalidates exports af
 });
 
 
+it("preserves exact Burmese spoken dialogue in translated English animation prompt exports", () => {
+  const draft = board();
+  draft.promptLanguage = "my";
+  draft.scenes[0].voiceover = 'မြမြ: "ဘိုဘိုရေ မြန်မြန်လုပ်၊ ကားထွက်တော့မယ်။"';
+  const full = materializeFullPrompts(draft, form);
+  const raw = structuredClone(full);
+  raw.scenes[0].fullVideoPrompt = [
+    "Animate the supplied opening image into an eight-second film.",
+    "0:00–0:03\\nBobo arrives.",
+    "DIALOGUE:\\nMohmoh: Hurry up, the bus is leaving.",
+    "ENDING FRAME:\\nBobo holds the ticket.",
+  ].join("\\n\\n");
+  const output = validateTranslation(raw, full);
+  const video = sceneVideoPrompt(output.scenes[0], output);
+  expect(video).toContain(draft.scenes[0].voiceover);
+  expect(video).not.toContain("Hurry up, the bus is leaving.");
+  expect(video).toContain("ENDING FRAME:\\nBobo holds the ticket.");
+  expect(output.scenes[0].voiceover).toBe(draft.scenes[0].voiceover);
+});
+
 it("persists screenplay approvals through ZIP and rejects unapproved scene generation", async () => {
   const workflow: ScreenplayWorkflow = { choices: [{ id: "choice", title: "Coffee", screenplay: "မေကော်ဖီသောက်သည်", versions: ["မူဟောင်း"] }], selectedId: "choice" };
   workflow.approvedScript = scriptSource(workflow, form);
