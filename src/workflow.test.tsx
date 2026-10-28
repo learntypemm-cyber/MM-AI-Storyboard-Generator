@@ -157,7 +157,7 @@ describe("editor workflow", () => {
     expect(screen.getByRole("navigation", { name: "Production stages" })).toBeTruthy();
     expect(screen.queryByRole("complementary", { name: "Studio navigation" })).toBeNull();
     expect(screen.getByRole("navigation", { name: "Scene inspector sections" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Camera", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Camera" }));
     const movement = screen.getByRole("textbox", { name: "Camera movement" }) as HTMLTextAreaElement;
     fireEvent.change(movement, { target: { value: "Slow dolly to the window" } });
     expect(movement.value).toBe("Slow dolly to the window");
