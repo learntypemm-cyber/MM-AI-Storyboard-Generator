@@ -1,4 +1,5 @@
 import type { ReferencePlanItem, Scene, Storyboard, VideoForm } from "../types";
+import { cinematicAnimationPrompt } from "./animationPrompt";
 
 type Design = Pick<ReferencePlanItem, "kind" | "title" | "prompt">;
 export function referencePromptSource(ref: Design, form: VideoForm): string {
@@ -27,14 +28,16 @@ export function sceneImagePromptMM(scene: Scene, board: Storyboard, form: VideoF
   return [`ပြီးစီးသော opening image တစ်ပုံတည်းထုတ်ပါ။ စာသားနှင့် watermark မပါစေရ။ collage နှင့် ရှင်းလင်းချက်စာ မထုတ်ပါနှင့်။`,
     `ပထမဆုံးအခိုက်အတန့်: ${scene.openingFrame || scene.visualDescription}`, `ဖွဲ့စည်းပုံနှင့်ပတ်ဝန်းကျင်: ${scene.visualDescription}`, `ရိုက်ကွက်: ${scene.shotSize}`, `အလင်း: ${scene.lighting}\nခံစားချက်: ${scene.mood}`, `ပုံစံ: ${form.visualStyle}\nအချိုး: ${form.aspectRatio}\nတစ်ခုလုံး၏အမြင်ပုံစံ: ${board.visualBible}`, sceneContext(scene, board), `လှုပ်ရှားမှုမဖြစ်ပွားမီ အစအနေအထားကိုသာပြပါ။ အပိုလူ၊ ထပ်တူဇာတ်ကောင်နှင့် caption မထည့်ပါနှင့်။`, `ရှောင်ရန်: ${board.globalNegativePrompt}; ${scene.negativePrompt}`].join("\n\n");
 }
-export function sceneVideoPromptMM(scene: Scene, board: Storyboard, form: VideoForm): string {
+export function sceneVideoPromptMM(scene: Scene, board: Storyboard, _form: VideoForm): string {
   const previous = previousFor(scene, board);
   const imageMode = scene.preparationMode ? scene.preparationMode === "image-to-video" : Boolean(refsFor(scene, board).length || previous);
-  const time = `${String(Math.floor(scene.durationSeconds / 60)).padStart(2, "0")}:${String(scene.durationSeconds % 60).padStart(2, "0")}`;
-  return [scene.flowPrompt, /\d{2}:\d{2}/.test(scene.flowPrompt) ? "" : `(00:00–${time})\nရိုက်ကွက်: ${scene.shotSize}\nလှုပ်ရှားမှု: ${scene.action}`,
-    `ကြာချိန်: ${scene.durationSeconds} စက္ကန့်\nပုံစံ: ${form.visualStyle}\nအချိုး: ${form.aspectRatio}`,
-    imageMode ? previous ? `ယခင် clip ၏ တကယ့်နောက်ဆုံး frame ကို အစပုံအဖြစ်သုံးပါ။ လူနေရာ၊ ဝတ်စုံ၊ ပစ္စည်း၊ အလင်းနှင့် camera ဦးတည်ချက်ကိုထိန်းပါ။ ဝင်လာမည့်အနေအထား: ${previous.finalFrame}` : "ပေးထားသော opening image ကို အစပုံအဖြစ်သုံးပြီး ဇာတ်ကောင်နှင့် ပုံစံကိုထိန်းလျက် လှုပ်ရှားစေပါ။" : "ဤဖော်ပြချက်မှ တိုက်ရိုက် video ထုတ်ပါ။ အစပုံမလိုပါ။",
-    sceneContext(scene, board), `တစ်ခုလုံး၏အမြင်ပုံစံ: ${board.visualBible}`, `အစပုံ: ${scene.openingFrame}`, `ပတ်ဝန်းကျင်: ${scene.visualDescription}`, `ရိုက်ကွက်: ${scene.shotSize}\nလှုပ်ရှားမှု: ${scene.action}\nCamera: ${scene.cameraMovement}`, `အလင်း: ${scene.lighting}\nခံစားချက်: ${scene.mood}`, `ဆက်စပ်မှု: ${board.continuityRules.join("; ")}`, `အဆုံးပုံ: ${scene.finalFrame}`, `အသံညွှန်ကြားချက်: ${scene.audioNotes}\nSFX: ${scene.sfx ?? "အသံညွှန်ကြားချက်အတိုင်းသာ"}\nနောက်ခံတေးဂီတ: ${scene.backgroundMusic ?? "အသံညွှန်ကြားချက်အတိုင်းသာ"}`, `ပြောစကား (ဤစာသားအတိုင်း): ${scene.voiceover || "မပါ"}`, `ရှောင်ရန်: ${board.globalNegativePrompt}; ${scene.negativePrompt}`].filter(Boolean).join("\n\n");
+  return cinematicAnimationPrompt(scene, board, {
+    language: "my",
+    background: sceneContext(scene, board),
+    startFromPrevious: imageMode && previous ? previous.finalFrame : undefined,
+    references: refsFor(scene, board).map(ref => ref.title + ": " + ref.prompt).join("\n") || "သီးခြား reference မရှိပါ။",
+    imageMode,
+  });
 }
 export function fullPromptsReady(board: Storyboard, form: VideoForm): boolean {
   return !(board.referencePlan || []).some(r => r.fullPrompt !== undefined && (!r.fullPrompt.trim() || r.fullPromptSource !== referencePromptSource(r, form))) && !board.scenes.some(s => (s.fullImagePrompt !== undefined || s.fullVideoPrompt !== undefined) && (!s.fullImagePrompt?.trim() || !s.fullVideoPrompt?.trim() || s.fullPromptSource !== scenePromptSource(s, board, form)));
