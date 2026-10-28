@@ -68,8 +68,8 @@ export function auditSceneContinuity(scene: Scene, board: Storyboard): AuditItem
   const characterRefs = planned.filter(ref => ref.kind === "character");
   const missing = characterRefs.filter(ref => {
     const name = ref.title.trim().toLowerCase();
-    if (!name || !new RegExp("(^|[^\\\\p{L}\\\\p{N}])" + name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\export function auditStoryboard(storyboard: Storyboard | null, form: VideoForm): AuditItem[] {") + "($|[^\\\\p{L}\\\\p{N}])", "iu").test(combined)) return false;
-    return !linked.some(entry => entry.id === ref.id);
+    const mentioned = name.length > 0 && combined.split(/[^\\p{L}\\p{N}]+/u).includes(name);
+    return mentioned && !linked.some(entry => entry.id === ref.id);
   });
   const hasBackground = linked.some(ref => ref.kind === "background");
   const backgroundRefs = planned.filter(ref => ref.kind === "background");
