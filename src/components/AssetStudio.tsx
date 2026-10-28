@@ -61,20 +61,16 @@ function downloadAsset(asset: ImageAsset): void {
   document.body.appendChild(link); link.click(); link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function CharacterPrompt(title: string, description: string, style: VisualStyle, format: string): string {
-  const formatInstruction = format === "Turnaround sheet"
-    ? "Create one professional character turnaround reference SHEET with full-body front, three-quarter, side-profile, and back views of the exact same character. Keep face, hair, clothing, height, proportions, and accessories identical. Plain neutral background, even spacing, no labels or text."
-    : format === "Expression sheet"
-      ? "Create one clean character expression reference SHEET with six head-and-shoulders expressions of the exact same character. Keep face, hair, skin tone, age, outfit collar, and proportions identical. Clearly separate each expression. No labels or text."
-      : "Create one polished full-body character reference portrait, centered against a clean neutral background. Show face, hairstyle, outfit, shoes, and defining accessories clearly.";
+function CharacterPrompt(title: string, description: string, style: VisualStyle): string {
   return [
-    "Create a production-ready character reference image for a recurring educational video series.",
-    "CHARACTER NAME: " + (title.trim() || "Main character"),
-    "USER DESCRIPTION OR REQUESTED IMPROVEMENT: " + (description.trim() || "Create a friendly, approachable, memorable character suitable for a Myanmar typing tutorial."),
-    "VISUAL STYLE: " + style + ". Use clear silhouette, believable anatomy, clean detail, polished lighting and readable facial features.",
-    formatInstruction,
-    "IF REFERENCE IMAGES ARE PROVIDED: treat the supplied character image as the identity source of truth. Preserve identity, facial structure, age, skin tone, hair, body proportions, distinctive features, clothing and accessories unless the request explicitly asks for a change. Improve clarity, composition, lighting and finish only; do not redesign the character.",
-    "Keep the character easy to recognize in future scenes. No watermarks, duplicate characters, extra limbs, extra fingers, unrelated props or readable text. This is a reusable visual reference asset, not a storyboard collage."
+    "GENERATE ONE FINISHED CHARACTER REFERENCE SHEET. Aspect ratio: 16:9.",
+    "Character: " + (title.trim() || "MAY") + ". " + (description.trim() || "A friendly, approachable, memorable character suitable for a Myanmar typing tutorial."),
+    "Visual style: " + style + ". Cinematic soft lighting, clear silhouette, believable anatomy, polished detail and readable facial features.",
+    "Character sheet layout: full-body turnaround showing front view, 3/4 view, side view, and back view. Separate head close-ups showing exactly four facial expressions: happy, surprised, thoughtful, and neutral.",
+    "Keep the exact same face, hairstyle, outfit, body proportions, colors and accessories consistent across every angle and expression. These are multiple views of ONE character, not different characters. Show the complete body, shoes and accessories without cropping.",
+    'Place exactly "Name: ' + (title.trim() || "MAY") + '" in the upper-right corner in bold black text on a yellow rectangular background, outside the character drawings. No other text, label or watermark.',
+    "Clean neutral light-grey studio background, soft even studio lighting with no harsh shadows, professional model-sheet composition.",
+    "If a reference image is attached in Google Flow, treat it as the identity source of truth. Preserve the exact face, age, skin tone, hair, body proportions, distinctive features, clothing and accessories; improve clarity and finish only."
   ].join("\n\n");
 }
 function BackgroundPrompt(name: string, description: string, time: string, style: VisualStyle, aspectRatio: string): string {
@@ -157,9 +153,8 @@ export default function AssetStudio(props: Props) {
   const [selectedSceneIds, setSelectedSceneIds] = useState<string[]>([]);
   const [refs, setRefs] = useState<ReferenceImage[]>([]);
   const [useProjectReferences, setUseProjectReferences] = useState(false);
-  const [characterName, setCharacterName] = useState("Main character");
+  const [characterName, setCharacterName] = useState("MAY");
   const [characterDescription, setCharacterDescription] = useState("");
-  const [characterFormat, setCharacterFormat] = useState("Full-body reference");
   const [backgroundName, setBackgroundName] = useState("LearnTypeMM typing workspace");
   const [backgroundDescription, setBackgroundDescription] = useState("A clean modern desk with a keyboard, monitor, comfortable chair, subtle blue accents, and enough open space for a presenter. Realistic, tidy, friendly and calm.");
   const [backgroundTime, setBackgroundTime] = useState("Soft daylight from a nearby window");
@@ -203,21 +198,6 @@ export default function AssetStudio(props: Props) {
     onAssetsChanged();
     setNotice("Saved " + asset.title + " to your local Asset Library.");
     return asset;
-  }
-  async function generateCharacter(): Promise<void> {
-    setError(""); setNotice("");
-    if (!apiKey.trim()) { setError("Add your Gemini API key in Settings first, then reopen Asset Studio."); return; }
-    setBusyId("character");
-    try {
-      const source = characterDescription.trim() || "Create a friendly, approachable, memorable character suitable for a Myanmar typing tutorial.";
-      setNotice("မြန်မာနှင့် English prompt နှစ်မျိုး ပြင်ဆင်ပြီး character ပုံထုတ်နေပါတယ်…");
-      const versions = await translateAssetDescriptionBilingual(apiKey, model, source);
-      const promptEn = CharacterPrompt(characterName, versions.english, visualStyle, characterFormat);
-      const promptMy = CharacterPromptMyanmar(characterName, versions.myanmar, visualStyle, characterFormat);
-      const image = await generateImage(apiKey, promptEn, "1:1", inputReferences());
-      await saveGenerated("character", characterName || "Character reference", promptEn, image, undefined, undefined, promptMy, promptEn);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not generate this character image."); }
-    finally { setBusyId(""); }
   }
   async function generateBackground(): Promise<void> {
     setError(""); setNotice("");
@@ -317,6 +297,8 @@ export default function AssetStudio(props: Props) {
   if (!open) return null;
 
   const refsCount = inputReferences().length;
+  const characterNameValid = /^[A-Za-z][A-Za-z0-9 _'-]{0,79}$/.test(characterName.trim());
+  const characterSheetPrompt = CharacterPrompt(characterName, characterDescription, visualStyle);
   const allScenes = storyboard?.scenes || [];
   const missingScenes = allScenes.filter((scene) => !scene.locked && !assets.some((asset) => asset.kind === "scene" && asset.sceneId === scene.id && asset.projectId === projectId));
 
@@ -352,14 +334,15 @@ export default function AssetStudio(props: Props) {
             </section>
 
             {tab === "character" && <section className="asset-workspace">
-              <div className="asset-workspace-head"><div className="asset-section-icon purple"><Users size={20} /></div><div><h3>Character Studio</h3><p>Use your own character as the source of truth, or create a new recurring character from a description.</p></div></div>
+              <div className="asset-workspace-head"><div className="asset-section-icon purple"><Users size={20} /></div><div><h3>Character sheet prompt</h3><p>Flow မှာပုံထုတ်ရန် 16:9 turnaround + expression sheet prompt ကိုပြင်ပြီး copy လုပ်ပါ။</p></div></div>
               <div className="asset-form-grid">
-                <label className="asset-field"><span>Character name</span><input value={characterName} onChange={(event) => setCharacterName(event.target.value)} placeholder="e.g. May, the typing tutor" /></label>
-                <label className="asset-field"><span>Reference image format</span><select value={characterFormat} onChange={(event) => setCharacterFormat(event.target.value)}><option>Full-body reference</option><option>Turnaround sheet</option><option>Expression sheet</option></select></label>
+                <label className="asset-field"><span>Character English name</span><input value={characterName} onChange={(event) => setCharacterName(event.target.value)} placeholder="e.g. LEO, LILI, MAY" /></label>
               </div>
-              <label className="asset-field"><span>Character description or improvement request</span><textarea rows={4} value={characterDescription} onChange={(event) => setCharacterDescription(event.target.value)} placeholder="Describe the character or ask to improve lighting, clarity, clothing detail, proportions, or style. If using your own character, say what must stay unchanged." /></label>
-              <div className="asset-guidance"><CheckCircle2 size={16} /><p><strong>Identity protection:</strong> when a character image is attached, the prompt tells the model to preserve the original face, hair, skin tone, age, body proportions, wardrobe and distinct features while refining quality and lighting.</p></div>
-              <div className="asset-action-row"><div><span className="asset-cost-label">IMAGE GENERATION</span><small>Uses your Gemini API key; Google API usage charges may apply.</small></div><button className="asset-primary-button" onClick={() => void generateCharacter()} disabled={isBusy}><Wand2 size={16} /> {busyId === "character" ? "Generating character..." : "Generate / improve character"}</button></div>
+              {!characterNameValid && <div className="asset-guidance"><AlertCircle size={16} /><p><strong>English name လိုအပ်ပါတယ်:</strong> Name label နဲ့ video prompts တွေမှာ အတိအကျပြန်သုံးရန် LEO, LILI, MAY လို English / Latin letters ဖြင့်သာရေးပါ။</p></div>}
+              <label className="asset-field"><span>Character description</span><textarea rows={4} value={characterDescription} onChange={(event) => setCharacterDescription(event.target.value)} placeholder="Describe face, hairstyle, age, body build, complete outfit, colors, shoes, accessories and details that must stay consistent." /></label>
+              <div className="asset-guidance"><CheckCircle2 size={16} /><p><strong>Fixed sheet layout:</strong> front, 3/4, side and back turnaround views plus happy, surprised, thoughtful and neutral expressions. Flow မှာ reference ပုံထည့်ထားလျှင် identity နှင့် wardrobe ကိုမပြောင်းဘဲ ထုတ်ခိုင်းထားပါတယ်။</p></div>
+              <label className="asset-field"><span>Google Flow character-sheet prompt</span><textarea rows={14} readOnly value={characterSheetPrompt} /></label>
+              <div className="asset-action-row"><div><span className="asset-cost-label">GOOGLE FLOW · MANUAL STEP</span><small>ဒီ app က prompt ပဲပြင်ပေးပါတယ်။ Flow မှာ prompt paste လုပ်ပြီး reference ပုံရှိလျှင် ကိုယ်တိုင်တွဲပါ။</small></div><button className="asset-primary-button" onClick={() => void copyText(characterSheetPrompt, "Character sheet prompt")} disabled={!characterNameValid}><Copy size={16} /> {copied === "Character sheet prompt" ? "Copied" : "Copy Flow prompt"}</button></div>
             </section>}
 
             {tab === "background" && <section className="asset-workspace">
