@@ -9,19 +9,23 @@ const stamp = (second: number) => String(Math.floor(second / 60)).padStart(2, "0
 const shortStamp = (second: number) => Math.floor(second / 60) + ":" + String(second % 60).padStart(2, "0");
 
 type Beat = { start: number; end: number; description: string };
-const marker = /^\s*\(?\s*(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})\s*\)?\s*[:.]?\s*(.*)$/gm;
+// Accept ranges both at line starts and inline (AI often returns all three beats on one line).
+const marker = /\b(\d{1,2}):([0-5]\d)\s*[-–]\s*(\d{1,2}):([0-5]\d)\b/g;
 
 export function existingTimedBeats(prompt: string, duration: number): Beat[] {
   const matches = Array.from(prompt.matchAll(marker));
+  if (matches.length < 2) return [];
   const beats = matches.map((match, index) => {
     const start = Number(match[1]) * 60 + Number(match[2]);
     const end = Number(match[3]) * 60 + Number(match[4]);
-    const body = prompt.slice(match.index! + match[0].length, index + 1 < matches.length ? matches[index + 1].index! : undefined)
-      .split(/\n(?=(?:CAMERA|CHARACTER CONTINUITY|AUDIO|DIALOGUE|ENDING FRAME|NO SUBTITLES|LIGHTING|VISUAL DESIGN|LOCATION):)/i)[0].trim();
-    return { start, end, description: [match[5]?.trim(), body].filter(Boolean).join("\n") };
+    const nextStart = index + 1 < matches.length ? matches[index + 1].index! : prompt.length;
+    const description = prompt.slice(match.index! + match[0].length, nextStart)
+      .replace(/^\s*[):.\]-]?\s*/, "")
+      .split(/\n\s*(?=(?:CAMERA|CHARACTER CONTINUITY|AUDIO|DIALOGUE|ENDING FRAME|LIGHTING|VISUAL DESIGN|LOCATION|NO SUBTITLES):)/i)[0].trim();
+    return { start, end, description };
   });
-  if (beats.length < 2 || beats[0].start !== 0 || beats[beats.length - 1].end !== duration) return [];
-  if (beats.some((beat, i) => beat.end <= beat.start || (i > 0 && beat.start !== beats[i - 1].end) || !beat.description.trim())) return [];
+  if (beats[0].start !== 0 || beats[beats.length - 1].end !== duration) return [];
+  if (beats.some((beat, i) => beat.end <= beat.start || (i > 0 && beat.start !== beats[i - 1].end) || !beat.description)) return [];
   return beats;
 }
 
@@ -56,7 +60,12 @@ export function cinematicAnimationPrompt(scene: Scene, board: Storyboard, option
   const intro = my
     ? sceneStart + " " + duration + " စက္ကန့်ကြာ ရုပ်ရှင်ဆန်သော video တစ်ခုတည်း ဖန်တီးပါ။"
     : sceneStart + " into a " + duration + "-second cinematic animation. One continuous clip; the time ranges are action beats, not separate edits.";
-  const beats = safeBeats(scene).map(beat => shortStamp(beat.start) + "–" + shortStamp(beat.end) + "\n" + beat.description).join("\n\n");
+  const authoredBeats = existingTimedBeats(scene.flowPrompt, duration);
+  const beats = (authoredBeats.length ? authoredBeats : safeBeats(scene))
+    .map(beat => shortStamp(beat.start) + "–" + shortStamp(beat.end) + "\n" + beat.description).join("\n\n");
+  // A malformed legacy timeline must not introduce a second, contradictory set of timings.
+  const untimedDirection = authoredBeats.length ? "" : scene.flowPrompt
+    .replace(marker, " ").replace(/\s+/g, " ").trim();
   const camera = scene.cameraMovement?.trim() || (my ? "ကင်မရာကို မတုန်မလှုပ် ထားပါ။" : "Keep the camera steady.");
   const continuity = [
     my ? "ဇာတ်ကောင်အမည်၊ မျက်နှာ၊ ကိုယ်ခန္ဓာ၊ ဝတ်စုံနှင့် accessories များကို ပေးထားသော reference နှင့် အတိအကျတူစေပါ။" : "Keep character identity, anatomy, costumes and accessories identical to the attached reference images.",
@@ -68,8 +77,9 @@ export function cinematicAnimationPrompt(scene: Scene, board: Storyboard, option
   return [
     intro,
     "DURATION: " + duration + " seconds",
+    scene.openingFrame?.trim() ? "OPENING FRAME:\n" + scene.openingFrame : "",
     beats,
-    (!existingTimedBeats(scene.flowPrompt, duration).length && scene.flowPrompt?.trim() ? "SCENE DIRECTION:\n" + scene.flowPrompt : ""),
+    untimedDirection ? "ADDITIONAL SCENE DETAIL:\n" + untimedDirection : "",
     "CAMERA:\n" + camera + ". " + (my ? "ရိုက်ကွက်: " : "Shot size: ") + scene.shotSize + ". " + (my ? "အဆက်မပြတ် ကင်မရာလှုပ်ရှားမှုတစ်ခုသာ၊ မလိုအပ်သော cut မပါစေရ။" : "Keep one continuous camera move without sudden cuts."),
     "CHARACTER CONTINUITY:\n" + continuity + "\n" + (my ? "Reference များ:" : "References:") + "\n" + options.references,
     (my ? "LOCATION & LOOK:" : "LOCATION & LOOK:") + "\n" + scene.visualDescription + "\n" + options.background + "\n" + board.visualBible + "\n" + (my ? "အလင်း: " : "Lighting: ") + scene.lighting + ". " + (my ? "ခံစားချက်: " : "Mood: ") + scene.mood,
