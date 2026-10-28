@@ -1045,14 +1045,14 @@ function App() {
             <div className="studio-sequence-strip" aria-label="Storyboard scene timeline">
               {storyboard.scenes.map((scene) => {
                 const preview = projectAssets.find((asset) => asset.kind === "scene" && asset.sceneId === scene.id);
-                return <button type="button" key={scene.id} className={inspectorScene?.id === scene.id ? "studio-sequence-item selected" : "studio-sequence-item"} onClick={() => {setInspectorSceneId(scene.id); document.getElementById("studio-scene-" + scene.id)?.scrollIntoView({behavior:"smooth",block:"nearest"});}}>
+                return <button type="button" key={scene.id} aria-label={"Select storyboard scene " + scene.sceneNumber} className={inspectorScene?.id === scene.id ? "studio-sequence-item selected" : "studio-sequence-item"} onClick={() => setInspectorSceneId(scene.id)}>
                   <span className="studio-sequence-thumb">{preview ? <img src={"data:" + preview.mimeType + ";base64," + preview.data} alt="" loading="lazy"/> : <Clapperboard size={19}/>}</span>
                   <span className="studio-sequence-item-label">{String(scene.sceneNumber).padStart(2,"0")} · {scene.durationSeconds}s</span>
                 </button>;
               })}
             </div>
-            <div className="studio-storyboard-workspace"><div className="scene-list">
-              {storyboard.scenes.map((scene) => {
+            <div className="studio-storyboard-workspace v2-storyboard-workspace"><div className="scene-list">
+              {storyboard.scenes.filter((scene) => scene.id === (inspectorScene?.id || storyboard.scenes[0]?.id)).map((scene) => {
                 const sceneAudit = auditScene(scene);
                 const flags = sceneAudit.filter((item) => !item.ok).length;
                 const preview = projectAssets.find((asset) => asset.kind === "scene" && asset.sceneId === scene.id);
