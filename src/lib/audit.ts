@@ -68,7 +68,7 @@ export function auditSceneContinuity(scene: Scene, board: Storyboard): AuditItem
   const characterRefs = planned.filter(ref => ref.kind === "character");
   const missing = characterRefs.filter(ref => {
     const name = ref.title.trim().toLowerCase();
-    const mentioned = name.length > 0 && combined.split(/[^\\p{L}\\p{N}]+/u).includes(name);
+    const mentioned = name.length > 0 && combined.includes(name);
     return mentioned && !linked.some(entry => entry.id === ref.id);
   });
   const hasBackground = linked.some(ref => ref.kind === "background");
