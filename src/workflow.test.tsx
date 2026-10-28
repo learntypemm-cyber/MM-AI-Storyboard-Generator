@@ -822,15 +822,15 @@ it("preserves exact Burmese spoken dialogue in translated English animation prom
   const raw = structuredClone(full);
   raw.scenes[0].fullVideoPrompt = [
     "Animate the supplied opening image into an eight-second film.",
-    "0:00–0:03\\nBobo arrives.",
-    "DIALOGUE:\\nMohmoh: Hurry up, the bus is leaving.",
-    "ENDING FRAME:\\nBobo holds the ticket.",
-  ].join("\\n\\n");
+    "0:00–0:03\nBobo arrives.",
+    "DIALOGUE:\nMohmoh: Hurry up, the bus is leaving.",
+    "ENDING FRAME:\nBobo holds the ticket.",
+  ].join("\n\n");
   const output = validateTranslation(raw, full);
   const video = sceneVideoPrompt(output.scenes[0], output);
   expect(video).toContain(draft.scenes[0].voiceover);
   expect(video).not.toContain("Hurry up, the bus is leaving.");
-  expect(video).toContain("ENDING FRAME:\\nBobo holds the ticket.");
+  expect(video).toContain("ENDING FRAME:\nBobo holds the ticket.");
   expect(output.scenes[0].voiceover).toBe(draft.scenes[0].voiceover);
 });
 
