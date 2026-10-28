@@ -62,7 +62,7 @@ export function cinematicAnimationPrompt(scene: Scene, board: Storyboard, option
     my ? "ဇာတ်ကောင်အမည်၊ မျက်နှာ၊ ကိုယ်ခန္ဓာ၊ ဝတ်စုံနှင့် accessories များကို ပေးထားသော reference နှင့် အတိအကျတူစေပါ။" : "Keep character identity, anatomy, costumes and accessories identical to the attached reference images.",
     ...board.continuityRules,
   ].join(" ");
-  const audio = [scene.audioNotes, scene.sfx ? (my ? "SFX: " : "SFX: ") + scene.sfx : "", scene.backgroundMusic ? (my ? "Music: " : "Music: ") + scene.backgroundMusic : ""].filter(Boolean).join("\n") || (my ? "သီးခြားအသံမသတ်မှတ်ထားပါ။" : "No additional audio specified.");
+  const audio = [scene.audioNotes, "SFX: " + (scene.sfx?.trim() || (my ? "သီးခြား SFX မသတ်မှတ်ထားပါ။" : "No additional effects specified.")), "Music: " + (scene.backgroundMusic?.trim() || (my ? "သီးခြားတေးဂီတမသတ်မှတ်ထားပါ။" : "No additional music specified."))].filter(Boolean).join("\n");
   const dialogue = scene.voiceover?.trim() || (my ? "မပါ။" : "None.");
   const ending = scene.finalFrame?.trim() || scene.action?.trim() || (my ? "ဇာတ်ဝင်ခန်းအဆုံးအနေအထားကို ထိန်းပါ။" : "Hold the described final state.");
   return [
