@@ -1,0 +1,21 @@
+/* Focused screenplay workspace */
+.focused-script-studio{padding-bottom:22px}
+.script-studio-tabs{display:flex;gap:8px;overflow-x:auto;padding:16px 20px;position:sticky;top:0;z-index:5;background:#1B2333;border-bottom:1px solid #364158}
+.script-studio-tabs button{border:1px solid #3A4961;border-radius:10px;background:#222D40;color:#AAB8D1;white-space:nowrap;padding:11px 15px;font-weight:700;font-size:12px}
+.script-studio-tabs button.active{background:#343E70;border-color:#8A96FF;color:#EDF0FF}
+.script-studio-tabs button:disabled{opacity:.38}
+.script-stage{padding:18px 22px}
+.script-stage h2,.script-stage h3{margin-top:0}
+.script-stage .concept-grid{margin-bottom:15px}
+.script-reference-workspace{display:grid;grid-template-columns:minmax(160px,230px) minmax(0,1fr);gap:14px;margin:16px 20px}
+.script-reference-list,.script-inventory-scene-list{display:flex;flex-direction:column;gap:7px;min-width:0}
+.script-reference-list button,.script-inventory-scene-list button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;text-align:left;border:1px solid #344057;background:#202B3D;border-radius:10px;color:#C2CDE2;padding:12px;overflow-wrap:anywhere}
+.script-reference-list button.active,.script-inventory-scene-list button.active{border-color:#8995FF;background:#303B61;color:#F0F3FF}
+.script-reference-list small{font-size:10px;color:#A8B5D4}
+.script-reference-workspace>.scene-card{margin:0;min-width:0}
+.script-review-workspace{display:grid;grid-template-columns:minmax(150px,225px) minmax(0,1fr);gap:14px;margin:18px 20px}
+.script-review-workspace>.field{min-width:0;margin:0}
+.script-review-actions{grid-column:1/-1;background:#202A3B;border:1px solid #364158;border-radius:12px;padding:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.script-review-actions p{width:100%}
+.focused-script-studio .scene-card textarea{max-width:100%;resize:vertical}
+@media(max-width:750px){.script-stage{padding:14px}.script-studio-tabs{padding:12px;top:0}.script-reference-workspace,.script-review-workspace{display:block;margin:12px}.script-reference-list,.script-inventory-scene-list{flex-direction:row;overflow-x:auto;margin-bottom:12px}.script-reference-list button,.script-inventory-scene-list button{flex:0 0 145px}.script-review-actions{margin-top:12px}}
