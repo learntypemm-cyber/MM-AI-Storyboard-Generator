@@ -727,7 +727,9 @@ it("packages Burmese steps, named angles, audio and continuation start frames", 
   current.referencePlan = [{ id: "park", kind: "background", title: "Park", prompt: "A green park with one bench and a stone path", sceneIds: ["two"] }];
   expect(sceneBackground(current.scenes[1], current)).toContain("B01 — Park — C / back");
   expect(sceneVideoPrompt(current.scenes[1], current)).toContain("actual final frame of the preceding clip");
-  expect(sceneVideoPrompt(current.scenes[1], current)).toContain("(00:00-00:08)");
+  expect(sceneVideoPrompt(current.scenes[1], current)).toContain("0:00–0:02");
+  expect(sceneVideoPrompt(current.scenes[1], current)).toContain("0:02–0:05");
+  expect(sceneVideoPrompt(current.scenes[1], current)).toContain("0:05–0:08");
   expect(sceneInstructions(current.scenes[1], current)).toContain("Scene 1 clip");
   expect(sceneVideoPrompt(current.scenes[0], current)).not.toContain("actual final frame of the preceding clip");
   const zip = await JSZip.loadAsync(await promptPackageZip(current, form));
