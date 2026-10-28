@@ -12,6 +12,9 @@ type Props = { value: ScreenplayWorkflow; form: VideoForm; board: Storyboard | n
 const englishCharacterName = (value: string) => /^[A-Za-z][A-Za-z0-9 _'-]{0,79}$/.test(value.trim());
 export default function ScreenplayStudio({ value, form, board, projectId, assets, busy, apiKey, model, requireKey, onChange, onBoard, onBusy, onError }: Props) {
   const [message, setMessage] = useState("");
+  const [studioTab, setStudioTab] = useState<"concepts" | "script" | "references" | "review">("concepts");
+  const [selectedRefId, setSelectedRefId] = useState<string | null>(null);
+  const [selectedInventorySceneId, setSelectedInventorySceneId] = useState<string | null>(null);
   const selected = value.choices.find(c => c.id === value.selectedId);
   const expectedSceneCount = requiredScreenplaySceneCount(form);
   const selectedSceneCount = selected ? screenplaySceneCount(selected.screenplay) : 0;
@@ -127,11 +130,25 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
       setMessage("Reference ပုံသိမ်းပြီးပါပြီ။ အတည်ပြုမှုကို ပြန်စစ်ပါ။");
     } catch (e) { onError(e instanceof Error ? e.message : "Image save failed"); } finally { onBusy(null); }
   };
-  return <section className="storyboard-section screenplay-studio">
+  return <section className="storyboard-section screenplay-studio focused-script-studio">
+    <nav className="script-studio-tabs" aria-label="Script production workspace">
+      {([
+        ["concepts", "1. Concepts"],
+        ["script", "2. Script"],
+        ["references", "3. References"],
+        ["review", "4. Review"]
+      ] as const).map(([id, label]) =>
+        <button type="button" key={id} className={studioTab === id ? "active" : ""} aria-current={studioTab === id ? "step" : undefined}
+          disabled={(id === "references" || id === "review") && (!current || !value.inventory)}
+          onClick={() => setStudioTab(id)}>{label}</button>
+      )}
+    </nav>
+    {studioTab === "concepts" && <div className="script-stage">
     <h2>{selected?.sourceType === "existing" ? "၁။ ရှိပြီးသား Screenplay မှ ဆက်လုပ်မယ်" : "၁။ မြန်မာဇာတ်ညွှန်း ၃ မျိုးထဲမှ ရွေးပါ"}</h2>
     <p>{selected?.sourceType === "existing" ? "သင်ထည့်ထားသော ဇာတ်ညွှန်းကို မူရင်းအတိုင်း အသုံးပြုပါမယ်။ Scene count က သင့် screenplay ထဲမှာရှိတဲ့ အခန်းအရေအတွက်အတိုင်း ဖြစ်ပါတယ်။" : "ဗီဒီယိုမှာ ဖြစ်လာမည့်ဇာတ်လမ်းကို အရင်ဖတ်ပါ။ ရွေးချယ်ခြင်းနှင့် ကိုယ်တိုင် edit လုပ်ခြင်းက API မသုံးပါ။ Target " + form.targetDuration + "s ÷ " + form.clipDuration + "s per clip = " + expectedSceneCount + " scenes per screenplay ဖြစ်ရပါမယ်." + " Scene တစ်ခုက Flow clip တစ်ခုစီ ဖြစ်ပါတယ်."}</p>
-    <div className="concept-grid">{value.choices.map((c, i) => <article className="concept-card" key={c.id}><h3>{i + 1}. {c.title}</h3><p>Scene အရေအတွက်: <strong>{screenplaySceneCount(c.screenplay)}{c.sourceType === "existing" ? " (မူရင်း screenplay)" : " / " + expectedSceneCount}</strong> {c.sourceType === "existing" ? (screenplaySceneCount(c.screenplay) > 0 ? "· အသုံးပြုနိုင်" : "· heading လိုအပ်") : (screenplayCompletenessIssues(c.screenplay, form).length ? "· မပြည့်စုံသေး" : "· ပြည့်စုံ")}</p><details><summary>ဇာတ်ညွှန်းအပြည့် ဖတ်ရန်</summary><pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", padding: 16 }}>{c.screenplay}</pre></details><button className="primary-button" disabled={busy} aria-pressed={value.selectedId === c.id} onClick={() => onChange({ ...value, selectedId: c.id })}>ဇာတ်ညွှန်း {i + 1} ရွေးမယ်</button></article>)}</div>
-    {selected && <>
+    <div className="concept-grid">{value.choices.map((c, i) => <article className="concept-card" key={c.id}><h3>{i + 1}. {c.title}</h3><p>Scene အရေအတွက်: <strong>{screenplaySceneCount(c.screenplay)}{c.sourceType === "existing" ? " (မူရင်း screenplay)" : " / " + expectedSceneCount}</strong> {c.sourceType === "existing" ? (screenplaySceneCount(c.screenplay) > 0 ? "· အသုံးပြုနိုင်" : "· heading လိုအပ်") : (screenplayCompletenessIssues(c.screenplay, form).length ? "· မပြည့်စုံသေး" : "· ပြည့်စုံ")}</p><details><summary>ဇာတ်ညွှန်းအပြည့် ဖတ်ရန်</summary><pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", padding: 16 }}>{c.screenplay}</pre></details><button className="primary-button" disabled={busy} aria-pressed={value.selectedId === c.id} onClick={() => { onChange({ ...value, selectedId: c.id }); setStudioTab("script"); }}>ဇာတ်ညွှန်း {i + 1} ရွေးမယ်</button></article>)}</div>
+    </div>}
+    {studioTab === "script" && selected && <div className="script-stage">
       <h3>၂။ ရွေးထားသောဇာတ်ညွှန်းကို ပြင် / ချောရေးပါ</h3>
       <fieldset className="scene-fieldset" disabled={busy}>
         <label className="field">ဇာတ်ညွှန်းခေါင်းစဉ်<input className="input" value={selected.title} onChange={e => editChoice({ title: e.target.value })} /></label>
@@ -144,9 +161,10 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
       <p role="status">{scriptApproved(value, form) ? "ဇာတ်ညွှန်း အတည်ပြုပြီးပါပြီ။" : "လက်ရှိဇာတ်ညွှန်း အတည်မပြုရသေးပါ။ အောက်ကခလုတ်နှိပ်မှ နောက်အဆင့်ဆက်ပါမယ်။"}</p>
       {selectedScriptIssues.length > 0 && <p role="alert">ဇာတ်ညွှန်းစစ်ဆေးချက်: {selectedSceneCount}/{expectedSceneCount} scenes. {selectedScriptIssues.join(" ")}</p>}
       <button className="primary-button" disabled={busy || !selected.screenplay.trim() || current} onClick={() => void extract()}>ဇာတ်ညွှန်းအတည်ပြုပြီး Character / Background စာရင်းထုတ်မယ်</button>
-    </>}
+    </div>}
+    {studioTab === "script" && current && value.inventory && <button className="secondary-button" type="button" onClick={() => setStudioTab("references")}>Open reference library →</button>}
     {value.inventory && !current && <p role="alert">ဇာတ်ညွှန်း သို့မဟုတ် brief ပြောင်းထားပါတယ်။ Reference နှင့် scene prompt အဟောင်းများကို ပြန်အတည်ပြုမပြီးမချင်း အသုံးမပြုနိုင်ပါ။</p>}
-    {current && value.inventory && <>
+    {current && value.inventory && (studioTab === "references" || studioTab === "review") && <>
       <h2>၃။ Character / Background / Scene စာရင်း ပြင်ဆင်ပါ</h2>
       <p>ဇာတ်ညွှန်းမှာ မပါသောလူ/နေရာကို ထပ်မထည့်ပါနှင့်။ ပြောင်းချင်လျှင် အပေါ်ကဇာတ်ညွှန်းကို အရင်ပြင်ပါ။ ကြိုက်တဲ့ reference ပုံကို Flow မှာထုတ်ပြီး ဒီမှာတွဲသိမ်းနိုင်ပါတယ်။</p>
       <div className="workflow-toolbar">
@@ -155,7 +173,14 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
           {busy && !["", "null"].includes(String(busy)) ? "လုပ်ဆောင်နေပါတယ်…" : "Reference အားလုံးကို English တစ်ခါတည်းပြောင်းမယ်"}
         </button>
       </div>
-      {value.inventory.references.map((ref, i) => {
+      {studioTab === "references" && <div className="script-reference-workspace">
+      <nav className="script-reference-list" aria-label="Reference library">
+        {value.inventory.references.map(ref => <button type="button" key={ref.id} className={(selectedRefId || value.inventory!.references[0]?.id) === ref.id ? "active" : ""} onClick={() => setSelectedRefId(ref.id)}>
+          <strong>{ref.title}</strong><small>{ref.kind}</small>
+        </button>)}
+      </nav>
+      {value.inventory.references.filter(ref => ref.id === (selectedRefId || value.inventory!.references[0]?.id)).map((ref) => {
+        const i = value.inventory!.references.findIndex(item => item.id === ref.id);
         const peers = value.inventory!.references.filter(r => r.kind === ref.kind);
         const code = ({ character: 'C', background: 'B', prop: 'P' }[ref.kind]) + String(peers.findIndex(r => r.id === ref.id) + 1).padStart(2, '0');
         const image = assets.find(a => a.id === ref.id);
@@ -177,17 +202,23 @@ export default function ScreenplayStudio({ value, form, board, projectId, assets
           <label className="field">Flow မှာထုတ်ထားသော reference ပုံတွဲရန်<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { void upload(ref.id, e.target.files?.[0]); e.currentTarget.value = ''; }} /></label>
           {image && <><img style={{ maxWidth: 260, maxHeight: 200, objectFit: 'contain' }} src={assetAsReference(image).previewUrl} alt={ref.title} />{image.prompt !== ref.description && <p role="alert">ဖော်ပြချက်ပြောင်းထားလို့ ပုံအဟောင်းနဲ့ ကိုက်မကိုက် ပြန်စစ်ပါ။</p>}</>}
         </fieldset></article>;
-      })}
-      {value.inventory.scenes.map((scene, i) => <details className="field" key={scene.id}><summary>Scene {i + 1} · {scene.title} · {scene.durationSeconds}s</summary><fieldset className="scene-fieldset" disabled={busy}>
+      })}</div>}
+      {studioTab === "review" && <div className="script-review-workspace">
+      <nav className="script-inventory-scene-list" aria-label="Review inventory scenes">
+        {value.inventory.scenes.map((scene,i) => <button type="button" key={scene.id} className={(selectedInventorySceneId || value.inventory!.scenes[0]?.id) === scene.id ? "active" : ""} onClick={() => setSelectedInventorySceneId(scene.id)}>Scene {i+1} · {scene.title}</button>)}
+      </nav>
+      {value.inventory.scenes.filter(scene => scene.id === (selectedInventorySceneId || value.inventory!.scenes[0]?.id)).map((scene) => { const i = value.inventory!.scenes.findIndex(item => item.id === scene.id); return <details open className="field" key={scene.id}><summary>Scene {i + 1} · {scene.title} · {scene.durationSeconds}s</summary><fieldset className="scene-fieldset" disabled={busy}>
         {(['title', 'location', 'action', 'dialogue'] as const).map(key => <label className="field" key={key}>{key}<textarea className="input" value={scene[key]} onChange={e => patchScene(scene.id, { [key]: e.target.value })} /></label>)}
         <label className="field">Scene duration<input className="input" type="number" min={1} max={600} value={scene.durationSeconds} onChange={e => patchScene(scene.id, { durationSeconds: Math.max(1, Math.min(600, Number(e.target.value) || 1)) })} /></label>
         {value.inventory!.references.map(ref => <label key={ref.id}><input type="checkbox" checked={scene.referenceIds.includes(ref.id)} onChange={e => { if (e.target.checked && scene.referenceIds.length >= 3) { onError('Scene တစ်ခုမှာ reference ၃ ခုအထိရွေးနိုင်ပါတယ်။'); return; } patchScene(scene.id, { referenceIds: e.target.checked ? [...scene.referenceIds, ref.id] : scene.referenceIds.filter(id => id !== ref.id) }); }} />{ref.title}</label>)}
-      </fieldset></details>)}
+      </fieldset></details>; })}
+      <div className="script-review-actions">
       <p>Scene စုစုပေါင်းကြာချိန်: {value.inventory.scenes.reduce((sum, s) => sum + s.durationSeconds, 0)}s · Target: {form.targetDuration}s</p>
       <button className="primary-button" disabled={busy || approved} onClick={() => { try { if (value.inventory!.references.some(r => r.kind === "character" && !englishCharacterName(r.title))) { onError("Character name များကို English / Latin letters ဖြင့်သာရေးပါ။ ဥပမာ LEO, LILI, MAY."); return; } if (value.inventory!.references.some(r => r.fullPrompt !== undefined && (!r.fullPrompt.trim() || r.fullPromptSource !== referencePromptSource({ ...r, prompt: r.description }, form)))) { onError("Reference prompt အပြည့်အစုံကို ပြန်စစ်ပြီး အတည်ပြုပါ။"); return; } scriptInventorySchema.parse(value.inventory); onChange({ ...value, approvedInventory: inventorySource(value, form) }); } catch { onError('နာမည်၊ ဖော်ပြချက်နှင့် scene စာရင်းကို အပြည့်ဖြည့်ပါ။'); } }}>Character / Background / Scene စာရင်း အတည်ပြုမယ်</button>
       <p role="status">{approved ? 'Reference စာရင်း အတည်ပြုပြီးပါပြီ။ ပုံထုတ်ရန် prompt ယူနိုင်ပြီး scene prompts ဆက်ထုတ်နိုင်ပါပြီ။' : 'ပြင်ထားသော reference နှင့် scene စာရင်းကို အတည်ပြုရန်လိုသည်။'}</p>
       <button className="primary-button" disabled={busy || !approved} onClick={() => void generate()}>အတည်ပြုထားသောစာရင်းဖြင့် Scene prompts ထုတ်မယ်</button>
       {board && !pipelineCurrent(value, form, board) && <p role="alert">Scene prompts အဟောင်းဖြစ်နေပါပြီ။ အတည်ပြုထားသောစာရင်းဖြင့် ပြန်ထုတ်ပါ။</p>}
+      </div></div>}
     </>}
     {message && <p role="status">{message}</p>}
   </section>;
