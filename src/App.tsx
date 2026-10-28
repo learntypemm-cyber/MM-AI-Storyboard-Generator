@@ -795,7 +795,7 @@ function App() {
         <button className="new-project-button" disabled={Boolean(busy) || !hydrated} onClick={newProject}><Plus size={17} /> New project <span>⌘ K</span></button>
         <div className="studio-nav-label">WORKSPACE</div>
         <nav className="studio-primary-nav" aria-label="Production stages">
-          <button className={step === "brief" ? "studio-nav-item is-active" : "studio-nav-item"} onClick={() => navigateStudio("brief")}><FileText size={17} /> <span>Video brief</span></button>
+          <button className={step === "brief" ? "studio-nav-item is-active" : "studio-nav-item"} onClick={() => navigateStudio("brief")}><FileText size={17} /> <span>Brief overview</span></button>
           <button className={step === "concepts" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!screenplay && !concepts.length} onClick={() => navigateStudio("concepts")}><Lightbulb size={17} /> <span>Script & concepts</span></button>
           <button className={step === "storyboard" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} onClick={() => navigateStudio("storyboard")}><Clapperboard size={17} /> <span>Storyboard</span></button>
           <button className={step === "shots" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} onClick={() => navigateStudio("shots")}><Film size={17} /> <span>Flow shots</span></button>
