@@ -1045,7 +1045,7 @@ function App() {
             <div className="studio-sequence-strip" aria-label="Storyboard scene timeline">
               {storyboard.scenes.map((scene) => {
                 const preview = projectAssets.find((asset) => asset.kind === "scene" && asset.sceneId === scene.id);
-                return <button type="button" key={scene.id} className={inspectorScene?.id === scene.id ? "studio-sequence-item selected" : "studio-sequence-item"} onClick={() => setInspectorSceneId(scene.id)}>
+                return <button type="button" key={scene.id} aria-label={"Select storyboard scene " + scene.sceneNumber} className={inspectorScene?.id === scene.id ? "studio-sequence-item selected" : "studio-sequence-item"} onClick={() => setInspectorSceneId(scene.id)}>
                   <span className="studio-sequence-thumb">{preview ? <img src={"data:" + preview.mimeType + ";base64," + preview.data} alt="" loading="lazy"/> : <Clapperboard size={19}/>}</span>
                   <span className="studio-sequence-item-label">{String(scene.sceneNumber).padStart(2,"0")} · {scene.durationSeconds}s</span>
                 </button>;
