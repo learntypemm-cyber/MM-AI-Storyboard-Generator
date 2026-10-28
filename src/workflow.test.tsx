@@ -197,7 +197,10 @@ describe("editor workflow", () => {
   });
   it("restores a version after editing and keeps the replaced board in history", async () => {
     await openEditor();
-    // Studio V2 edits the selected (unlocked) scene without rendering all other scene cards.
+    // The restore action requires every scene unlocked; V2 shows one scene at a time.
+    fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 2" }));
+    fireEvent.click(screen.getByRole("button", { name: /Locked · unlock/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 1" }));
     fireEvent.click(screen.getByRole("button", { name: "Save version" }));
     const title = screen.getAllByLabelText("Scene title")[0] as HTMLInputElement;
     fireEvent.change(title, { target: { value: "New title" } });
