@@ -1,0 +1,198 @@
+/* MM Storyboard — Interactive Studio V3
+   Original cinematic UI system. Previous sidebar/stepper/dark-mode override CSS is retired. */
+:root{color-scheme:dark;font-family:Inter,"DM Sans","Myanmar Text",system-ui,sans-serif;--ink:#f2f4fc;--muted:#a2afc3;--line:#354154;--blue:#959fff;--blue-dark:#737ef2;--blue-light:#303b63;--panel:#192332;--green:#72d8b0;--shadow:0 16px 50px rgba(0,0,0,.12)}
+html{background:#0b111b}
+body{margin:0;background:#0b111b!important;color:#e9eef8}
+button,select,input,textarea{font:inherit}
+button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #a8b1ff;outline-offset:2px}
+.cinema-app{min-height:100vh;background:radial-gradient(ellipse at 25% -15%,#1a2944 0%,#0b111b 42%);color:#eef2ff;--panel:#192332;--ink:#eff3ff;--muted:#a2b0c4;--line:#354257;--blue:#919bff;--blue-dark:#727ee9;--blue-light:#2b3557}
+.cinema-header{height:76px;position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 max(22px,calc((100vw - 1550px)/2));background:rgba(13,19,29,.94);backdrop-filter:blur(16px);border-bottom:1px solid #2b3549}
+.cinema-header-start,.cinema-header-end,.cinema-brand{display:flex;align-items:center;gap:15px;min-width:0}
+.cinema-brand{gap:12px;flex-shrink:0}
+.cinema-brand-icon{width:42px;height:42px;display:grid;place-items:center;background:linear-gradient(145deg,#7784ed,#384a88);border-radius:12px;color:#fff;box-shadow:0 8px 25px #3d4da94d}
+.cinema-brand strong{display:block;font-size:14px;letter-spacing:.075em;white-space:nowrap;font-weight:800}
+.cinema-brand small{display:block;color:#9cacc8;font-size:9px;letter-spacing:.14em;margin-top:3px}
+.cinema-header-divider{width:1px;height:34px;background:#344054}
+.cinema-current-project{display:flex;flex-direction:column;gap:4px;max-width:270px;min-width:0}
+.cinema-current-project>span{color:#7586a3;font-size:9px;letter-spacing:.13em;font-weight:800}
+.cinema-current-project strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#e0e7f4;font-size:12px;font-weight:650}
+.cinema-header-end{margin-left:auto;gap:9px}
+.cinema-header button{cursor:pointer}
+.cinema-ai{display:flex;align-items:center;gap:8px;background:transparent;color:#c2cbdf;border:1px solid #35435a;padding:9px 12px;border-radius:9px;font-size:11px;white-space:nowrap}
+.cinema-ai-dot{width:7px;height:7px;display:inline-block;border-radius:50%;background:#f0b96d;box-shadow:0 0 0 3px #f0b96d1a}
+.cinema-ai.online .cinema-ai-dot{background:#72d8b0;box-shadow:0 0 0 3px #72d8b01f}
+.cinema-icon-action{display:flex;align-items:center;justify-content:center;background:#1a2637;border:1px solid #39455a;border-radius:9px;color:#b8c9e0;min-width:38px;height:38px;list-style:none;cursor:pointer}
+.cinema-save{display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;background:#818dff;color:#fff;border:1px solid #959fff;padding:10px 15px;border-radius:9px;font-weight:750;font-size:11px}
+.cinema-save:hover:not(:disabled){background:#6e79e9}
+.cinema-mobile-toggle{display:none;border:1px solid #364357;background:#1b2637;color:#fff;border-radius:8px;padding:8px}
+.cinema-more{position:relative}
+.cinema-more .topbar-more-menu{top:calc(100% + 8px);right:0;z-index:100;background:#202b3d;border:1px solid #46536b;box-shadow:0 20px 60px #0008}
+.cinema-more .topbar-more-menu>button,.cinema-more .topbar-more-menu>label{color:#e5edff}
+.cinema-main{max-width:1600px;margin:0 auto;min-width:0}
+.cinema-content{padding:28px 36px 48px}
+.cinema-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:18px 4px 26px}
+.cinema-heading-copy{max-width:820px;min-width:0}
+.cinema-overline{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:800;color:#9facff;letter-spacing:.15em}
+.cinema-overline-line{display:inline-block;width:35px;height:1px;background:#6774c4;margin-left:5px}
+.cinema-heading h1{font-size:clamp(27px,3.2vw,46px);font-weight:800;letter-spacing:-.046em;line-height:1.17;margin:12px 0 8px;color:#f5f6fd;max-width:100%}
+.cinema-heading p{color:#97aac3;font-size:13px;line-height:1.7;margin:0}
+.cinema-heading-stats{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
+.cinema-heading-stats>span{display:flex;align-items:center;gap:8px;background:#1a2535;border:1px solid #334055;color:#c4d0e1;padding:10px 11px;border-radius:8px;font-size:11px}
+.cinema-heading-stats svg{color:#aab4ff}
+.cinema-navigation{display:flex;align-items:stretch;justify-content:space-between;gap:12px;background:#161f2e;border:1px solid #303d51;border-radius:14px;padding:7px;margin-bottom:20px;box-shadow:0 16px 35px #0000001c}
+.cinema-nav-tabs,.cinema-nav-actions{display:flex;align-items:stretch;gap:5px;min-width:0}
+.cinema-nav-tabs{flex:1;overflow-x:auto}
+.cinema-nav-tab{position:relative;display:flex;align-items:center;justify-content:center;gap:9px;min-height:46px;border:1px solid transparent;background:transparent;color:#aab8cd;padding:10px 13px;border-radius:9px;white-space:nowrap;font-size:12px;font-weight:700;flex-shrink:0}
+.cinema-nav-tab:hover:not(:disabled){background:#242f43;color:#eef2fc}
+.cinema-nav-tab.active{color:#f4f4ff;background:#353f68;border-color:#6371ab}
+.cinema-nav-tab:disabled{opacity:.36}
+.cinema-nav-number{font-size:10px;color:#8798b2;font-weight:800}
+.cinema-nav-tab.active .cinema-nav-number{color:#c5ccff}
+.cinema-tab-active-dot{position:absolute;bottom:3px;left:calc(50% - 12px);width:24px;height:2px;border-radius:2px;background:#b4bafd}
+.cinema-nav-actions{padding-left:12px;border-left:1px solid #334155;flex-shrink:0}
+.cinema-nav-actions button{display:flex;align-items:center;justify-content:center;gap:7px;background:#202d40;border:1px solid #37465d;color:#cbd6e8;padding:8px 11px;border-radius:9px;font-size:11px;font-weight:700;white-space:nowrap}
+.cinema-nav-actions button:last-child{color:#fff;border-color:#7d86e6;background:#46518b}
+.cinema-nav-actions button:hover:not(:disabled){background:#32425d}
+.cinema-workspace{min-width:0;max-width:100%}
+.cinema-workspace > .panel,.cinema-workspace > .storyboard-section,.cinema-workspace > .results-section{margin-top:0;margin-bottom:15px}
+.cinema-app .panel,.cinema-app .storyboard-section,.cinema-app .results-section{border:1px solid #354257!important;background:#182231!important;border-radius:15px!important;box-shadow:none!important;color:#e9efff}
+.cinema-app .section-heading{border-bottom:1px solid #334054!important;padding:19px 22px;background:transparent}
+.cinema-app .section-heading h2,.cinema-app h2,.cinema-app h3,.cinema-app h4{color:#edf1fc}
+.cinema-app .section-heading h2{font-size:18px;letter-spacing:-.02em}
+.cinema-app .section-heading p,.cinema-app .field-hint,.cinema-app .page-description{color:#99abc5}
+.cinema-app .section-icon{border-radius:11px;background:#2b395a!important;color:#a9b3ff!important}
+.cinema-app .form-content{padding:20px 22px}
+.cinema-app .field,.cinema-app label{color:#cdd6e5}
+.cinema-app .field-label{color:#c9d5e8!important}
+.cinema-app .input,.cinema-app input.input,.cinema-app select.input,.cinema-app textarea.input{background:#111a28!important;border:1px solid #3a4760!important;color:#eff4ff!important;border-radius:9px;padding:11px 12px;box-shadow:none}
+.cinema-app .input::placeholder,.cinema-app textarea::placeholder{color:#71839d}
+.cinema-app .input:focus{border-color:#919cff!important;box-shadow:0 0 0 3px #8c9bff1b}
+.cinema-app textarea{resize:vertical;max-width:100%}
+.cinema-app .primary-button,.cinema-app .new-project-button{background:#7d87f6!important;border:1px solid #858ef7!important;color:#fff!important;box-shadow:none!important;border-radius:9px;font-weight:750}
+.cinema-app .primary-button:hover:not(:disabled){background:#6976e3!important}
+.cinema-app .secondary-button,.cinema-app .quiet-button,.cinema-app .settings-button,.cinema-app .upload-button{background:#263247!important;color:#dce5fb!important;border:1px solid #45536b!important;border-radius:9px}
+.cinema-app .secondary-button:hover:not(:disabled),.cinema-app .quiet-button:hover:not(:disabled){background:#34435e!important}
+.cinema-app button:disabled{opacity:.43}
+.cinema-app .workflow-toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.cinema-app .panel-kicker,.cinema-app .subsection-label,.cinema-app .hook-label,.cinema-app .overview-eyebrow{color:#aab6ff}
+.cinema-app .brief-panel .form-content{display:block}
+.cinema-app .brief-panel .form-grid{margin-top:16px}
+.cinema-app .style-grid{display:flex;overflow-x:auto;gap:10px;padding:9px 0}
+.cinema-app .style-option{min-width:122px;max-width:150px;background:#202c3f;border:1px solid #35445b;border-radius:11px;color:#c6d1e5}
+.cinema-app .style-option.chosen{background:#313d63;border-color:#929bfb;color:#fff}
+.cinema-app .style-art{background:radial-gradient(circle at 40% 40%,#465377,#263147)!important;color:#b9c5ff}
+.cinema-app .brief-footer{border-color:#344158;background:#1b2738}
+.cinema-app .existing-screenplay-panel{background:#192333!important}
+.cinema-app .existing-screenplay-summary{cursor:pointer}
+.cinema-app .concept-grid{background:transparent;gap:15px}
+.cinema-app .concept-card{background:#1d293a;border:1px solid #3b4a61;border-radius:13px;overflow:hidden;color:#e4ebf9;box-shadow:none}
+.cinema-app .concept-card.selected{border-color:#919cff}
+.cinema-app .concept-visual{background:linear-gradient(140deg,#353f74,#1d2a46)!important}
+.cinema-app .concept-title-row h3,.cinema-app .concept-card h3{color:#f0f2ff}
+.cinema-app .concept-summary,.cinema-app .concept-direction p,.cinema-app .concept-hook{color:#bdc9dc}
+.cinema-app .concept-direction,.cinema-app .story-arc,.cinema-app .arc-beat{background:#233149;border-color:#3d4d65}
+.cinema-app .storyboard-overview{background:#202c3f;border:1px solid #3c4b62;border-radius:12px;margin:12px 18px}
+.cinema-app .overview-main h3{color:#eaf0ff}
+.cinema-app .visual-bible,.cinema-app .production-notes,.cinema-app .audit-panel,.cinema-app .contact-sheet-action,.cinema-app .compatibility-note{background:#202b3d;color:#c5d0e3;border-color:#3a4a60}
+.cinema-app .audit-item{border-color:#35445b;background:#1b283a}
+.cinema-app .audit-item strong,.cinema-app .production-notes strong{color:#e8edff}
+.cinema-app .storyboard-section > h2,.cinema-app .storyboard-section > p{margin-left:20px;margin-right:20px}
+.cinema-story-bible{margin:13px 20px;border:1px solid #394763;border-radius:12px;background:#1b2636}
+.cinema-story-bible > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:13px 15px;font-size:12px;font-weight:750;color:#b8c5e5}
+.cinema-story-bible > summary svg:last-child{margin-left:auto}
+.cinema-story-bible > summary::-webkit-details-marker{display:none}
+.cinema-story-bible[open] > summary{border-bottom:1px solid #3b4960}
+.cinema-app .workspace-advanced,.cinema-app .scene-extra,.cinema-app .scene-editor-details{border:1px solid #35445a;background:#1d293a;color:#c2d1e9;border-radius:9px}
+.cinema-app details > summary{cursor:pointer}
+.cinema-app .workspace-advanced>summary,.cinema-app .scene-editor-details>summary,.cinema-app .scene-extra>summary{color:#c1cfff;background:#222e45;border-color:#3d4a63;padding:13px 15px;font-weight:750}
+.cinema-app .scene-fieldset{border-color:#3c4a62;min-width:0}
+.cinema-app .scene-card{background:#182231!important;border:1px solid #394860!important;border-radius:14px;overflow:hidden;color:#e5edfa}
+.cinema-app .scene-card-head{background:#1d293a;border-color:#38465c;gap:10px}
+.cinema-app .scene-title-input{color:#f0f4ff!important}
+.cinema-app .scene-number{background:#35466b;color:#bec7ff;border-radius:8px}
+.cinema-app .scene-tags span,.cinema-app .quality-tag{color:#b8c7db}
+.cinema-app .scene-controls{background:#1a2636;border-color:#37465b;display:flex;flex-wrap:wrap;gap:8px;padding:11px}
+.cinema-app .scene-controls .input{width:auto;max-width:180px}
+.cinema-app .scene-detail,.cinema-app .scene-visual-details,.cinema-app .scene-audit-line,.cinema-app .scene-reference-picker{background:#1d2a3d;border-color:#37465d;color:#c6d2e6}
+.cinema-app .scene-content{color:#dbe6f6}
+.cinema-app .scene-detail span,.cinema-app .scene-visual-details span{color:#9cacdb}
+.cinema-app .scene-detail p,.cinema-app .scene-audit-line small{color:#c2cddd}
+.cinema-app .scene-editor-details{margin:10px 12px}
+.cinema-app .scene-editor-details > summary{font-size:12px}
+.cinema-app .studio-sequence-header{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:23px 21px 10px}
+.cinema-app .studio-sequence-kicker{display:block;color:#a3aeff;font-size:10px;letter-spacing:.14em;font-weight:800}
+.cinema-app .studio-sequence-header h3{font-size:22px;letter-spacing:-.04em;margin:7px 0 4px}
+.cinema-app .studio-sequence-header p{color:#9dafc6;font-size:12px;margin:0}
+.cinema-app .studio-sequence-strip{display:flex;align-items:stretch;gap:10px;overflow-x:auto;padding:10px 20px 21px;scroll-snap-type:x proximity}
+.cinema-app .studio-sequence-item{display:flex;flex-direction:column;gap:8px;flex:0 0 142px;min-width:0;border:1px solid #3a4a61;border-radius:11px;padding:7px;background:#1b293a;color:#aebfd5;text-align:left;scroll-snap-align:start}
+.cinema-app .studio-sequence-item:hover,.cinema-app .studio-sequence-item.selected{border-color:#a0a8ff;background:#343f64}
+.cinema-app .studio-sequence-thumb{width:100%;height:77px;display:grid;place-items:center;background:linear-gradient(145deg,#2f405d,#151e2d);border-radius:7px;overflow:hidden;color:#9fabff}
+.cinema-app .studio-sequence-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.cinema-app .studio-sequence-item-label{font-size:10px;color:#d0d7ec;font-weight:800}
+.cinema-app .studio-storyboard-workspace{display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:start;gap:16px;padding:0 20px}
+.cinema-app .scene-list{min-width:0}
+.cinema-app .studio-storyboard-workspace .scene-card{margin:0}
+.cinema-app .studio-scene-cover{position:relative;height:clamp(280px,37vw,520px);background:#0b1422;display:flex;align-items:center;justify-content:center;overflow:hidden;border-bottom:1px solid #364357}
+.cinema-app .studio-scene-cover > img{width:100%;height:100%;object-fit:contain}
+.cinema-app .studio-scene-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;height:100%;width:100%;background:radial-gradient(ellipse at 50% 30%,#2b3d61,#121c2d 70%);color:#93a6c3}
+.cinema-app .studio-scene-placeholder strong{font-size:15px;color:#e5eafb}
+.cinema-app .studio-scene-placeholder span{font-size:12px;color:#9eafc8}
+.cinema-app .studio-scene-cover-count{position:absolute;left:15px;top:15px;background:#0c1522dd;border:1px solid #6a7895;border-radius:8px;color:#f1f4ff;padding:8px 12px;font-size:11px;letter-spacing:.11em;font-weight:850}
+.cinema-app .studio-inspector{position:sticky;top:95px;min-width:0;background:#1b2637;border:1px solid #3a4960;border-radius:13px;padding:16px;display:flex;flex-direction:column;gap:13px;box-shadow:none}
+.cinema-app .studio-inspector-heading{display:flex;align-items:center;justify-content:space-between;color:#9eabff;font-size:10px;font-weight:850;letter-spacing:.16em}
+.cinema-app .studio-inspector-dot{width:7px;height:7px;background:#8c99ff;border-radius:50%}
+.cinema-app .studio-inspector-title span{font-size:11px;color:#a0acd1;font-weight:800}
+.cinema-app .studio-inspector-title h3{font-size:18px;line-height:1.45;letter-spacing:-.025em;margin:7px 0 3px}
+.cinema-app .studio-inspector-statgrid{display:flex;gap:7px;flex-wrap:wrap;color:#d4dfef;font-size:11px}
+.cinema-app .studio-inspector-statgrid span{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#263449;border-radius:8px}
+.cinema-inspector-tabs{display:flex;gap:5px;overflow-x:auto;border-bottom:1px solid #3a4a60;padding-bottom:10px}
+.cinema-inspector-tabs button{flex:0 0 auto;font-size:10px;font-weight:750;padding:9px 10px;color:#aabbd2;background:transparent;border:1px solid transparent;border-radius:7px}
+.cinema-inspector-tabs button.active{background:#36436c;border-color:#7885d1;color:#f0f3ff}
+.cinema-inspector-body{display:flex;flex-direction:column;gap:9px;min-height:165px}
+.cinema-app .studio-inspector-section{padding:11px 12px;background:#222f43;border:1px solid #34475f;border-radius:8px}
+.cinema-app .studio-inspector-section strong{display:block;color:#9facd1;font-size:10px;letter-spacing:.09em}
+.cinema-app .studio-inspector-section p{color:#d0dced;font-size:11px;line-height:1.65;margin:6px 0 0}
+.cinema-inspector-editor .field{display:flex;flex-direction:column;gap:6px;margin:0;font-size:11px}
+.cinema-inspector-editor .input{font-size:12px}
+.cinema-scene-pagination{display:flex;align-items:center;justify-content:space-between;gap:6px;background:#1b2a40;border:1px solid #394963;border-radius:9px;padding:7px}
+.cinema-scene-pagination button{display:flex;align-items:center;gap:5px;border:0;border-radius:7px;background:#313e60;color:#dce6fd;padding:8px;font-size:10px}
+.cinema-scene-pagination span{font-size:10px;font-weight:750;color:#abb7d0}
+.cinema-app .studio-next-step{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:20px;padding:20px;border:1px solid #4e5d8b;border-radius:12px;background:linear-gradient(110deg,#253459,#1a273c)}
+.cinema-app .studio-next-step strong{display:block;font-size:15px;margin-top:7px;color:#f3f5ff}
+.cinema-app .studio-next-step p{color:#aab8d2;font-size:12px;line-height:1.6;margin:5px 0 0}
+.cinema-app .studio-next-step button{flex-shrink:0}
+.cinema-app .end-actions,.cinema-app .storyboard-actions{display:flex;flex-wrap:wrap;gap:8px}
+.cinema-app .page-footer{background:transparent;border-color:#29374b;color:#71839d;margin-top:24px}
+.cinema-app .modal-backdrop{background:#050b14c9;backdrop-filter:blur(4px)}
+.cinema-app .modal-card{background:#1b2636;border:1px solid #4d5a74;color:#e5edfd;box-shadow:0 32px 100px #000a}
+.cinema-app .modal-card h2{color:#fff}
+.cinema-app .modal-description,.cinema-app .privacy-note{color:#b9c8db}
+.cinema-app .library-project,.cinema-app .gemini-model-check-item{background:#202d40;border:1px solid #3d4b62;color:#d9e3f3}
+.cinema-app .shot-card,.cinema-app .shot-section,.cinema-app .shot-scene,.cinema-app .shot-editor{background:#1b2738;border-color:#3b4a61;color:#edf1fc}
+.cinema-app .shot-card > summary{color:#d6dfec}
+.cinema-app .shot-card-title,.cinema-app .shot-scene-title{color:#f1f4fc}
+.cinema-app .shot-fields,.cinema-app .shot-options,.cinema-app .shot-actions{background:#1b2637;color:#dbe5f6}
+.cinema-app .script-studio-tabs,.cinema-app .v2-tabs{display:flex;gap:6px;overflow-x:auto;position:sticky;top:76px;z-index:8;background:#151f2d;border-bottom:1px solid #3a4961;padding:12px 15px}
+.cinema-app .script-studio-tabs button,.cinema-app .v2-tabs button{flex:0 0 auto;background:#223146;color:#b7c4d9;border:1px solid #3c4d65;border-radius:8px;padding:10px 13px;font-size:12px;font-weight:750}
+.cinema-app .script-studio-tabs button.active,.cinema-app .v2-tabs button.active{background:#3b4774;border-color:#929ef5;color:#fff}
+.cinema-app .script-studio-tabs button:disabled{opacity:.38}
+.cinema-app .script-stage,.cinema-app .v2-export-workspace{padding:18px}
+.cinema-app .script-stage .scene-fieldset{padding:16px}
+.cinema-app .script-stage textarea[rows="22"]{min-height:280px;max-height:55vh;overflow:auto;resize:vertical}
+.cinema-app .script-reference-workspace,.cinema-app .script-review-workspace,.cinema-app .v2-focused-scene,.cinema-app .v2-assets-workspace{display:grid;grid-template-columns:220px minmax(0,1fr);gap:14px;padding:16px;align-items:start}
+.cinema-app .v2-assets-workspace > h3,.cinema-app .v2-assets-workspace > p{grid-column:1/-1;margin:0}
+.cinema-app .v2-assets-list,.cinema-app .v2-scene-list,.cinema-app .script-reference-list,.cinema-app .script-inventory-scene-list{display:flex;flex-direction:column;gap:7px;max-height:70vh;overflow:auto;min-width:0}
+.cinema-app .v2-assets-list button,.cinema-app .v2-scene-list button,.cinema-app .script-reference-list button,.cinema-app .script-inventory-scene-list button{display:flex;flex-direction:column;gap:5px;text-align:left;padding:11px 12px;border-radius:9px;border:1px solid #3a4b63;background:#223046;color:#d8e0f0;font-size:12px;overflow-wrap:anywhere}
+.cinema-app .v2-assets-list button.active,.cinema-app .v2-scene-list button.active,.cinema-app .script-reference-list button.active,.cinema-app .script-inventory-scene-list button.active{border-color:#929fff;background:#354269}
+.cinema-app .v2-assets-list small,.cinema-app .v2-scene-list small,.cinema-app .script-reference-list small{color:#9baac5;font-size:10px}
+.cinema-app .v2-asset-editor,.cinema-app .v2-scene-editor,.cinema-app .script-reference-workspace > .scene-card{min-width:0;margin:0!important}
+.cinema-app .v2-asset-editor{grid-column:2}
+.cinema-app .script-review-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;background:#202d40;border:1px solid #3a4b62;border-radius:10px;padding:14px}
+.cinema-app .script-review-actions p{width:100%}
+.cinema-app .v2-detail-tabs{position:static;top:auto}
+.cinema-app .v2-scene-editor h3{padding:15px;margin:0}
+.cinema-app .v2-scene-editor .scene-fieldset{padding:14px}
+.cinema-app .alert{border-radius:10px}
+@media(max-width:1260px){.cinema-content{padding:22px 24px}.cinema-nav-actions button{font-size:0;padding:11px}.cinema-nav-actions button svg{width:17px;height:17px}.cinema-app .studio-storyboard-workspace{grid-template-columns:minmax(0,1fr) 300px}.cinema-brand small{letter-spacing:.04em}}
+@media(max-width:1050px){.cinema-heading{display:block}.cinema-heading-stats{justify-content:flex-start;margin-top:16px}.cinema-nav-tab{padding:9px}.cinema-app .studio-storyboard-workspace{grid-template-columns:1fr}.cinema-app .studio-inspector{position:static;order:2}.cinema-app .studio-scene-cover{height:clamp(240px,48vw,450px)}.cinema-app .v2-focused-scene,.cinema-app .v2-assets-workspace,.cinema-app .script-reference-workspace,.cinema-app .script-review-workspace{grid-template-columns:1fr}.cinema-app .v2-assets-list,.cinema-app .v2-scene-list,.cinema-app .script-reference-list,.cinema-app .script-inventory-scene-list{flex-direction:row;max-height:none;overflow-x:auto}.cinema-app .v2-assets-list button,.cinema-app .v2-scene-list button,.cinema-app .script-reference-list button,.cinema-app .script-inventory-scene-list button{flex:0 0 160px}.cinema-app .v2-asset-editor{grid-column:1}}
+@media(max-width:740px){.cinema-header{height:64px;padding:0 14px;gap:6px}.cinema-brand-icon{width:36px;height:36px}.cinema-brand strong{font-size:11px}.cinema-brand small{font-size:8px}.cinema-current-project,.cinema-header-divider,.cinema-ai,.cinema-header-end .cinema-icon-action{display:none}.cinema-save{font-size:0;padding:10px}.cinema-save svg{width:17px}.cinema-mobile-toggle{display:grid;place-items:center}.cinema-content{padding:15px 10px 30px}.cinema-heading{padding:10px 5px 18px}.cinema-heading h1{font-size:26px}.cinema-heading p{font-size:12px}.cinema-heading-stats>span{font-size:10px;padding:7px}.cinema-navigation{display:block;padding:5px;margin-bottom:12px}.cinema-nav-tabs{padding:2px;overflow-x:auto}.cinema-nav-tab{min-height:42px;font-size:11px;padding:9px 10px}.cinema-nav-actions{border-left:0;border-top:1px solid #334155;padding:6px 3px 3px;margin-top:5px;justify-content:flex-end}.cinema-nav-actions button{font-size:10px;padding:8px 10px}.cinema-app .section-heading{padding:14px;flex-wrap:wrap}.cinema-app .form-content{padding:14px}.cinema-app .studio-sequence-header{padding:14px;flex-wrap:wrap}.cinema-app .studio-sequence-strip{padding:6px 12px 15px}.cinema-app .studio-sequence-item{flex-basis:108px}.cinema-app .studio-sequence-thumb{height:61px}.cinema-app .studio-storyboard-workspace{padding:0 10px;gap:12px}.cinema-app .studio-scene-cover{height:240px}.cinema-app .studio-inspector{padding:12px}.cinema-app .studio-next-step{margin:12px;display:block;padding:15px}.cinema-app .studio-next-step button{margin-top:14px;width:100%}.cinema-app .scene-controls{gap:5px}.cinema-app .scene-card-head{flex-wrap:wrap}.cinema-app .cinema-story-bible{margin:10px}.cinema-app .concept-grid{padding:10px;grid-template-columns:1fr}.cinema-app .script-studio-tabs,.cinema-app .v2-tabs{top:64px}.cinema-app .script-reference-workspace,.cinema-app .script-review-workspace,.cinema-app .v2-focused-scene,.cinema-app .v2-assets-workspace{padding:10px;gap:10px}.cinema-app .page-footer{padding:14px;gap:10px;flex-wrap:wrap}.cinema-app .scene-editor-details{margin:8px}.cinema-app .v2-asset-editor{padding:10px}}
