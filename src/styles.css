@@ -589,6 +589,22 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .shot-workflow-note strong { display: block; color: #365aa4; font-size: 11px; }
 .shot-workflow-note p { margin: 4px 0 0; color: #6e7e9d; font-size: 10px; line-height: 1.8; }
 .shot-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 17px 20px; border-bottom: 1px solid #edf1f6; }
+.shot-workspace-layout { display: grid; grid-template-columns: 226px minmax(0, 1fr); min-height: 420px; background: #fafbfe; }
+.shot-scene-nav { padding: 15px 10px; border-right: 1px solid #e8edf5; background: #f7f9fd; }
+.shot-scene-nav-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 9px 10px; color: #8b99ad; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.shot-scene-nav-heading strong { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 6px; background: #e8eefb; color: #4668b9; font-size: 10px; }
+.shot-scene-nav-item { width: 100%; display: flex; align-items: center; gap: 9px; padding: 10px 8px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #60728d; font: inherit; text-align: left; cursor: pointer; }
+.shot-scene-nav-item + .shot-scene-nav-item { margin-top: 3px; }
+.shot-scene-nav-item:hover { background: #fff; border-color: #e4eaf4; }
+.shot-scene-nav-item.active { border-color: #cedcff; background: #fff; box-shadow: 0 3px 12px rgba(43, 77, 143, .07); }
+.shot-scene-nav-number { display: grid; width: 27px; height: 27px; flex: 0 0 27px; place-items: center; border-radius: 7px; background: #eaf0fc; color: #5271b5; font-size: 9px; font-weight: 800; }
+.shot-scene-nav-item.active .shot-scene-nav-number { background: #396ee8; color: #fff; }
+.shot-scene-nav-copy { display: grid; min-width: 0; gap: 2px; flex: 1; }
+.shot-scene-nav-copy strong { overflow: hidden; color: #4d617f; font-size: 10px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.shot-scene-nav-item.active .shot-scene-nav-copy strong { color: #294f9c; }
+.shot-scene-nav-copy small { color: #94a1b3; font-size: 9px; }
+.scene-ready-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #c8d0dc; }
+.scene-ready-dot.ready { background: #35a27b; box-shadow: 0 0 0 3px #dff4eb; }
 .shot-scene-list { display: grid; gap: 12px; padding: 18px 20px 22px; background: #fafbfe; }
 .shot-scene-card { min-width: 0; border: 1px solid #e3e9f3; border-radius: 11px; background: #fff; overflow: hidden; }
 .shot-scene-heading { padding: 16px 17px 5px; }
@@ -602,6 +618,15 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .shot-empty { margin: 0; padding: 0 17px 17px; color: #909db0; font-size: 10px; line-height: 1.75; }
 .shot-list-details { border-top: 1px solid #edf1f7; background: #fcfdff; }
 .shot-list-details > summary { display: flex; align-items: center; gap: 7px; cursor: pointer; padding: 12px 17px; color: #3e5c96; font-size: 10px; font-weight: 800; }
+.shot-quick-actions { display: grid; gap: 8px; padding: 0 14px 14px; }
+.shot-quick-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 11px; border: 1px solid #e4eaf3; border-radius: 9px; background: #fff; }
+.shot-quick-row > span { display: grid; min-width: 0; gap: 3px; }
+.shot-quick-row strong { color: #5970a0; font-size: 9px; letter-spacing: .6px; }
+.shot-quick-row small { overflow: hidden; color: #687b96; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.shot-quick-row > div { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.shot-quick-row .quiet-button, .shot-quick-row .secondary-button { min-height: 30px; padding: 5px 8px; font-size: 9px; }
+.shot-edit-details { margin: 0 14px 14px; border-top: 1px solid #eaf0f6; }
+.shot-edit-details > summary { cursor: pointer; padding: 12px 2px 3px; color: #6a7f9d; font-size: 10px; font-weight: 800; }
 .shot-cards { display: grid; gap: 9px; padding: 0 14px 14px; }
 .shot-card { min-width: 0; border: 1px solid #e4eaf3; border-radius: 9px; background: #fff; overflow: hidden; }
 .shot-card > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 13px; color: #566984; font-size: 10px; }
@@ -635,6 +660,12 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .shot-toolbar > button { flex: 1 1 145px; white-space: normal; }
   .shot-scene-actions { align-items: flex-start; flex-direction: column; }
   .shot-scene-actions button { width: 100%; }
+  .shot-workspace-layout { grid-template-columns: 1fr; }
+  .shot-scene-nav { display: flex; gap: 7px; overflow-x: auto; padding: 11px 12px; border-right: 0; border-bottom: 1px solid #e8edf5; }
+  .shot-scene-nav-heading { display: none; }
+  .shot-scene-nav-item { width: 148px; min-width: 148px; }
+  .shot-quick-row { align-items: flex-start; flex-direction: column; }
+  .shot-quick-row > div { width: 100%; justify-content: flex-start; }
   .shot-fields .three-columns { grid-template-columns: 1fr; }
 }
 
