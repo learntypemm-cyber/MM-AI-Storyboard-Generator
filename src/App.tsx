@@ -208,7 +208,9 @@ function App() {
   const [step, setStep] = useState<"brief" | "concepts" | "storyboard" | "shots">("brief");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [inspectorSceneId, setInspectorSceneId] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<"overview" | "prompt" | "camera" | "audio" | "references">("overview");
   const inspectorScene = storyboard?.scenes.find((scene) => scene.id === inspectorSceneId) || storyboard?.scenes[0] || null;
+  const inspectorIndex = storyboard && inspectorScene ? storyboard.scenes.findIndex(scene => scene.id === inspectorScene.id) : -1;
   const navigateStudio = (next: "brief" | "concepts" | "storyboard" | "shots") => { setStep(next); setMobileNavOpen(false); };
 
   useEffect(() => {
@@ -786,94 +788,65 @@ function App() {
   };
 
   return (
-    <div className="app-shell studio-dark">
-      <aside className={mobileNavOpen ? "sidebar mobile-open" : "sidebar"} aria-label="Studio navigation">
-        <div className="brand-lockup">
-          <div className="brand-mark"><Clapperboard size={22} strokeWidth={2.2} /></div>
-          <div><div className="brand-name">MM Storyboard</div><div className="brand-subtitle">PRODUCTION STUDIO</div></div>
+    <div className="cinema-app studio-dark">
+      <header className="cinema-header">
+        <div className="cinema-header-start">
+          <button className="cinema-mobile-toggle" type="button" onClick={() => setMobileNavOpen((value) => !value)} aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}><LayoutDashboard size={21}/></button>
+          <div className="cinema-brand"><span className="cinema-brand-icon"><Clapperboard size={23}/></span><span><strong>MM STORYBOARD</strong><small>CREATIVE PRODUCTION STUDIO</small></span></div>
+          <span className="cinema-header-divider"/>
+          <div className="cinema-current-project"><span>ACTIVE PROJECT</span><strong>{storyboard?.projectTitle || form.topic || "Untitled production"}</strong></div>
         </div>
-        <button className="new-project-button" disabled={Boolean(busy) || !hydrated} onClick={newProject}><Plus size={17} /> New project <span>⌘ K</span></button>
-        <div className="studio-nav-label">WORKSPACE</div>
-        <nav className="studio-primary-nav" aria-label="Production stages">
-          <button className={step === "brief" ? "studio-nav-item is-active" : "studio-nav-item"} onClick={() => navigateStudio("brief")}><FileText size={17} /> <span>Brief overview</span></button>
-          <button className={step === "concepts" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!screenplay && !concepts.length} onClick={() => navigateStudio("concepts")}><Lightbulb size={17} /> <span>Script & concepts</span></button>
-          <button className={step === "storyboard" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} onClick={() => navigateStudio("storyboard")}><Clapperboard size={17} /> <span>Storyboard</span></button>
-          <button className={step === "shots" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} onClick={() => navigateStudio("shots")}><Film size={17} /> <span>Flow shots</span></button>
-        </nav>
-        <div className="studio-nav-label">PRODUCTION TOOLS</div>
-        <div className="studio-primary-nav">
-          <button className="studio-nav-item" onClick={() => { setAssetStudioOpen(true); setMobileNavOpen(false); }}><Wand2 size={17} /> <span>Asset studio</span></button>
-          <button className="studio-nav-item" disabled={!storyboard} onClick={() => { if (storyboard) exportPromptPack(); setMobileNavOpen(false); }}><Download size={17} /> <span>Export prompts</span></button>
-          <button className="studio-nav-item" onClick={() => { setLibraryOpen(true); setMobileNavOpen(false); }}><FolderOpen size={17} /> <span>Project library</span></button>
-        </div>
-        <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
-        <div className="saved-list">
-          {savedProjects.slice(0, 4).map((project) => <button className="saved-item" key={project.id} disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)} title={project.title}><FolderOpen size={15} /><span>{project.title}</span></button>)}
-          {!savedProjects.length && <div className="empty-library">Your saved projects will appear here.</div>}
-          {savedProjects.length > 4 && <button className="view-all" onClick={() => setLibraryOpen(true)}>View all projects</button>}
-        </div>
-        <div className="sidebar-bottom">
-          <div className={apiKey ? "api-status connected" : "api-status"}><span className="status-dot" /><span>{apiKey ? "Gemini connected" : "API key required"}</span></div>
-          <button className="side-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}><Settings size={17} /> Settings <span className="side-shortcut">⌘ ,</span></button>
-          <div className="sidebar-footer"><span className="mini-logo">MM</span><span>Built for LearnTypeMM</span><span className="version">v1.0</span></div>
-        </div>
-      </aside>
-
-      {mobileNavOpen && <button type="button" className="studio-mobile-scrim" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" />}
-      <main className="main-panel">
-        <header className="topbar"><button className="studio-mobile-menu" type="button" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation"><LayoutDashboard size={19}/></button>
-          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "ဇာတ်ညွှန်းနှင့် Reference အတည်ပြုခြင်း" : step === "storyboard" ? "Scene prompts" : "Flow prompts"}</strong></div>
-          <div className="topbar-actions">
-            <button className="primary-button small-primary" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={15} /> Save</button>
-            <details className="topbar-more">
-              <summary className="secondary-button more-menu-trigger"><MoreHorizontal size={16} /> More</summary>
-              <div className="topbar-more-menu">
-                <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
-                <label className="quiet-button archive-upload"><Upload size={15} /> Import ZIP<input type="file" accept=".zip" disabled={Boolean(busy) || !hydrated} onChange={(event) => { void importZip(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
-                <button className="secondary-button" onClick={() => setLibraryOpen(true)}><FolderOpen size={15} /> My projects</button>
-                <button className="settings-button" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}><Settings size={15} /> Settings</button>
-                {showAdvanced && <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={15} /> Asset Studio</button>}
-              </div>
-            </details>
-          </div>
-        </header>
-
-        <div className="page-content">
-          <div className="studio-contextbar"><div><span className="studio-context-eyebrow">CURRENT PRODUCTION</span><strong>{storyboard?.projectTitle || form.topic || "Untitled project"}</strong></div><div className="studio-context-meta"><span><Film size={13}/> {storyboard?.scenes.length || 0} scenes</span><span><MonitorPlay size={13}/> {form.aspectRatio}</span></div></div>
-          <section className="welcome-row">
-            <div>
-              <div className="eyebrow"><span className="eyebrow-mark"><Sparkles size={12} /></span> AI VIDEO WORKFLOW <span className="eyebrow-dot">•</span> GOOGLE FLOW READY</div>
-              <h1>Turn ideas into <span className="gradient-text">storyboards.</span></h1>
-              <p className="page-description">ခေါင်းစဉ်မှ မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပါ။ ဇာတ်ညွှန်းနှင့် Character / Background ကို အတည်ပြုပြီးမှ Scene prompts ထုတ်ပါ။</p>
+        <div className="cinema-header-end">
+          <button className={apiKey ? "cinema-ai online" : "cinema-ai"} onClick={() => {setApiKeyDraft(apiKey);setSettingsOpen(true);}} title="Gemini connection settings"><span className="cinema-ai-dot"/>{apiKey ? "Gemini ready" : "Connect Gemini"}</button>
+          <button className="cinema-icon-action" type="button" onClick={() => setLibraryOpen(true)} title="Project library" aria-label="Open library"><FolderOpen size={18}/></button>
+          <button className="cinema-save" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={16}/> Save project</button>
+          <details className="topbar-more cinema-more">
+            <summary className="cinema-icon-action" aria-label="More options" title="More options"><MoreHorizontal size={20}/></summary>
+            <div className="topbar-more-menu">
+              <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15}/> Backup ZIP</button>
+              <label className="quiet-button archive-upload"><Upload size={15}/> Import ZIP<input type="file" accept=".zip" disabled={Boolean(busy) || !hydrated} onChange={(event) => {void importZip(event.target.files?.[0]);event.currentTarget.value = "";}}/></label>
+              <button className="secondary-button" onClick={() => setLibraryOpen(true)}><FolderOpen size={15}/> My projects</button>
+              <button className="settings-button" onClick={() => {setApiKeyDraft(apiKey);setSettingsOpen(true);}}><Settings size={15}/> Settings</button>
             </div>
-            <div className="welcome-stat"><div className="welcome-stat-icon"><Zap size={19} /></div><div><strong>One brief</strong><span>Complete video plan</span></div></div>
-          </section>
-
-          <nav className="stepper" aria-label="Video production workflow">
-            {[
-              { id: "brief", number: "01", label: "Video brief", icon: FileText },
-              { id: "concepts", number: "02", label: "Screenplay / refs", icon: Lightbulb },
-              { id: "storyboard", number: "03", label: "Scene prompts", icon: Clapperboard },
-              { id: "shots", number: "04", label: "Flow prompts", icon: Film },
-            ].map((item, index) => {
-              const Icon = item.icon;
-              const active = step === item.id;
-              const complete = (item.id === "brief" && (concepts.length > 0 || Boolean(form.topic.trim())))
-                || (item.id === "concepts" && (screenplay ? inventoryApproved(screenplay, form) : concepts.length > 0))
-                || (item.id === "storyboard" && boardCurrent)
-                || (item.id === "shots" && boardCurrent && Boolean(storyboard?.scenes.some((scene) => scene.shots?.length)));
-              const canVisit = item.id === "brief" || (item.id === "concepts" && Boolean(screenplay || concepts.length))
-                || (item.id === "storyboard" && boardCurrent) || (item.id === "shots" && boardCurrent);
-              return <button type="button" className={active ? "step-item active" : complete ? "step-item complete" : "step-item"} key={item.id}
-                disabled={!canVisit} aria-current={active ? "step" : undefined}
-                onClick={() => setStep(item.id as "brief" | "concepts" | "storyboard" | "shots")}>
-                <span className="step-num">{complete && !active ? <Check size={14} /> : <Icon size={14} />}</span>
-                <span className="step-copy"><span>{item.number}</span><strong>{item.label}</strong></span>
-                {index < 3 && <span className="step-connector" aria-hidden="true" />}
-              </button>;
-            })}
-          </nav>
-
+          </details>
+        </div>
+      </header>
+      <main className="cinema-main">
+        <div className="cinema-content">
+          <div className="cinema-heading">
+            <div className="cinema-heading-copy">
+              <span className="cinema-overline"><Sparkles size={12}/> YOUR CREATIVE WORKSPACE <span className="cinema-overline-line"/></span>
+              <h1>{step === "brief" ? "Every film starts with a story." : step === "concepts" ? "Write the story. Find its world." : step === "storyboard" ? "See the story, frame by frame." : "Craft every shot."}</h1>
+              <p>{step === "brief" ? "Shape the idea, define the look, and set your production in motion." : step === "concepts" ? "Select a concept, refine the screenplay, and approve character references." : step === "storyboard" ? "Select a scene from the filmstrip, review the image, and refine only what matters." : "Prepare precise shots and export production-ready prompts for Google Flow."}</p>
+            </div>
+            <div className="cinema-heading-stats">
+              <span><Film size={15}/>{storyboard?.scenes.length || 0} scenes</span>
+              <span><Clock3 size={15}/>{storyboard?.scenes.reduce((n,scene)=>n+scene.durationSeconds,0) || form.targetDuration}s</span>
+              <span><MonitorPlay size={15}/>{form.aspectRatio}</span>
+            </div>
+          </div>
+          <div className="cinema-navigation">
+            <nav className={mobileNavOpen ? "cinema-nav-tabs mobile-open" : "cinema-nav-tabs"} aria-label="Production stages">
+              {([
+                ["brief", "01", "Video brief", FileText],
+                ["concepts", "02", "Screenplay / refs", Lightbulb],
+                ["storyboard", "03", "Scene prompts", Clapperboard],
+                ["shots", "04", "Flow prompts", Film]
+              ] as const).map(([id,number,label,Icon]) => {
+                const active = step === id;
+                const available = id === "brief" || (id === "concepts" && Boolean(screenplay || concepts.length)) ||
+                  (id === "storyboard" && boardCurrent) || (id === "shots" && boardCurrent);
+                return <button type="button" key={id} className={active ? "cinema-nav-tab active" : "cinema-nav-tab"} aria-current={active ? "step" : undefined}
+                  disabled={!available} onClick={() => navigateStudio(id)}><span className="cinema-nav-number">{number}</span><Icon size={17}/><span>{label}</span>{active && <span className="cinema-tab-active-dot"/>}</button>;
+              })}
+            </nav>
+            <div className="cinema-nav-actions">
+              <button type="button" title="Asset library" onClick={() => setAssetStudioOpen(true)}><Wand2 size={16}/> Assets</button>
+              <button type="button" disabled={!storyboard} title="Download Flow prompts" onClick={() => exportPromptPack()}><Download size={16}/> Export</button>
+              <button type="button" title="Create new project" disabled={Boolean(busy) || !hydrated} onClick={newProject}><Plus size={16}/> New project</button>
+            </div>
+          </div>
+          <div className="cinema-workspace">
           {error && <div className="alert error-alert" role="alert"><AlertCircle size={17} /><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss"><X size={15} /></button></div>}
           {notice && <div className="alert success-alert" role="status"><CheckCircle2 size={17} /><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}
 
@@ -993,6 +966,8 @@ function App() {
               <div><h2>Your storyboard</h2><p>Edit the prompts and narration before moving each clip into Google Flow.</p></div>
               <div className="storyboard-actions"><button className="quiet-button" onClick={() => setStep("shots")}><Film size={15} /> Shot breakdown</button><button className="primary-button" disabled={Boolean(busy)} onClick={() => void makeBurmeseDraft()}>မြန်မာမူကြမ်းအဖြစ်ပြောင်းရန်</button><button className="quiet-button" onClick={saveProject}><Save size={15} /> Save</button><button className="quiet-button" onClick={exportPromptPack}><Download size={15} /> Flow .txt</button><button className="quiet-button" onClick={exportJson}><Download size={15} /> JSON</button><button className="primary-button small-primary" onClick={exportMarkdown}><Download size={15} /> Export .md</button></div>
             </div>
+            <details className="cinema-story-bible">
+              <summary><Sparkles size={16}/> Story bible, production notes & quality checks <ChevronDown size={15}/></summary>
             <div className="storyboard-overview">
               <div className="overview-main"><div className="overview-eyebrow">SELECTED CONCEPT</div><h3>{storyboard.projectTitle || selectedConcept?.title || form.topic}</h3><p>{storyboard.logline}</p><div className="overview-meta"><span><Film size={14} /> {storyboard.scenes.length} scenes</span><span><Clock3 size={14} /> {storyboard.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)}s planned</span><span><MonitorPlay size={14} /> {form.aspectRatio}</span></div></div>
               <div className="visual-bible"><span><Sparkles size={14} /> VISUAL BIBLE</span><p>{storyboard.visualBible}</p></div>
@@ -1012,6 +987,7 @@ function App() {
               <div className="audit-grid">{allAudits.map((item) => <div className="audit-item" key={item.label}><span className={item.ok ? "audit-check ok" : "audit-check issue"}>{item.ok ? <Check size={12} /> : <AlertCircle size={12} />}</span><div><strong>{item.label}</strong><p>{item.detail}</p></div></div>)}</div>
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
+            </details>
             <details className="field"><summary>Flow လုပ်ဆောင်ရန် လမ်းညွှန် · ၆ ဆင့်</summary><p style={{ whiteSpace: "pre-line" }}>{workflowGuideMM()}</p></details>
             <details className="workspace-advanced">
               <summary>Advanced tools, reusable references & version history</summary>
@@ -1113,11 +1089,44 @@ function App() {
               {inspectorScene && storyboard && <>
                 <div className="studio-inspector-title"><span>SCENE {String(inspectorScene.sceneNumber).padStart(2,"0")}</span><h3>{inspectorScene.title}</h3></div>
                 <div className="studio-inspector-statgrid"><span><Clock3 size={13}/> {inspectorScene.durationSeconds}s</span><span><Film size={13}/> {inspectorScene.shotSize || "Shot"}</span></div>
-                <div className="studio-inspector-section"><strong>OPENING FRAME</strong><p>{inspectorScene.openingFrame}</p></div>
-                <div className="studio-inspector-section"><strong>ACTION</strong><p>{inspectorScene.action}</p></div>
-                <div className="studio-inspector-section"><strong>CAMERA / LIGHT</strong><p>{inspectorScene.cameraMovement} · {inspectorScene.lighting}</p></div>
-                <div className="studio-inspector-section"><strong>REFERENCES</strong><p>{sceneReferenceList(inspectorScene,storyboard)}</p></div>
-                <div className="studio-inspector-section"><strong>QUALITY</strong><p>{auditScene(inspectorScene).filter(item=>!item.ok).length} flagged checks</p></div>
+                <nav className="cinema-inspector-tabs" aria-label="Scene inspector sections">
+                  {([
+                    ["overview", "Overview"],
+                    ["prompt", "Prompt"],
+                    ["camera", "Camera"],
+                    ["audio", "Audio"],
+                    ["references", "Refs"]
+                  ] as const).map(([id,label]) => <button type="button" className={inspectorTab === id ? "active" : ""} key={id} onClick={() => setInspectorTab(id)}>{label}</button>)}
+                </nav>
+                {inspectorTab === "overview" && <div className="cinema-inspector-body">
+                  <div className="studio-inspector-section"><strong>OPENING FRAME</strong><p>{inspectorScene.openingFrame}</p></div>
+                  <div className="studio-inspector-section"><strong>ACTION</strong><p>{inspectorScene.action}</p></div>
+                  <div className="studio-inspector-section"><strong>CAMERA / LIGHT</strong><p>{inspectorScene.cameraMovement} · {inspectorScene.lighting}</p></div>
+                  <div className="studio-inspector-section"><strong>QUALITY</strong><p>{auditScene(inspectorScene).filter(item => !item.ok).length} checks flagged</p></div>
+                </div>}
+                {inspectorTab === "prompt" && <div className="cinema-inspector-body cinema-inspector-editor">
+                  <label className="field">Google Flow prompt<textarea className="input" rows={10} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.flowPrompt} onChange={event => updateScene(inspectorScene.id, {flowPrompt:event.target.value})}/></label>
+                  <span className="field-hint">Edit the selected scene only. Copy the complete prompt below.</span>
+                </div>}
+                {inspectorTab === "camera" && <div className="cinema-inspector-body cinema-inspector-editor">
+                  <label className="field">Shot size<input className="input" disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.shotSize} onChange={event=>updateScene(inspectorScene.id,{shotSize:event.target.value})}/></label>
+                  <label className="field">Camera movement<textarea className="input" rows={3} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.cameraMovement} onChange={event=>updateScene(inspectorScene.id,{cameraMovement:event.target.value})}/></label>
+                  <label className="field">Lighting<textarea className="input" rows={3} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.lighting} onChange={event=>updateScene(inspectorScene.id,{lighting:event.target.value})}/></label>
+                </div>}
+                {inspectorTab === "audio" && <div className="cinema-inspector-body cinema-inspector-editor">
+                  <label className="field">Voiceover<textarea className="input" rows={3} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.voiceover} onChange={event=>updateScene(inspectorScene.id,{voiceover:event.target.value})}/></label>
+                  <label className="field">Audio direction<textarea className="input" rows={3} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.audioNotes} onChange={event=>updateScene(inspectorScene.id,{audioNotes:event.target.value})}/></label>
+                  <label className="field">SFX<textarea className="input" rows={2} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.sfx || ""} onChange={event=>updateScene(inspectorScene.id,{sfx:event.target.value})}/></label>
+                </div>}
+                {inspectorTab === "references" && <div className="cinema-inspector-body">
+                  <div className="studio-inspector-section"><strong>CHARACTERS, BACKGROUNDS & PROPS</strong><p>{sceneReferenceList(inspectorScene,storyboard)}</p></div>
+                  <button className="secondary-button full-width" onClick={() => setAssetStudioOpen(true)}><Wand2 size={15}/> Open Asset Library</button>
+                </div>}
+                <div className="cinema-scene-pagination">
+                  <button type="button" disabled={inspectorIndex <= 0} onClick={() => {const scene = storyboard.scenes[inspectorIndex-1]; if(scene) setInspectorSceneId(scene.id);}}><ArrowLeft size={14}/> Previous</button>
+                  <span>{inspectorIndex + 1} / {storyboard.scenes.length}</span>
+                  <button type="button" disabled={inspectorIndex < 0 || inspectorIndex >= storyboard.scenes.length-1} onClick={() => {const scene = storyboard.scenes[inspectorIndex+1]; if(scene) setInspectorSceneId(scene.id);}}>Next <ChevronRight size={14}/></button>
+                </div>
                 <button className="primary-button full-width" onClick={() => void copyText(sceneVideoPrompt(inspectorScene,storyboard), "Inspector prompt")}><Copy size={15}/> {copied === "Inspector prompt" ? "Copied" : "Copy Flow prompt"}</button>
                 <button className="secondary-button full-width" onClick={() => setAssetStudioOpen(true)}><Wand2 size={15}/> Asset studio</button>
               </>}
@@ -1132,6 +1141,7 @@ function App() {
           {storyboard && step === "shots" && pipelineCurrent(screenplay, form, storyboard) && <ShotBreakdownStudio board={storyboard} form={form} assets={projectAssets} apiKey={apiKey.trim()} model={geminiModel.trim() || GEMINI_DEFAULT} busy={Boolean(busy) || !hydrated} requireKey={requireKey} onChange={setStoryboard} onBusy={setBusy} onError={setError} onDownloadZip={() => void downloadFlowScenes()} onSave={() => void saveProject()} />}
 
           <footer className="page-footer"><span>MM Storyboard Studio</span><span>Prompt generation only · Videos are created separately in Google Flow</span><button onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>API & privacy settings</button></footer>
+          </div>
         </div>
       </main>
 

@@ -152,6 +152,20 @@ describe("editor workflow", () => {
     await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(1));
     await waitFor(() => expect((screen.getByText("New project", { exact: false }).closest("button") as HTMLButtonElement).disabled).toBe(false));
   }
+  it("uses one navigation and a focused scene inspector with working editable tabs", async () => {
+    await openEditor();
+    expect(screen.getByRole("navigation", { name: "Production stages" })).toBeTruthy();
+    expect(screen.queryByRole("complementary", { name: "Studio navigation" })).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Scene inspector sections" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Camera" }));
+    const movement = screen.getByRole("textbox", { name: "Camera movement" }) as HTMLTextAreaElement;
+    fireEvent.change(movement, { target: { value: "Slow dolly to the window" } });
+    expect(movement.value).toBe("Slow dolly to the window");
+    fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 2" }));
+    expect(screen.getByText("two", { selector: ".studio-inspector-title h3" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 1" }));
+    expect((screen.getByRole("textbox", { name: "Camera movement" }) as HTMLTextAreaElement).value).toBe("Slow dolly to the window");
+  });
   it("disables locked fields, approves a scene, and keeps feedback with the frame", async () => {
     await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 2" }));
@@ -173,7 +187,9 @@ describe("editor workflow", () => {
     const saved = JSON.parse(localStorage.getItem("mm-storyboard-saved-projects")!)[0];
     expect(saved.storyboard.scenes[0].title).toBe("Unsaved change");
     expect(await loadReferences(saved.id)).toEqual([ref]);
-    fireEvent.click(screen.getByRole("button", { name: "Coffee" }));
+    // Recent projects now live in the Project Library instead of a persistent sidebar.
+    fireEvent.click(screen.getByRole("button", { name: "Open library" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Coffee/ }));
     await waitFor(() => expect((screen.getAllByLabelText("Scene title")[0] as HTMLInputElement).value).toBe("Unsaved change"));
     expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).form.referenceNotes).toBe("");
   });
