@@ -1038,11 +1038,29 @@ function App() {
               <button className="secondary-button" disabled={Boolean(busy) || !storyboard.scenes.some((scene) => !scene.locked && !scene.flowPrompt.trim())} onClick={() => void regenerateScenes(storyboard.scenes.filter((scene) => !scene.flowPrompt.trim()).map((scene) => scene.id))}>Generate missing prompts</button>
             </div>
             </details>
+            <div className="studio-sequence-header">
+              <div><span className="studio-sequence-kicker">VISUAL STORYBOARD</span><h3>Scene sequence</h3><p>Select a frame to inspect its creative direction. Edit prompts only when you need to.</p></div>
+              <button className="primary-button" onClick={() => setAssetStudioOpen(true)}><Wand2 size={16}/> Generate scene images</button>
+            </div>
+            <div className="studio-sequence-strip" aria-label="Storyboard scene timeline">
+              {storyboard.scenes.map((scene) => {
+                const preview = projectAssets.find((asset) => asset.kind === "scene" && asset.sceneId === scene.id);
+                return <button type="button" key={scene.id} className={inspectorScene?.id === scene.id ? "studio-sequence-item selected" : "studio-sequence-item"} onClick={() => {setInspectorSceneId(scene.id); document.getElementById("studio-scene-" + scene.id)?.scrollIntoView({behavior:"smooth",block:"nearest"});}}>
+                  <span className="studio-sequence-thumb">{preview ? <img src={"data:" + preview.mimeType + ";base64," + preview.data} alt="" loading="lazy"/> : <Clapperboard size={19}/>}</span>
+                  <span className="studio-sequence-item-label">{String(scene.sceneNumber).padStart(2,"0")} · {scene.durationSeconds}s</span>
+                </button>;
+              })}
+            </div>
             <div className="studio-storyboard-workspace"><div className="scene-list">
               {storyboard.scenes.map((scene) => {
                 const sceneAudit = auditScene(scene);
                 const flags = sceneAudit.filter((item) => !item.ok).length;
-                return <article className={inspectorScene?.id === scene.id ? "scene-card studio-scene-selected" : "scene-card"} key={scene.id}>
+                const preview = projectAssets.find((asset) => asset.kind === "scene" && asset.sceneId === scene.id);
+                return <article id={"studio-scene-" + scene.id} className={inspectorScene?.id === scene.id ? "scene-card studio-scene-selected" : "scene-card"} key={scene.id}>
+                  <div className="studio-scene-cover" onClick={() => setInspectorSceneId(scene.id)}>
+                    {preview ? <img src={"data:" + preview.mimeType + ";base64," + preview.data} alt={"Generated scene " + scene.sceneNumber} loading="lazy" /> : <div className="studio-scene-placeholder"><Clapperboard size={29}/><strong>Scene {String(scene.sceneNumber).padStart(2,"0")} · Visual not generated</strong><span>Generate this scene's opening frame in Asset Studio.</span></div>}
+                    <span className="studio-scene-cover-count">SCENE {String(scene.sceneNumber).padStart(2,"0")}</span>
+                  </div>
                   <div className="scene-card-head"><button type="button" className="studio-inspect-trigger" onClick={() => setInspectorSceneId(scene.id)} aria-label={"Inspect scene " + scene.sceneNumber}>Inspect <ChevronRight size={13}/></button>
                     <input type="checkbox" aria-label={"Select scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy) || !hydrated} checked={selectedSceneIds.includes(scene.id)} onChange={(event) => setSelectedSceneIds((ids) => event.target.checked ? [...ids, scene.id] : ids.filter((id) => id !== scene.id))} /><div className="scene-number">{String(scene.sceneNumber).padStart(2, "0")}</div>
                     <div className="scene-title-area"><input className="scene-title-input" disabled={scene.locked || Boolean(busy) || !hydrated} value={scene.title} onChange={(event) => updateScene(scene.id, { title: event.target.value })} aria-label="Scene title" /><div className="scene-tags"><span><Clock3 size={12} /> {scene.durationSeconds}s clip</span><span><Film size={12} /> {scene.shotSize || "Shot plan"}</span><span className={flags ? "quality-tag warn" : "quality-tag"}>{flags ? flags + " checks to review" : "Prompt checked"}</span></div></div>
@@ -1056,7 +1074,7 @@ function App() {
                     <button className="quiet-button" disabled={Boolean(busy) || scene.locked} aria-label={"Delete scene " + scene.sceneNumber} onClick={() => removeScene(scene)}><Trash2 size={15} /></button>
                     <select className="input" aria-label={"Review status scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy) || !hydrated} value={scene.reviewStatus || "draft"} onChange={(event) => updateScene(scene.id, { reviewStatus: event.target.value as Scene["reviewStatus"], locked: event.target.value === "approved" })}><option value="draft">Draft</option><option value="review">Needs review</option><option value="approved">Approved · lock</option></select>
                   </div>
-                  <details className="scene-editor-details"><summary>Scene details, references & Flow prompts · ဖွင့်ရန်နှိပ်ပါ</summary><fieldset className="scene-content scene-fieldset" disabled={scene.locked || Boolean(busy) || !hydrated}>
+                  <details className="scene-editor-details"><summary>Advanced scene editor · References, audio & Flow prompts</summary><fieldset className="scene-content scene-fieldset" disabled={scene.locked || Boolean(busy) || !hydrated}>
                     <Field label="Review notes"><input className="input" value={scene.reviewNotes || ""} onChange={(event) => updateScene(scene.id, { reviewNotes: event.target.value })} placeholder="Keep feedback with this scene…" /></Field>
                     <div className="scene-reference-picker"><strong>Character & location references</strong><label><input type="checkbox" checked={scene.assetIds === undefined} onChange={(event) => updateScene(scene.id, { assetIds: event.target.checked ? undefined : [] })} /> Use project reference set</label>{castAssets.map((asset) => <label key={asset.id}><input type="checkbox" checked={sceneReferences(scene, projectAssets).some((item) => item.id === asset.id)} onChange={(event) => { const ids = sceneReferences(scene, projectAssets).map((item) => item.id); if (event.target.checked && ids.length >= 4) { setError("A scene can use up to four reference assets."); return; } updateScene(scene.id, { assetIds: event.target.checked ? [...ids, asset.id] : ids.filter((id) => id !== asset.id) }); }} /><img src={assetAsReference(asset).previewUrl} alt="" />{asset.title}</label>)}{!castAssets.length && <span>Add a character or location in Asset Studio to reuse it here.</span>}</div>
                     <div className="scene-visual-details"><div className="scene-detail"><span>SCENE PURPOSE</span><p>{scene.objective}</p></div><div className="scene-detail"><span>VISUAL ACTION</span><p>{scene.visualDescription}</p></div><div className="scene-detail two-detail"><div><span>CAMERA</span><p>{scene.cameraMovement}</p></div><div><span>LIGHT / MOOD</span><p>{scene.lighting} · {scene.mood}</p></div></div><div className="scene-detail"><span>ACTION BEAT</span><p>{scene.action}</p></div></div>
@@ -1104,6 +1122,10 @@ function App() {
                 <button className="secondary-button full-width" onClick={() => setAssetStudioOpen(true)}><Wand2 size={15}/> Asset studio</button>
               </>}
             </aside></div>
+            <div className="studio-next-step">
+              <div><span className="studio-sequence-kicker">NEXT PRODUCTION STEP</span><strong>Review your frames before generating video</strong><p>Make sure characters and props look consistent, then prepare the Flow shot prompts.</p></div>
+              <button className="primary-button" onClick={() => setStep("shots")}><Film size={16}/> Go to Flow shots <ChevronRight size={15}/></button>
+            </div>
             <div className="end-actions"><button className="secondary-button" onClick={() => setStep("concepts")}><ArrowLeft size={16} /> Change concept</button><button className="quiet-button" onClick={() => void copyText(completePromptText(storyboard, form), "Complete prompt package")}><Copy size={15} /> Copy all prompts</button><button className="primary-button" onClick={exportMarkdown}><Download size={16} /> Export complete storyboard <ChevronRight size={16} /></button></div>
           </section>}
 
