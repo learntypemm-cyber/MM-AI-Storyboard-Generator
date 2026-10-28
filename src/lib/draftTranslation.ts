@@ -15,6 +15,16 @@ export function translatedBoard(board: Storyboard, form: VideoForm): Storyboard 
   if (!board.englishJson || board.englishSource !== draftSource(board, form)) return null;
   try { return storyboardSchema.parse(JSON.parse(board.englishJson)); } catch { return null; }
 }
+/**
+ * English motion directions are useful for Flow, but original Burmese spoken
+ * lines must not be translated by the model inside its rendered video prompt.
+ */
+function preserveSpokenDialogue(prompt: string | undefined, spoken: string): string | undefined {
+  if (!prompt || !/[\u1000-\u109F]/.test(spoken)) return prompt;
+  return prompt.replace(/(DIALOGUE:\s*\n)[\s\S]*?(?=\n\s*ENDING FRAME:)/i,
+    (_entire, heading: string) => heading + spoken.trim() + "\n");
+}
+
 export function validateTranslation(raw: unknown, original: Storyboard): Storyboard {
   const translated = storyboardSchema.parse(raw);
   if (translated.scenes.length !== original.scenes.length || new Set(translated.scenes.map(s => s.id)).size !== original.scenes.length || original.scenes.some(s => !translated.scenes.some(t => t.id === s.id))) throw new Error("Translation omitted or changed scene IDs. Your Burmese draft is preserved; retry translation.");
@@ -28,6 +38,8 @@ export function validateTranslation(raw: unknown, original: Storyboard): Storybo
       const next = translated.scenes.find(s => s.id === scene.id)!;
       if (fields.some(field => scene[field]?.trim() && !next[field]?.trim())) throw new Error("Translation left scene details blank. Your draft is preserved.");
       const text = Object.fromEntries(fields.map(field => [field, next[field] ?? scene[field]]));
+      // Preserve the original spoken Burmese inside exported English animation prompts.
+      text.fullVideoPrompt = preserveSpokenDialogue(text.fullVideoPrompt, scene.voiceover);
       // IDs, timing, angles, locks, links and exact spoken words remain user-owned.
       return { ...scene, ...text, voiceover: scene.voiceover, onscreenText: scene.onscreenText };
     }),
@@ -37,5 +49,5 @@ export function validateTranslation(raw: unknown, original: Storyboard): Storybo
 export function translationPrompt(board: Storyboard): string {
   const { englishJson: _json, englishSource: _source, pipelineSource: _pipeline, ...draft } = board;
   const payload = { ...draft, referencePlan: draft.referencePlan?.map(({ fullPromptSource: _stamp, ...ref }) => ref), scenes: draft.scenes.map(({ fullPromptSource: _stamp, ...scene }) => scene) };
-  return "Translate this approved Burmese storyboard and ALL reference design prompts into precise English for Google Flow. Return the complete identical JSON structure, not a summary. Do not add ideas, actions, camera moves, characters or objects. Preserve scene/reference IDs, scene order, duration, angle, handoff, reference links, technical fields, and the exact voiceover/dialogue and caption text in their original language. Translate only descriptive text, including timed flowPrompt beats, sfx and music. Translate fullPrompt, fullImagePrompt and fullVideoPrompt IN FULL, including every layout, label, camera, timing, continuity and audio instruction. These are the final copyable prompts: do not append anything or replace them with summaries. Preserve exact spoken dialogue inside these prompts in its original language. Preserve all detail and timing. Omit promptLanguage, englishSource and englishJson.\n" + JSON.stringify(payload);
+  return "Translate this approved Burmese storyboard and ALL reference design prompts into precise English for Google Flow. Return the complete identical JSON structure, not a summary. Do not add ideas, actions, camera moves, characters or objects. Preserve scene/reference IDs, scene order, duration, angle, handoff, reference links, technical fields, and the exact voiceover/dialogue and caption text in their original language. Translate only descriptive text, including timed flowPrompt beats, sfx and music. Translate fullPrompt, fullImagePrompt and fullVideoPrompt IN FULL, including every layout, label, camera, timing, continuity and audio instruction. These are the final copyable prompts: do not append anything or replace them with summaries. CRITICAL: All spoken dialogue must stay in its original language, including Burmese words inside the fullVideoPrompt DIALOGUE block. Never translate dialogue, even when the rest of the video prompt is English. Preserve exact spoken dialogue inside these prompts in its original language. Preserve all detail and timing. Omit promptLanguage, englishSource and englishJson.\n" + JSON.stringify(payload);
 }
