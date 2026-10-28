@@ -208,7 +208,9 @@ function App() {
   const [step, setStep] = useState<"brief" | "concepts" | "storyboard" | "shots">("brief");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [inspectorSceneId, setInspectorSceneId] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<"overview" | "prompt" | "camera" | "audio" | "references">("overview");
   const inspectorScene = storyboard?.scenes.find((scene) => scene.id === inspectorSceneId) || storyboard?.scenes[0] || null;
+  const inspectorIndex = storyboard && inspectorScene ? storyboard.scenes.findIndex(scene => scene.id === inspectorScene.id) : -1;
   const navigateStudio = (next: "brief" | "concepts" | "storyboard" | "shots") => { setStep(next); setMobileNavOpen(false); };
 
   useEffect(() => {
@@ -964,6 +966,8 @@ function App() {
               <div><h2>Your storyboard</h2><p>Edit the prompts and narration before moving each clip into Google Flow.</p></div>
               <div className="storyboard-actions"><button className="quiet-button" onClick={() => setStep("shots")}><Film size={15} /> Shot breakdown</button><button className="primary-button" disabled={Boolean(busy)} onClick={() => void makeBurmeseDraft()}>မြန်မာမူကြမ်းအဖြစ်ပြောင်းရန်</button><button className="quiet-button" onClick={saveProject}><Save size={15} /> Save</button><button className="quiet-button" onClick={exportPromptPack}><Download size={15} /> Flow .txt</button><button className="quiet-button" onClick={exportJson}><Download size={15} /> JSON</button><button className="primary-button small-primary" onClick={exportMarkdown}><Download size={15} /> Export .md</button></div>
             </div>
+            <details className="cinema-story-bible">
+              <summary><Sparkles size={16}/> Story bible, production notes & quality checks <ChevronDown size={15}/></summary>
             <div className="storyboard-overview">
               <div className="overview-main"><div className="overview-eyebrow">SELECTED CONCEPT</div><h3>{storyboard.projectTitle || selectedConcept?.title || form.topic}</h3><p>{storyboard.logline}</p><div className="overview-meta"><span><Film size={14} /> {storyboard.scenes.length} scenes</span><span><Clock3 size={14} /> {storyboard.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)}s planned</span><span><MonitorPlay size={14} /> {form.aspectRatio}</span></div></div>
               <div className="visual-bible"><span><Sparkles size={14} /> VISUAL BIBLE</span><p>{storyboard.visualBible}</p></div>
@@ -983,6 +987,7 @@ function App() {
               <div className="audit-grid">{allAudits.map((item) => <div className="audit-item" key={item.label}><span className={item.ok ? "audit-check ok" : "audit-check issue"}>{item.ok ? <Check size={12} /> : <AlertCircle size={12} />}</span><div><strong>{item.label}</strong><p>{item.detail}</p></div></div>)}</div>
               <p className="audit-disclaimer">Automated checks cannot guarantee visual continuity or that Flow will support every selected setting. Review each scene and the active model options.</p>
             </div>
+            </details>
             <details className="field"><summary>Flow လုပ်ဆောင်ရန် လမ်းညွှန် · ၆ ဆင့်</summary><p style={{ whiteSpace: "pre-line" }}>{workflowGuideMM()}</p></details>
             <details className="workspace-advanced">
               <summary>Advanced tools, reusable references & version history</summary>
@@ -1084,11 +1089,44 @@ function App() {
               {inspectorScene && storyboard && <>
                 <div className="studio-inspector-title"><span>SCENE {String(inspectorScene.sceneNumber).padStart(2,"0")}</span><h3>{inspectorScene.title}</h3></div>
                 <div className="studio-inspector-statgrid"><span><Clock3 size={13}/> {inspectorScene.durationSeconds}s</span><span><Film size={13}/> {inspectorScene.shotSize || "Shot"}</span></div>
-                <div className="studio-inspector-section"><strong>OPENING FRAME</strong><p>{inspectorScene.openingFrame}</p></div>
-                <div className="studio-inspector-section"><strong>ACTION</strong><p>{inspectorScene.action}</p></div>
-                <div className="studio-inspector-section"><strong>CAMERA / LIGHT</strong><p>{inspectorScene.cameraMovement} · {inspectorScene.lighting}</p></div>
-                <div className="studio-inspector-section"><strong>REFERENCES</strong><p>{sceneReferenceList(inspectorScene,storyboard)}</p></div>
-                <div className="studio-inspector-section"><strong>QUALITY</strong><p>{auditScene(inspectorScene).filter(item=>!item.ok).length} flagged checks</p></div>
+                <nav className="cinema-inspector-tabs" aria-label="Scene inspector sections">
+                  {([
+                    ["overview", "Overview"],
+                    ["prompt", "Prompt"],
+                    ["camera", "Camera"],
+                    ["audio", "Audio"],
+                    ["references", "Refs"]
+                  ] as const).map(([id,label]) => <button type="button" className={inspectorTab === id ? "active" : ""} key={id} onClick={() => setInspectorTab(id)}>{label}</button>)}
+                </nav>
+                {inspectorTab === "overview" && <div className="cinema-inspector-body">
+                  <div className="studio-inspector-section"><strong>OPENING FRAME</strong><p>{inspectorScene.openingFrame}</p></div>
+                  <div className="studio-inspector-section"><strong>ACTION</strong><p>{inspectorScene.action}</p></div>
+                  <div className="studio-inspector-section"><strong>CAMERA / LIGHT</strong><p>{inspectorScene.cameraMovement} · {inspectorScene.lighting}</p></div>
+                  <div className="studio-inspector-section"><strong>QUALITY</strong><p>{auditScene(inspectorScene).filter(item => !item.ok).length} checks flagged</p></div>
+                </div>}
+                {inspectorTab === "prompt" && <div className="cinema-inspector-body cinema-inspector-editor">
+                  <label className="field">Google Flow prompt<textarea className="input" rows={10} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.flowPrompt} onChange={event => updateScene(inspectorScene.id, {flowPrompt:event.target.value})}/></label>
+                  <span className="field-hint">Edit the selected scene only. Copy the complete prompt below.</span>
+                </div>}
+                {inspectorTab === "camera" && <div className="cinema-inspector-body cinema-inspector-editor">
+                  <label className="field">Shot size<input className="input" disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.shotSize} onChange={event=>updateScene(inspectorScene.id,{shotSize:event.target.value})}/></label>
+                  <label className="field">Camera movement<textarea className="input" rows={3} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.cameraMovement} onChange={event=>updateScene(inspectorScene.id,{cameraMovement:event.target.value})}/></label>
+                  <label className="field">Lighting<textarea className="input" rows={3} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.lighting} onChange={event=>updateScene(inspectorScene.id,{lighting:event.target.value})}/></label>
+                </div>}
+                {inspectorTab === "audio" && <div className="cinema-inspector-body cinema-inspector-editor">
+                  <label className="field">Voiceover<textarea className="input" rows={3} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.voiceover} onChange={event=>updateScene(inspectorScene.id,{voiceover:event.target.value})}/></label>
+                  <label className="field">Audio direction<textarea className="input" rows={3} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.audioNotes} onChange={event=>updateScene(inspectorScene.id,{audioNotes:event.target.value})}/></label>
+                  <label className="field">SFX<textarea className="input" rows={2} disabled={Boolean(busy) || inspectorScene.locked} value={inspectorScene.sfx || ""} onChange={event=>updateScene(inspectorScene.id,{sfx:event.target.value})}/></label>
+                </div>}
+                {inspectorTab === "references" && <div className="cinema-inspector-body">
+                  <div className="studio-inspector-section"><strong>CHARACTERS, BACKGROUNDS & PROPS</strong><p>{sceneReferenceList(inspectorScene,storyboard)}</p></div>
+                  <button className="secondary-button full-width" onClick={() => setAssetStudioOpen(true)}><Wand2 size={15}/> Open Asset Library</button>
+                </div>}
+                <div className="cinema-scene-pagination">
+                  <button type="button" disabled={inspectorIndex <= 0} onClick={() => {const scene = storyboard.scenes[inspectorIndex-1]; if(scene) setInspectorSceneId(scene.id);}}><ArrowLeft size={14}/> Previous</button>
+                  <span>{inspectorIndex + 1} / {storyboard.scenes.length}</span>
+                  <button type="button" disabled={inspectorIndex < 0 || inspectorIndex >= storyboard.scenes.length-1} onClick={() => {const scene = storyboard.scenes[inspectorIndex+1]; if(scene) setInspectorSceneId(scene.id);}}>Next <ChevronRight size={14}/></button>
+                </div>
                 <button className="primary-button full-width" onClick={() => void copyText(sceneVideoPrompt(inspectorScene,storyboard), "Inspector prompt")}><Copy size={15}/> {copied === "Inspector prompt" ? "Copied" : "Copy Flow prompt"}</button>
                 <button className="secondary-button full-width" onClick={() => setAssetStudioOpen(true)}><Wand2 size={15}/> Asset studio</button>
               </>}
