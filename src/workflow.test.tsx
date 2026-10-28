@@ -197,7 +197,7 @@ describe("editor workflow", () => {
   });
   it("restores a version after editing and keeps the replaced board in history", async () => {
     await openEditor();
-    fireEvent.click(screen.getAllByRole("button", { name: /Locked · unlock/ })[0]);
+    // Studio V2 edits the selected (unlocked) scene without rendering all other scene cards.
     fireEvent.click(screen.getByRole("button", { name: "Save version" }));
     const title = screen.getAllByLabelText("Scene title")[0] as HTMLInputElement;
     fireEvent.change(title, { target: { value: "New title" } });
@@ -386,13 +386,18 @@ describe("screenplay approval workflow", () => {
     await waitFor(() => expect(screen.getByLabelText("Reference 1 ဖော်ပြချက်")).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const generate = () => screen.getByRole("button", { name: "အတည်ပြုထားသောစာရင်းဖြင့် Scene prompts ထုတ်မယ်" }) as HTMLButtonElement;
+    fireEvent.click(screen.getByRole("button", { name: "4. Review" }));
     expect(generate().disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "3. References" }));
     fireEvent.change(screen.getByLabelText("Reference 1 ဖော်ပြချက်"), { target: { value: "ဆံပင်တို၊ အနီရောင်ဝတ်စုံ" } });
+    fireEvent.click(screen.getByRole("button", { name: "4. Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Character / Background / Scene စာရင်း အတည်ပြုမယ်" }));
     expect(generate().disabled).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     fireEvent.click(generate());
-    await waitFor(() => expect(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Translate & export" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Translate & export" }));
+    expect(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(4);
     fireEvent.click(screen.getByRole("button", { name: /Screenplay \/ refs/ }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Reference အားလုံးကို English တစ်ခါတည်းပြောင်းမယ်" })).toBeTruthy());
@@ -400,7 +405,10 @@ describe("screenplay approval workflow", () => {
     await waitFor(() => expect(screen.getByText("Reference 2 ခုလုံးကို တစ်ခါတည်း English ပြောင်းပြီးပါပြီ။")).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(screen.getByText(/2 \/ 2 reference prompts English ပြောင်းပြီးပါပြီ/)).toBeTruthy();
-    expect(screen.getAllByText("English Reference image prompt အပြည့်အစုံ")).toHaveLength(2);
+    expect(screen.getAllByText("English Reference image prompt အပြည့်အစုံ")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("navigation", { name: "Reference library" }).querySelectorAll("button")[1]);
+    expect(screen.getAllByText("English Reference image prompt အပြည့်အစုံ")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("navigation", { name: "Reference library" }).querySelectorAll("button")[0]);
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem("mm-storyboard-current") || "null");
       expect(persisted?.storyboard?.scenes?.length).toBe(4);
@@ -410,7 +418,9 @@ describe("screenplay approval workflow", () => {
     expect(saved.storyboard.referencePlan[0].prompt).toContain("အနီရောင်");
     expect(saved.screenplay.choices[1].versions[0]).toContain("User edit");
     fireEvent.change(screen.getByLabelText("Reference 1 ဖော်ပြချက်"), { target: { value: "အဝါရောင်ဝတ်စုံ" } });
+    fireEvent.click(screen.getByRole("button", { name: "4. Review" }));
     expect(generate().disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "2. Script" }));
     expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
     fireEvent.change(screen.getByLabelText("မြန်မာဇာတ်ညွှန်း"), { target: { value: "အသစ်ပြင်ထားသောဇာတ်လမ်း" } });
     expect(screen.queryByLabelText("Reference 1 ဖော်ပြချက်")).toBeNull();
@@ -418,6 +428,7 @@ describe("screenplay approval workflow", () => {
     app.unmount(); render(<App />);
     await waitFor(() => expect(screen.getByRole("button", { name: /Screenplay \/ refs/ })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: /Screenplay \/ refs/ }));
+    fireEvent.click(screen.getByRole("button", { name: "2. Script" }));
     await waitFor(() => expect((screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement).value).toBe("အသစ်ပြင်ထားသောဇာတ်လမ်း"));
     expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(5);
@@ -462,6 +473,7 @@ describe("screenplay approval workflow", () => {
     const imported = screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement;
     expect(imported.value).toContain("1. INT. GAMING ROOM - DAY");
     expect(imported.value).toContain("2. EXT. STREET - DAY");
+    fireEvent.click(screen.getByRole("button", { name: "1. Concepts" }));
     expect(screen.getByText(/2 \(မူရင်း screenplay\)/)).toBeTruthy();
   });
 
@@ -767,6 +779,7 @@ it("keeps Burmese drafts and translated English separate, invalidates exports af
   expect(draft.scenes[0].flowPrompt).toContain("မေသည်");
   const onTranslate = vi.fn(); const onChange = vi.fn();
   const ui = render(<BurmeseDraftEditor board={draft} form={form} busy={false} onChange={onChange} onTranslate={onTranslate} onSave={() => {}} onRetryReferences={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "Translate & export" }));
   expect((screen.getByRole("button", { name: "Download English ZIP" }) as HTMLButtonElement).disabled).toBe(false);
   draft.scenes[0].action = "New edited action";
   expect(translatedBoard(draft, form)).toBeNull();
@@ -843,6 +856,7 @@ it("edits full Burmese prompts without API calls and invalidates prior English",
   full.englishSource = draftSource(full, form);
   const change = vi.fn(); const translate = vi.fn();
   render(<BurmeseDraftEditor board={full} form={form} busy={false} onChange={change} onTranslate={translate} onSave={() => {}} onRetryReferences={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "Full prompts" }));
   fireEvent.change(screen.getAllByLabelText("Video prompt အပြည့်အစုံ")[0], { target: { value: "အသစ်ပြင်ထားသည်" } });
   const updated = change.mock.calls[0][0];
   expect(updated.scenes[0].fullVideoPrompt).toBe("အသစ်ပြင်ထားသည်");
