@@ -804,7 +804,7 @@ function App() {
 
       <main className="main-panel">
         <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "ဇာတ်ညွှန်းနှင့် Reference အတည်ပြုခြင်း" : step === "storyboard" ? "Scene prompts" : "Shot list / Flow export"}</strong></div>
+          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "ဇာတ်ညွှန်းနှင့် Reference အတည်ပြုခြင်း" : step === "storyboard" ? "Scene prompts" : "Flow prompts"}</strong></div>
           <div className="topbar-actions">
             <button className="primary-button small-primary" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={15} /> Save</button>
             <details className="topbar-more">

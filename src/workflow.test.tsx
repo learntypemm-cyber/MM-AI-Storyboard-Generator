@@ -390,7 +390,7 @@ describe("screenplay approval workflow", () => {
     fireEvent.click(generate());
     await waitFor(() => expect(screen.getByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(4);
-    fireEvent.click(screen.getByRole("button", { name: /ဇာတ်ညွှန်း \/ References/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Screenplay \/ refs/ }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Reference အားလုံးကို English တစ်ခါတည်းပြောင်းမယ်" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Reference အားလုံးကို English တစ်ခါတည်းပြောင်းမယ်" }));
     await waitFor(() => expect(screen.getByText("Reference 2 ခုလုံးကို တစ်ခါတည်း English ပြောင်းပြီးပါပြီ။")).toBeTruthy());
@@ -412,8 +412,8 @@ describe("screenplay approval workflow", () => {
     expect(screen.queryByLabelText("Reference 1 ဖော်ပြချက်")).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(5);
     app.unmount(); render(<App />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /ဇာတ်ညွှန်း \/ References/ })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: /ဇာတ်ညွှန်း \/ References/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Screenplay \/ refs/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /Screenplay \/ refs/ }));
     await waitFor(() => expect((screen.getByLabelText("မြန်မာဇာတ်ညွှန်း") as HTMLTextAreaElement).value).toBe("အသစ်ပြင်ထားသောဇာတ်လမ်း"));
     expect(screen.queryByRole("button", { name: "English prompt ပြောင်းမယ်" })).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(5);
