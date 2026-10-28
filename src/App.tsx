@@ -206,6 +206,10 @@ function App() {
   const [copied, setCopied] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [step, setStep] = useState<"brief" | "concepts" | "storyboard" | "shots">("brief");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [inspectorSceneId, setInspectorSceneId] = useState<string | null>(null);
+  const inspectorScene = storyboard?.scenes.find((scene) => scene.id === inspectorSceneId) || storyboard?.scenes[0] || null;
+  const navigateStudio = (next: "brief" | "concepts" | "storyboard" | "shots") => { setStep(next); setMobileNavOpen(false); };
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -782,13 +786,26 @@ function App() {
   };
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className="app-shell studio-dark">
+      <aside className={mobileNavOpen ? "sidebar mobile-open" : "sidebar"} aria-label="Studio navigation">
         <div className="brand-lockup">
           <div className="brand-mark"><Clapperboard size={22} strokeWidth={2.2} /></div>
-          <div><div className="brand-name">MM Storyboard</div><div className="brand-subtitle">FLOW PROMPT STUDIO</div></div>
+          <div><div className="brand-name">MM Storyboard</div><div className="brand-subtitle">PRODUCTION STUDIO</div></div>
         </div>
         <button className="new-project-button" disabled={Boolean(busy) || !hydrated} onClick={newProject}><Plus size={17} /> New project <span>⌘ K</span></button>
+        <div className="studio-nav-label">WORKSPACE</div>
+        <nav className="studio-primary-nav" aria-label="Production stages">
+          <button className={step === "brief" ? "studio-nav-item is-active" : "studio-nav-item"} onClick={() => navigateStudio("brief")}><FileText size={17} /> <span>Video brief</span></button>
+          <button className={step === "concepts" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!screenplay && !concepts.length} onClick={() => navigateStudio("concepts")}><Lightbulb size={17} /> <span>Script & concepts</span></button>
+          <button className={step === "storyboard" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} onClick={() => navigateStudio("storyboard")}><Clapperboard size={17} /> <span>Storyboard</span></button>
+          <button className={step === "shots" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} onClick={() => navigateStudio("shots")}><Film size={17} /> <span>Flow shots</span></button>
+        </nav>
+        <div className="studio-nav-label">PRODUCTION TOOLS</div>
+        <div className="studio-primary-nav">
+          <button className="studio-nav-item" onClick={() => { setAssetStudioOpen(true); setMobileNavOpen(false); }}><Wand2 size={17} /> <span>Asset studio</span></button>
+          <button className="studio-nav-item" disabled={!storyboard} onClick={() => { if (storyboard) exportPromptPack(); setMobileNavOpen(false); }}><Download size={17} /> <span>Export prompts</span></button>
+          <button className="studio-nav-item" onClick={() => { setLibraryOpen(true); setMobileNavOpen(false); }}><FolderOpen size={17} /> <span>Project library</span></button>
+        </div>
         <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
         <div className="saved-list">
           {savedProjects.slice(0, 4).map((project) => <button className="saved-item" key={project.id} disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)} title={project.title}><FolderOpen size={15} /><span>{project.title}</span></button>)}
@@ -802,8 +819,9 @@ function App() {
         </div>
       </aside>
 
+      {mobileNavOpen && <button type="button" className="studio-mobile-scrim" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" />}
       <main className="main-panel">
-        <header className="topbar">
+        <header className="topbar"><button className="studio-mobile-menu" type="button" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation"><LayoutDashboard size={19}/></button>
           <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{step === "brief" ? "Video brief" : step === "concepts" ? "ဇာတ်ညွှန်းနှင့် Reference အတည်ပြုခြင်း" : step === "storyboard" ? "Scene prompts" : "Flow prompts"}</strong></div>
           <div className="topbar-actions">
             <button className="primary-button small-primary" disabled={Boolean(busy) || !hydrated || !mediaReady} onClick={() => void saveProject()}><Save size={15} /> Save</button>
@@ -821,6 +839,7 @@ function App() {
         </header>
 
         <div className="page-content">
+          <div className="studio-contextbar"><div><span className="studio-context-eyebrow">CURRENT PRODUCTION</span><strong>{storyboard?.projectTitle || form.topic || "Untitled project"}</strong></div><div className="studio-context-meta"><span><Film size={13}/> {storyboard?.scenes.length || 0} scenes</span><span><MonitorPlay size={13}/> {form.aspectRatio}</span></div></div>
           <section className="welcome-row">
             <div>
               <div className="eyebrow"><span className="eyebrow-mark"><Sparkles size={12} /></span> AI VIDEO WORKFLOW <span className="eyebrow-dot">•</span> GOOGLE FLOW READY</div>
@@ -1019,12 +1038,12 @@ function App() {
               <button className="secondary-button" disabled={Boolean(busy) || !storyboard.scenes.some((scene) => !scene.locked && !scene.flowPrompt.trim())} onClick={() => void regenerateScenes(storyboard.scenes.filter((scene) => !scene.flowPrompt.trim()).map((scene) => scene.id))}>Generate missing prompts</button>
             </div>
             </details>
-            <div className="scene-list">
+            <div className="studio-storyboard-workspace"><div className="scene-list">
               {storyboard.scenes.map((scene) => {
                 const sceneAudit = auditScene(scene);
                 const flags = sceneAudit.filter((item) => !item.ok).length;
-                return <article className="scene-card" key={scene.id}>
-                  <div className="scene-card-head">
+                return <article className={inspectorScene?.id === scene.id ? "scene-card studio-scene-selected" : "scene-card"} key={scene.id}>
+                  <div className="scene-card-head"><button type="button" className="studio-inspect-trigger" onClick={() => setInspectorSceneId(scene.id)} aria-label={"Inspect scene " + scene.sceneNumber}>Inspect <ChevronRight size={13}/></button>
                     <input type="checkbox" aria-label={"Select scene " + scene.sceneNumber} disabled={scene.locked || Boolean(busy) || !hydrated} checked={selectedSceneIds.includes(scene.id)} onChange={(event) => setSelectedSceneIds((ids) => event.target.checked ? [...ids, scene.id] : ids.filter((id) => id !== scene.id))} /><div className="scene-number">{String(scene.sceneNumber).padStart(2, "0")}</div>
                     <div className="scene-title-area"><input className="scene-title-input" disabled={scene.locked || Boolean(busy) || !hydrated} value={scene.title} onChange={(event) => updateScene(scene.id, { title: event.target.value })} aria-label="Scene title" /><div className="scene-tags"><span><Clock3 size={12} /> {scene.durationSeconds}s clip</span><span><Film size={12} /> {scene.shotSize || "Shot plan"}</span><span className={flags ? "quality-tag warn" : "quality-tag"}>{flags ? flags + " checks to review" : "Prompt checked"}</span></div></div>
                     <button className="icon-button" onClick={() => void copyText(promptWithReferences({ ...scene, flowPrompt: sceneVideoPrompt(scene, storyboard!) }, projectAssets), "Scene " + scene.sceneNumber + " prompt")} title="Copy Flow prompt">{copied === "Scene " + scene.sceneNumber + " prompt" ? <Check size={16} /> : <Copy size={16} />}</button>
@@ -1071,6 +1090,20 @@ function App() {
                 </article>;
               })}
             </div>
+            <aside className="studio-inspector" aria-label="Scene inspector">
+              <div className="studio-inspector-heading"><span>SCENE INSPECTOR</span><span className="studio-inspector-dot" /></div>
+              {inspectorScene && storyboard && <>
+                <div className="studio-inspector-title"><span>SCENE {String(inspectorScene.sceneNumber).padStart(2,"0")}</span><h3>{inspectorScene.title}</h3></div>
+                <div className="studio-inspector-statgrid"><span><Clock3 size={13}/> {inspectorScene.durationSeconds}s</span><span><Film size={13}/> {inspectorScene.shotSize || "Shot"}</span></div>
+                <div className="studio-inspector-section"><strong>OPENING FRAME</strong><p>{inspectorScene.openingFrame}</p></div>
+                <div className="studio-inspector-section"><strong>ACTION</strong><p>{inspectorScene.action}</p></div>
+                <div className="studio-inspector-section"><strong>CAMERA / LIGHT</strong><p>{inspectorScene.cameraMovement} · {inspectorScene.lighting}</p></div>
+                <div className="studio-inspector-section"><strong>REFERENCES</strong><p>{sceneReferenceList(inspectorScene,storyboard)}</p></div>
+                <div className="studio-inspector-section"><strong>QUALITY</strong><p>{auditScene(inspectorScene).filter(item=>!item.ok).length} flagged checks</p></div>
+                <button className="primary-button full-width" onClick={() => void copyText(sceneVideoPrompt(inspectorScene,storyboard), "Inspector prompt")}><Copy size={15}/> {copied === "Inspector prompt" ? "Copied" : "Copy Flow prompt"}</button>
+                <button className="secondary-button full-width" onClick={() => setAssetStudioOpen(true)}><Wand2 size={15}/> Asset studio</button>
+              </>}
+            </aside></div>
             <div className="end-actions"><button className="secondary-button" onClick={() => setStep("concepts")}><ArrowLeft size={16} /> Change concept</button><button className="quiet-button" onClick={() => void copyText(completePromptText(storyboard, form), "Complete prompt package")}><Copy size={15} /> Copy all prompts</button><button className="primary-button" onClick={exportMarkdown}><Download size={16} /> Export complete storyboard <ChevronRight size={16} /></button></div>
           </section>}
 
