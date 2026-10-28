@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, Clapperboard, Copy, Download, RefreshCw, Save, Scissors } from "lucide-react";
 import { generateJson } from "../lib/gemini";
 import { shotBreakdownOutputSchema, shotBreakdownRequest, shotPackageText, sceneShotsText, shotPromptText, shotImagePromptText, validateShotPrompt, shotReferences, shotNeedsReview, shotSourceSnapshot, translatedShot, shotTranslationRequest, validateShotTranslation } from "../lib/multiShot";
@@ -25,6 +25,11 @@ const makeId = () => Date.now().toString(36) + "-" + Math.random().toString(36).
 export default function ShotBreakdownStudio({ board, form, assets, apiKey, model, busy, requireKey, onChange, onBusy, onError, onDownloadZip, onSave }: Props) {
   const [message, setMessage] = useState("");
   const [requestedCount, setRequestedCount] = useState<number | "auto">("auto");
+  const [selectedSceneId, setSelectedSceneId] = useState(() => board.scenes[0]?.id || "");
+  useEffect(() => {
+    if (!board.scenes.some((scene) => scene.id === selectedSceneId)) setSelectedSceneId(board.scenes[0]?.id || "");
+  }, [board.scenes, selectedSceneId]);
+  const selectedScene = board.scenes.find((scene) => scene.id === selectedSceneId) || board.scenes[0];
   const shotCount = board.scenes.reduce((sum, scene) => sum + (scene.shots?.length || 0), 0);
   const scenesWithShots = board.scenes.filter((scene) => scene.shots?.length).length;
   const shotsApproved = board.scenes.reduce((sum, scene) => sum + (scene.shots || []).filter((shot) => shot.imageApproved && !shotNeedsReview(shot, scene, board, form, assets)).length, 0);
@@ -133,62 +138,81 @@ export default function ShotBreakdownStudio({ board, form, assets, apiKey, model
       <button className="primary-button" disabled={busy} onClick={onSave}><Save size={15} /> Save project</button>
     </div>
     {staleCount > 0 && <p className="shot-validation warning" role="status">{staleCount} shot(s) ပြန်စစ်ရန်လိုပါတယ်။ မူလ scene / reference / setting ပြောင်းထားခြင်း သို့မဟုတ် အဟောင်း shot ဖြစ်ခြင်းကြောင့်ပါ။ ပြင်ထားတဲ့ prompt တွေ မပျက်ပါ။</p>}
-    <div className="shot-scene-list">
-      {board.scenes.map((scene) => <article className="shot-scene-card" key={scene.id}>
+    <div className="shot-workspace-layout">
+      <nav className="shot-scene-nav" aria-label="Choose a scene to prepare">
+        <div className="shot-scene-nav-heading"><span>YOUR SCENES</span><strong>{board.scenes.length}</strong></div>
+        {board.scenes.map((scene) => <button type="button" key={scene.id} className={scene.id === selectedScene?.id ? "shot-scene-nav-item active" : "shot-scene-nav-item"} onClick={() => setSelectedSceneId(scene.id)}>
+          <span className="shot-scene-nav-number">{String(scene.sceneNumber).padStart(2, "0")}</span>
+          <span className="shot-scene-nav-copy"><strong>{scene.title}</strong><small>{scene.shots?.length ? scene.shots.length + " prompts ready" : "Needs prompts"}</small></span>
+          <span className={scene.shots?.length ? "scene-ready-dot ready" : "scene-ready-dot"} aria-label={scene.shots?.length ? "Prompts ready" : "Prompts missing"} />
+        </button>)}
+      </nav>
+      <div className="shot-scene-list">
+      {selectedScene && <article className="shot-scene-card" key={selectedScene.id}>
         <div className="shot-scene-heading">
-          <div className="shot-scene-meta"><span>SCENE {String(scene.sceneNumber).padStart(2, "0")}</span><span>{scene.durationSeconds}s story beat</span></div>
-          <h3>{scene.title}</h3>
-          <p>{scene.objective || scene.action || scene.visualDescription}</p>
+          <div className="shot-scene-meta"><span>SCENE {String(selectedScene.sceneNumber).padStart(2, "0")}</span><span>{selectedScene.durationSeconds}s story beat</span></div>
+          <h3>{selectedScene.title}</h3>
+          <p>{selectedScene.objective || selectedScene.action || selectedScene.visualDescription}</p>
         </div>
         <div className="shot-scene-actions">
-          <span className={scene.shots?.length ? "shot-state ready" : "shot-state"}>{scene.shots?.length ? scene.shots.length + " prompts ready" : "Not broken into shots"}</span>
-          <button className="secondary-button" disabled={busy} onClick={() => void generateForScene(scene)}><RefreshCw size={14} />{scene.shots?.length ? "Regenerate shot list" : "Generate shot list"}</button>
+          <span className={selectedScene.shots?.length ? "shot-state ready" : "shot-state"}>{selectedScene.shots?.length ? selectedScene.shots.length + " prompts ready" : "Not broken into shots"}</span>
+          <button className="secondary-button" disabled={busy} onClick={() => void generateForScene(selectedScene)}><RefreshCw size={14} />{selectedScene.shots?.length ? "Regenerate shot list" : "Generate shot list"}</button>
         </div>
-        {scene.shots?.length ? <details className="shot-list-details">
-          <summary><ChevronDown size={15} /> View / edit {scene.shots.length} shot prompts</summary>
+        {selectedScene.shots?.length ? <details className="shot-list-details" open>
+          <summary><ChevronDown size={15} /> Flow prompts · {selectedScene.shots.length} shots</summary>
+          <div className="shot-quick-actions" aria-label="Quick copy prompts">
+            {selectedScene.shots.map((shot) => { const exportShot = translatedShot(shot) || shot; return <div className="shot-quick-row" key={shot.id}>
+              <span><strong>SHOT {String(shot.shotNumber).padStart(2, "0")}</strong><small>{shot.title}</small></span>
+              <div><button type="button" className="quiet-button" onClick={() => void copyText(shotImagePromptText(shot, selectedScene, board, form, assets), "Shot " + shot.shotNumber + " opening still prompt")}><Copy size={13} /> Still prompt</button><button type="button" className="secondary-button" onClick={() => void copyText(exportShot.flowPrompt, "Shot " + shot.shotNumber + (exportShot.promptLanguage === "my" ? " Burmese draft" : " Flow prompt"))}><Copy size={13} /> {exportShot.promptLanguage === "my" ? "Copy Burmese draft" : "Copy Flow prompt"}</button></div>
+            </div>; })}
+          </div>
+          <details className="shot-edit-details">
+          <summary>View / edit {selectedScene.shots.length} shot prompts</summary>
           <div className="shot-cards">
-            {scene.shots.map((shot) => { const stale = shotNeedsReview(shot, scene, board, form, assets); const english = translatedShot(shot); const exportShot = english || shot; const issues = validateShotPrompt(exportShot, form, board, scene, assets); return <details className="shot-card" key={shot.id}>
+            {selectedScene.shots.map((shot) => { const stale = shotNeedsReview(shot, selectedScene, board, form, assets); const english = translatedShot(shot); const exportShot = english || shot; const issues = validateShotPrompt(exportShot, form, board, selectedScene, assets); return <details className="shot-card" key={shot.id}>
               <summary><span className="shot-number">{String(shot.shotNumber).padStart(2, "0")}</span><span className="shot-card-title">{shot.title}</span><span className={stale || issues.length || !shot.imageApproved ? "shot-duration warn" : "shot-duration"}>{stale ? "Source changed" : !shot.imageApproved ? "Review still" : issues.length ? issues.length + " checks" : shot.durationSeconds + "s"}</span></summary>
               <fieldset className="shot-fields" disabled={busy}>
-                {stale && <div className="shot-validation warning"><strong>Source changed · ပြန်စစ်ရန်</strong><p>Scene၊ character၊ background၊ အသံနဲ့ setting များကို prompt နဲ့တိုက်စစ်ပါ။ လိုအပ်သလို ပြင်ပြီးမှ အတည်ပြုပါ။</p><button type="button" className="secondary-button" onClick={() => updateShot(scene.id, shot.id, { sourceSnapshot: shotSourceSnapshot(shot, scene, board, form, assets), imageApproved: false })}>လက်ရှိ source နဲ့တိုက်စစ်ပြီးပြီ</button></div>}
-                <div className="shot-validation"><strong>Flow မှာ ကိုယ်တိုင်ထည့်ရမည့် references</strong><p>နာမည် / @handle ရေးရုံနဲ့ ပုံမချိတ်ပါ။ သက်ဆိုင်ရာ reference ပုံကို Flow မှာ ကိုယ်တိုင်ထည့်ပါ။</p><ul>{shotReferences(shot, scene, board, assets).map(ref => <li key={ref.id}>{ref.title} · {ref.kind} · {ref.asset ? "ပုံရှိပြီး — Flow မှာထည့်ပါ" : "reference prompt နဲ့ Flow မှာပုံအရင်ထုတ်ပါ"}</li>)}</ul>{!shot.referenceAssets.length && <span>ဒီ shot အတွက် reference မရွေးထားပါ။</span>}</div>
-                <label className="field"><span className="field-label">Shot title</span><input className="input" value={shot.title} onChange={(event) => updateShot(scene.id, shot.id, { title: event.target.value })} /></label>
-                <label className="field"><span className="field-label">Purpose</span><textarea className="input" rows={2} value={shot.purpose} onChange={(event) => updateShot(scene.id, shot.id, { purpose: event.target.value })} /></label>
+                {stale && <div className="shot-validation warning"><strong>Source changed · ပြန်စစ်ရန်</strong><p>Scene၊ character၊ background၊ အသံနဲ့ setting များကို prompt နဲ့တိုက်စစ်ပါ။ လိုအပ်သလို ပြင်ပြီးမှ အတည်ပြုပါ။</p><button type="button" className="secondary-button" onClick={() => updateShot(selectedScene.id, shot.id, { sourceSnapshot: shotSourceSnapshot(shot, selectedScene, board, form, assets), imageApproved: false })}>လက်ရှိ source နဲ့တိုက်စစ်ပြီးပြီ</button></div>}
+                <div className="shot-validation"><strong>Flow မှာ ကိုယ်တိုင်ထည့်ရမည့် references</strong><p>နာမည် / @handle ရေးရုံနဲ့ ပုံမချိတ်ပါ။ သက်ဆိုင်ရာ reference ပုံကို Flow မှာ ကိုယ်တိုင်ထည့်ပါ။</p><ul>{shotReferences(shot, selectedScene, board, assets).map(ref => <li key={ref.id}>{ref.title} · {ref.kind} · {ref.asset ? "ပုံရှိပြီး — Flow မှာထည့်ပါ" : "reference prompt နဲ့ Flow မှာပုံအရင်ထုတ်ပါ"}</li>)}</ul>{!shot.referenceAssets.length && <span>ဒီ shot အတွက် reference မရွေးထားပါ။</span>}</div>
+                <label className="field"><span className="field-label">Shot title</span><input className="input" value={shot.title} onChange={(event) => updateShot(selectedScene.id, shot.id, { title: event.target.value })} /></label>
+                <label className="field"><span className="field-label">Purpose</span><textarea className="input" rows={2} value={shot.purpose} onChange={(event) => updateShot(selectedScene.id, shot.id, { purpose: event.target.value })} /></label>
                 <div className="form-grid three-columns">
-                  <label className="field"><span className="field-label">Shot size</span><input className="input" value={shot.shotSize} onChange={(event) => updateShot(scene.id, shot.id, { shotSize: event.target.value })} /></label>
-                  <label className="field"><span className="field-label">Camera movement</span><input className="input" value={shot.cameraMovement} onChange={(event) => updateShot(scene.id, shot.id, { cameraMovement: event.target.value })} /></label>
-                  <label className="field"><span className="field-label">Duration (seconds)</span><input className="input" type="number" min={1} max={600} value={shot.durationSeconds} onChange={(event) => updateShot(scene.id, shot.id, { durationSeconds: Math.max(1, Math.min(600, Number(event.target.value) || 1)) })} /></label>
+                  <label className="field"><span className="field-label">Shot size</span><input className="input" value={shot.shotSize} onChange={(event) => updateShot(selectedScene.id, shot.id, { shotSize: event.target.value })} /></label>
+                  <label className="field"><span className="field-label">Camera movement</span><input className="input" value={shot.cameraMovement} onChange={(event) => updateShot(selectedScene.id, shot.id, { cameraMovement: event.target.value })} /></label>
+                  <label className="field"><span className="field-label">Duration (seconds)</span><input className="input" type="number" min={1} max={600} value={shot.durationSeconds} onChange={(event) => updateShot(selectedScene.id, shot.id, { durationSeconds: Math.max(1, Math.min(600, Number(event.target.value) || 1)) })} /></label>
                 </div>
-                <label className="field"><span className="field-label">Action</span><textarea className="input" rows={3} value={shot.action} onChange={(event) => updateShot(scene.id, shot.id, { action: event.target.value })} /></label>
-                <label className="field"><span className="field-label">Opening frame</span><textarea className="input" rows={2} value={shot.openingFrame} onChange={(event) => updateShot(scene.id, shot.id, { openingFrame: event.target.value })} /></label>
-                <label className="field"><span className="field-label">Final frame</span><textarea className="input" rows={2} value={shot.finalFrame} onChange={(event) => updateShot(scene.id, shot.id, { finalFrame: event.target.value })} /></label>
-                <label className="field"><span className="field-label">Opening still / storyboard image prompt</span><textarea className="input prompt-editor" rows={6} value={shotImagePromptText(shot, scene, board, form, assets)} onChange={(event) => updateShot(scene.id, shot.id, { imagePrompt: event.target.value })} /></label>
-                <button type="button" className="secondary-button shot-copy-still" onClick={() => void copyText(shotImagePromptText(shot, scene, board, form, assets), "Shot " + shot.shotNumber + " opening still prompt")}><Copy size={14} /> Copy opening still prompt</button>
-                <label className="shot-approval"><input type="checkbox" disabled={stale} checked={Boolean(shot.imageApproved && !stale)} onChange={(event) => updateShot(scene.id, shot.id, { imageApproved: event.target.checked })} /><span><strong>{shot.imageApproved && !stale ? "Opening still reviewed" : "Opening still not reviewed"}</strong><small>Flow မှာ still ပုံကို ကိုယ်တိုင်ထုတ်ပြီး frame, character နဲ့ location ကို စစ်ပြီးမှ အမှန်ခြစ်ပါ။ Prompt ပြောင်းလျှင် approval ပြန်ပျက်သွားပါမယ်။</small></span></label>
-                <label className="field"><span className="field-label">{shot.promptLanguage === "my" ? "Video prompt · မြန်မာမူကြမ်းအပြည့်အစုံ" : "Google Flow video prompt (English)"}</span><textarea className="input prompt-editor" rows={8} value={shot.flowPrompt} onChange={(event) => updateShot(scene.id, shot.id, { flowPrompt: event.target.value })} /></label>
-                {shot.promptLanguage === "my" && <div className="shot-validation"><button type="button" className="secondary-button" disabled={stale} onClick={() => void translateShot(scene, shot)}>{english ? "English ပြန်ဆိုရန်" : "မူကြမ်းအတည်ပြုပြီး English ပြောင်းရန်"}</button>{!english && <p>မြန်မာ prompt ကို အရင်ပြင်ပါ။ English ကို ဒီခလုတ်နှိပ်မှသာ ထုတ်ပေးပါမယ်။</p>}{english && <><label className="field"><span className="field-label">English opening still prompt</span><textarea className="input prompt-editor" readOnly rows={5} value={english.imagePrompt} /></label><button type="button" className="quiet-button" onClick={() => void copyText(english.imagePrompt || "", "English still prompt")}>Copy English still prompt</button><label className="field"><span className="field-label">English video prompt</span><textarea className="input prompt-editor" readOnly rows={8} value={english.flowPrompt} /></label></>}</div>}
+                <label className="field"><span className="field-label">Action</span><textarea className="input" rows={3} value={shot.action} onChange={(event) => updateShot(selectedScene.id, shot.id, { action: event.target.value })} /></label>
+                <label className="field"><span className="field-label">Opening frame</span><textarea className="input" rows={2} value={shot.openingFrame} onChange={(event) => updateShot(selectedScene.id, shot.id, { openingFrame: event.target.value })} /></label>
+                <label className="field"><span className="field-label">Final frame</span><textarea className="input" rows={2} value={shot.finalFrame} onChange={(event) => updateShot(selectedScene.id, shot.id, { finalFrame: event.target.value })} /></label>
+                <label className="field"><span className="field-label">Opening still / storyboard image prompt</span><textarea className="input prompt-editor" rows={6} value={shotImagePromptText(shot, selectedScene, board, form, assets)} onChange={(event) => updateShot(selectedScene.id, shot.id, { imagePrompt: event.target.value })} /></label>
+                <button type="button" className="secondary-button shot-copy-still" onClick={() => void copyText(shotImagePromptText(shot, selectedScene, board, form, assets), "Shot " + shot.shotNumber + " opening still prompt")}><Copy size={14} /> Copy opening still prompt</button>
+                <label className="shot-approval"><input type="checkbox" disabled={stale} checked={Boolean(shot.imageApproved && !stale)} onChange={(event) => updateShot(selectedScene.id, shot.id, { imageApproved: event.target.checked })} /><span><strong>{shot.imageApproved && !stale ? "Opening still reviewed" : "Opening still not reviewed"}</strong><small>Flow မှာ still ပုံကို ကိုယ်တိုင်ထုတ်ပြီး frame, character နဲ့ location ကို စစ်ပြီးမှ အမှန်ခြစ်ပါ။ Prompt ပြောင်းလျှင် approval ပြန်ပျက်သွားပါမယ်။</small></span></label>
+                <label className="field"><span className="field-label">{shot.promptLanguage === "my" ? "Video prompt · မြန်မာမူကြမ်းအပြည့်အစုံ" : "Google Flow video prompt (English)"}</span><textarea className="input prompt-editor" rows={8} value={shot.flowPrompt} onChange={(event) => updateShot(selectedScene.id, shot.id, { flowPrompt: event.target.value })} /></label>
+                {shot.promptLanguage === "my" && <div className="shot-validation"><button type="button" className="secondary-button" disabled={stale} onClick={() => void translateShot(selectedScene, shot)}>{english ? "English ပြန်ဆိုရန်" : "မူကြမ်းအတည်ပြုပြီး English ပြောင်းရန်"}</button>{!english && <p>မြန်မာ prompt ကို အရင်ပြင်ပါ။ English ကို ဒီခလုတ်နှိပ်မှသာ ထုတ်ပေးပါမယ်။</p>}{english && <><label className="field"><span className="field-label">English opening still prompt</span><textarea className="input prompt-editor" readOnly rows={5} value={english.imagePrompt} /></label><button type="button" className="quiet-button" onClick={() => void copyText(english.imagePrompt || "", "English still prompt")}>Copy English still prompt</button><label className="field"><span className="field-label">English video prompt</span><textarea className="input prompt-editor" readOnly rows={8} value={english.flowPrompt} /></label></>}</div>}
                 <div className={issues.length ? "shot-validation warning" : "shot-validation valid"}><strong>{issues.length ? issues.length + " pre-generation check(s) to review" : "Pre-generation checks passed"}</strong>{issues.length > 0 && <ul>{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}</div>
                 <details className="field shot-extra-fields"><summary>Audio, references & negative prompt</summary>
-                  <label className="field"><span className="field-label">Reference names</span><textarea className="input" rows={2} value={shot.referenceAssets.join("\n")} onChange={(event) => updateShot(scene.id, shot.id, { referenceAssets: event.target.value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean) })} /></label>
-                  <label className="field"><span className="field-label">Negative prompt</span><textarea className="input" rows={2} value={shot.negativePrompt} onChange={(event) => updateShot(scene.id, shot.id, { negativePrompt: event.target.value })} /></label>
+                  <label className="field"><span className="field-label">Reference names</span><textarea className="input" rows={2} value={shot.referenceAssets.join("\n")} onChange={(event) => updateShot(selectedScene.id, shot.id, { referenceAssets: event.target.value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean) })} /></label>
+                  <label className="field"><span className="field-label">Negative prompt</span><textarea className="input" rows={2} value={shot.negativePrompt} onChange={(event) => updateShot(selectedScene.id, shot.id, { negativePrompt: event.target.value })} /></label>
                   <div className="form-grid three-columns">
-                    <label className="field"><span className="field-label">Voiceover</span><textarea className="input" rows={2} value={shot.voiceover} onChange={(event) => updateShot(scene.id, shot.id, { voiceover: event.target.value })} /></label>
-                    <label className="field"><span className="field-label">SFX</span><textarea className="input" rows={2} value={shot.sfx} onChange={(event) => updateShot(scene.id, shot.id, { sfx: event.target.value })} /></label>
-                    <label className="field"><span className="field-label">Background music</span><textarea className="input" rows={2} value={shot.backgroundMusic} onChange={(event) => updateShot(scene.id, shot.id, { backgroundMusic: event.target.value })} /></label>
+                    <label className="field"><span className="field-label">Voiceover</span><textarea className="input" rows={2} value={shot.voiceover} onChange={(event) => updateShot(selectedScene.id, shot.id, { voiceover: event.target.value })} /></label>
+                    <label className="field"><span className="field-label">SFX</span><textarea className="input" rows={2} value={shot.sfx} onChange={(event) => updateShot(selectedScene.id, shot.id, { sfx: event.target.value })} /></label>
+                    <label className="field"><span className="field-label">Background music</span><textarea className="input" rows={2} value={shot.backgroundMusic} onChange={(event) => updateShot(selectedScene.id, shot.id, { backgroundMusic: event.target.value })} /></label>
                   </div>
-                  <label className="field"><span className="field-label">Audio direction</span><textarea className="input" rows={2} value={shot.audioNotes} onChange={(event) => updateShot(scene.id, shot.id, { audioNotes: event.target.value })} /></label>
+                  <label className="field"><span className="field-label">Audio direction</span><textarea className="input" rows={2} value={shot.audioNotes} onChange={(event) => updateShot(selectedScene.id, shot.id, { audioNotes: event.target.value })} /></label>
                 </details>
                 <div className="shot-card-actions">
-                  <button type="button" className="secondary-button" onClick={() => void copyText(shotPromptText(shot, scene, board, form, assets), "Shot " + shot.shotNumber + " prompt")}><Copy size={14} /> Copy full shot prompt</button>
+                  <button type="button" className="secondary-button" onClick={() => void copyText(shotPromptText(shot, selectedScene, board, form, assets), "Shot " + shot.shotNumber + " prompt")}><Copy size={14} /> Copy full shot prompt</button>
                   <button type="button" className="quiet-button" onClick={() => void copyText(exportShot.flowPrompt, "Shot " + shot.shotNumber + (exportShot.promptLanguage === "my" ? " Burmese draft" : " Flow prompt"))}><Copy size={14} /> {exportShot.promptLanguage === "my" ? "Copy Burmese draft" : "Copy Flow prompt only"}</button>
                 </div>
                 {(!shot.imageApproved || stale) && <p className="field-hint">Copy လုပ်နိုင်ပါတယ်။ Video မထုတ်မီ opening still နဲ့ reference တွေကို ကိုယ်တိုင်စစ်ပါ။</p>}
               </fieldset>
             </details>; })}
           </div>
-          <div className="shot-list-actions"><button className="quiet-button" onClick={() => void copyText(sceneShotsText(scene, board, form, assets), "Scene " + scene.sceneNumber + " prompts")}><Copy size={14} /> Copy this scene's shots</button></div>
+          </details>
+          <div className="shot-list-actions"><button className="quiet-button" onClick={() => void copyText(sceneShotsText(selectedScene, board, form, assets), "Scene " + selectedScene.sceneNumber + " prompts")}><Copy size={14} /> Copy this scene's shots</button></div>
         </details> : <p className="shot-empty">Shot list မရှိသေးပါ။ Shot အရေအတွက်ရွေးပြီး Generate shot list ကိုနှိပ်ပါ။ မြန်မာမူကြမ်းကို အရင်စစ်နိုင်ပါတယ်။</p>}
-      </article>)}
+      </article>}
+      </div>
     </div>
     {message && <p className="shot-status" role="status">{message}</p>}
   </section>;

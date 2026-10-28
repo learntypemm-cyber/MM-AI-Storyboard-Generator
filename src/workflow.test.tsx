@@ -341,7 +341,7 @@ describe("screenplay approval workflow", () => {
       .mockResolvedValueOnce(reply({ screenplay: fullScreenplay("ချောရေးမူ") }))
       .mockResolvedValueOnce(reply({
         references: [
-          { id: "may", kind: "character", title: "မေ", description: "ဆံပင်တို၊ အပြာရောင်ဝတ်စုံ" },
+          { id: "may", kind: "character", title: "MAY", description: "ဆံပင်တို၊ အပြာရောင်ဝတ်စုံ" },
           { id: "cafe", kind: "background", title: "ကော်ဖီဆိုင်", description: "သစ်သားစားပွဲနှင့် ပြတင်းပေါက်" },
         ],
         scenes: [1, 2, 3, 4].map(n => ({
@@ -794,10 +794,11 @@ it("persists screenplay approvals through ZIP and rejects unapproved scene gener
 
 it("shows the entire Burmese package before translation and exports translated prompts verbatim", async () => {
   const draft = board(); draft.promptLanguage = "my";
-  draft.referencePlan = [{ id: "may", kind: "character", title: "မေ", prompt: "အင်္ကျီအနီဝတ်ထားသည်", sceneIds: ["one"] }, { id: "cafe", kind: "background", title: "ဆိုင်", prompt: "သစ်သားစားပွဲ", sceneIds: ["one"] }];
+  draft.referencePlan = [{ id: "may", kind: "character", title: "MAY", prompt: "အင်္ကျီအနီဝတ်ထားသည်", sceneIds: ["one"] }, { id: "cafe", kind: "background", title: "ဆိုင်", prompt: "သစ်သားစားပွဲ", sceneIds: ["one"] }];
   const full = materializeFullPrompts(draft, form);
-  expect(full.referencePlan![0].fullPrompt).toContain("Name: မေ");
+  expect(full.referencePlan![0].fullPrompt).toContain("Name: MAY");
   expect(full.referencePlan![0].fullPrompt).toContain("အမူအရာလေးမျိုး");
+  expect(full.referencePlan![0].fullPrompt).toContain("English / Latin letters");
   expect(full.referencePlan![1].fullPrompt).toContain("2×2");
   expect(full.scenes[0].fullImagePrompt).toContain("9:16");
   expect(full.scenes[0].fullVideoPrompt).toContain("SFX:");
