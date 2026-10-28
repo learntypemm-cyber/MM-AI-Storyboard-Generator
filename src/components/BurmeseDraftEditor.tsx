@@ -74,6 +74,11 @@ export default function BurmeseDraftEditor({ referencesLocked = false, board, fo
         {detailTab === "prompts" && <><p>အောက်က prompt အပြည့်အစုံကိုသာ English ပြောင်းပြီး Flow အတွက်သုံးပါမယ်။ အပေါ်ကအသေးစိတ်ကို ပြောင်းလျှင် စစ်ပြီးပြီနှိပ်ပါ သို့မဟုတ် ပြန်စီပါ။</p>
         {([['fullImagePrompt', 'Scene image prompt အပြည့်အစုံ'], ['fullVideoPrompt', 'Video prompt အပြည့်အစုံ']] as const).map(([key, label]) => <label className="field" key={key}>{label}<textarea className="input" rows={14} value={scene[key] ?? (key === 'fullImagePrompt' ? sceneImagePromptMM(scene, board, form) : sceneVideoPromptMM(scene, board, form))} onChange={e => updateScene(scene.id, { fullImagePrompt: scene.fullImagePrompt ?? sceneImagePromptMM(scene, board, form), fullVideoPrompt: scene.fullVideoPrompt ?? sceneVideoPromptMM(scene, board, form), fullPromptSource: scene.fullPromptSource ?? scenePromptSource(scene, board, form), [key]: e.target.value })} /></label>)}
         {(scene.fullImagePrompt !== undefined || scene.fullVideoPrompt !== undefined) && scene.fullPromptSource !== scenePromptSource(scene, board, form) && <p role="alert">Scene အသေးစိတ်ပြောင်းထားပါတယ်။ ပြင်ထားသော prompt များကို ပြန်စစ်ပါ။</p>}
+        <button className="secondary-button" disabled={busy || scene.locked} onClick={() => updateScene(scene.id, {
+          fullImagePrompt: scene.fullImagePrompt ?? sceneImagePromptMM(scene, board, form),
+          fullVideoPrompt: sceneVideoPromptMM(scene, board, form),
+          fullPromptSource: scenePromptSource(scene, board, form),
+        })}>Video Animation Prompt ကို Timeline ပုံစံပြန်စီမယ် (AI မခေါ်ပါ)</button>
         <button className="secondary-button" onClick={() => updateScene(scene.id, { fullPromptSource: scenePromptSource(scene, board, form) })}>Scene prompt စစ်ပြီးပြီ</button>
         <button className="secondary-button" onClick={() => updateScene(scene.id, { fullImagePrompt: undefined, fullVideoPrompt: undefined, fullPromptSource: undefined })}>Scene prompts ကို အသေးစိတ်မှ ပြန်စီမယ်</button>
         </>}

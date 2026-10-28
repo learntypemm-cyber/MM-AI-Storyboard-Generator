@@ -1,4 +1,5 @@
 import { referencePromptMM, sceneImagePromptMM, sceneVideoPromptMM } from "./fullPrompts";
+import { cinematicAnimationPrompt } from "./animationPrompt";
 import JSZip from "jszip";
 import type { ImageAsset, ReferencePlanItem, Scene, Storyboard, VideoForm } from "../types";
 import { referenceImagePrompt, referenceImagePromptMyanmar } from "./automaticAssets";
@@ -54,26 +55,13 @@ export function sceneImagePrompt(scene: Scene, board: Storyboard, form: VideoFor
 export function sceneVideoPrompt(scene: Scene, board: Storyboard): string {
   if (scene.fullVideoPrompt !== undefined) return scene.fullVideoPrompt;
   const previous = previousContinuousScene(scene, board);
-  const time = (seconds: number) => String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
-  const timedPrompt = /\d{2}:\d{2}/.test(scene.flowPrompt) ? scene.flowPrompt : scene.flowPrompt + "\n\n(00:00-" + time(scene.durationSeconds) + ")\n[Camera shot] " + scene.shotSize + "\n[Action] " + scene.action;
-  return [timedPrompt,
-    "[Background / opening angle] " + sceneBackground(scene, board),
-    previous && scenePreparationMode(scene, board) === "image-to-video" ? "START FRAME: Use the actual final frame of the preceding clip. Preserve subject positions, wardrobe, props, lighting and camera direction. Expected incoming state: " + previous.finalFrame : "",
-    referenceSheetDirections(scene, board),
-    scenePreparationMode(scene, board) === "image-to-video" ? "Use the supplied scene opening image as the starting composition. Preserve its subjects and design while animating the action below." : "Generate this shot directly from the description; no starting image is required.",
-    "DURATION: " + scene.durationSeconds + " seconds",
-    "VISUAL DESIGN: " + board.visualBible,
-    "OPENING FRAME: " + scene.openingFrame,
-    "COMPOSITION / ENVIRONMENT: " + scene.visualDescription,
-    "SHOT SIZE: " + scene.shotSize,
-    "ACTION: " + scene.action, "CAMERA: " + scene.cameraMovement,
-    "LIGHTING: " + scene.lighting, "MOOD: " + scene.mood,
-    "CONTINUITY RULES: " + board.continuityRules.join("; "),
-    "AVOID: " + [board.globalNegativePrompt, scene.negativePrompt].filter(Boolean).join("; "),
-    "FINAL FRAME: " + scene.finalFrame, "AUDIO DIRECTION: " + scene.audioNotes,
-    "SFX: " + (scene.sfx ?? "Follow the audio direction; no additional effects specified."), "BACKGROUND MUSIC: " + (scene.backgroundMusic ?? "Follow the audio direction; no additional music specified."),
-    scene.voiceover ? "VOICEOVER: " + scene.voiceover : "", "CONTINUITY REFERENCES:\n" + referenceDescriptions(scene, board),
-  ].filter(Boolean).join("\n\n");
+  return cinematicAnimationPrompt(scene, board, {
+    language: "en",
+    background: "[Background / opening angle] " + sceneBackground(scene, board),
+    startFromPrevious: previous && scenePreparationMode(scene, board) === "image-to-video" ? previous.finalFrame : undefined,
+    references: referenceDescriptions(scene, board) + "\n" + referenceSheetDirections(scene, board),
+    imageMode: scenePreparationMode(scene, board) === "image-to-video",
+  });
 }
 export function sceneInstructions(scene: Scene, board: Storyboard): string {
   const previous = previousContinuousScene(scene, board);
@@ -133,33 +121,13 @@ export function sceneImagePromptMyanmar(scene: Scene, board: Storyboard, form: V
 export function sceneVideoPromptMyanmar(scene: Scene, board: Storyboard): string {
   if (scene.fullVideoPrompt !== undefined) return scene.fullVideoPrompt;
   const previous = previousContinuousScene(scene, board);
-  const time = (seconds: number) => String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
-  const timedPrompt = /\d{2}:\d{2}/.test(scene.flowPrompt) ? scene.flowPrompt : scene.flowPrompt + "\n\n(00:00-" + time(scene.durationSeconds) + ")\n[ကင်မရာရိုက်ကွက်] " + scene.shotSize + "\n[လုပ်ဆောင်ချက်] " + scene.action;
-  return [
-    timedPrompt,
-    "နောက်ခံ / အဖွင့်ထောင့်: " + sceneBackgroundMyanmar(scene, board),
-    previous && scenePreparationMode(scene, board) === "image-to-video" ? "အစပုံ: ယခင်ဇာတ်ကွက်၏ အမှန်တကယ်နောက်ဆုံး frame ကို အသုံးပြုပါ။ ဇာတ်ကောင်တည်နေရာ၊ အဝတ်အစား၊ ပစ္စည်း၊ အလင်းနှင့် ကင်မရာဦးတည်ချက်ကို မပြောင်းပါနှင့်။ ဆက်ဝင်လာမည့်အခြေအနေ: " + previous.finalFrame : "",
-    ...scenePlanReferences(scene, board).filter((item) => item.kind === "background").map((item) =>
-      referenceCode(item, board) + " (" + item.title + "): A = ရှေ့၊ B = ညာ၊ C = နောက်/ပြောင်းပြန်၊ D = ဘယ်။ သတ်မှတ်ထားသော ထောင့်နှင့် နေရာကိုသာ သုံးပါ။"),
-    scenePreparationMode(scene, board) === "image-to-video" ? "ပေးထားသော scene အဖွင့်ပုံကို စတင်ဖွဲ့စည်းပုံအဖြစ် အသုံးပြုပြီး ဇာတ်ကွက်လုပ်ဆောင်ချက်အတိုင်း လှုပ်ရှားစေပါ။" : "အဖွင့်ပုံ မလိုအပ်ဘဲ ဖော်ပြချက်အတိုင်း ဤမြင်ကွင်းကို တိုက်ရိုက်ဖန်တီးပါ။",
-    "ဇာတ်ကွက်ကြာချိန်: " + scene.durationSeconds + " စက္ကန့်",
-    "ရုပ်ပုံပုံစံလမ်းညွှန်: " + board.visualBible,
-    "အဖွင့် frame: " + scene.openingFrame,
-    "ဖွဲ့စည်းပုံ / ပတ်ဝန်းကျင်: " + scene.visualDescription,
-    "ရိုက်ကွက်အရွယ်အစား: " + scene.shotSize,
-    "လုပ်ဆောင်ချက်: " + scene.action,
-    "ကင်မရာလှုပ်ရှားမှု: " + scene.cameraMovement,
-    "အလင်းရောင်: " + scene.lighting,
-    "ခံစားချက်: " + scene.mood,
-    "ဇာတ်ကွက်ဆက်စပ်မှုစည်းမျဉ်းများ: " + board.continuityRules.join("၊ "),
-    "ရှောင်ရန်: " + [board.globalNegativePrompt, scene.negativePrompt].filter(Boolean).join("၊ "),
-    "နောက်ဆုံး frame: " + scene.finalFrame,
-    "အသံညွှန်ကြားချက်: " + scene.audioNotes,
-    "အသံအကျိုးသက်ရောက်မှု (SFX): " + (scene.sfx ?? "အသံညွှန်ကြားချက်နှင့် လိုက်ဖက်စွာ ထည့်ပါ။"),
-    "နောက်ခံတေးဂီတ: " + (scene.backgroundMusic ?? "အသံညွှန်ကြားချက်နှင့် လိုက်ဖက်စွာ ထည့်ပါ။"),
-    scene.voiceover ? "ပြောစကား / Voiceover: " + scene.voiceover : "",
-    "ဆက်စပ် reference များ:\n" + referenceDescriptionsMyanmar(scene, board),
-  ].filter(Boolean).join("\n\n");
+  return cinematicAnimationPrompt(scene, board, {
+    language: "my",
+    background: "နောက်ခံ / အဖွင့်ထောင့်: " + sceneBackgroundMyanmar(scene, board),
+    startFromPrevious: previous && scenePreparationMode(scene, board) === "image-to-video" ? previous.finalFrame : undefined,
+    references: referenceDescriptionsMyanmar(scene, board),
+    imageMode: scenePreparationMode(scene, board) === "image-to-video",
+  });
 }
 export function completePromptTextMyanmar(board: Storyboard, form: VideoForm): string {
   board = { ...board, referencePlan: board.referencePlan?.map(r => ({ ...r, fullPrompt: r.fullPrompt ?? referencePromptMM(r, form) })), scenes: board.scenes.map(s => ({ ...s, fullImagePrompt: s.fullImagePrompt ?? sceneImagePromptMM(s, board, form), fullVideoPrompt: s.fullVideoPrompt ?? sceneVideoPromptMM(s, board, form) })) };
