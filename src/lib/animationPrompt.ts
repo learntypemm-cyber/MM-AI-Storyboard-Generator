@@ -67,7 +67,9 @@ export function cinematicAnimationPrompt(scene: Scene, board: Storyboard, option
   const ending = scene.finalFrame?.trim() || scene.action?.trim() || (my ? "ဇာတ်ဝင်ခန်းအဆုံးအနေအထားကို ထိန်းပါ။" : "Hold the described final state.");
   return [
     intro,
+    "DURATION: " + duration + " seconds",
     beats,
+    (!existingTimedBeats(scene.flowPrompt, duration).length && scene.flowPrompt?.trim() ? "SCENE DIRECTION:\n" + scene.flowPrompt : ""),
     "CAMERA:\n" + camera + ". " + (my ? "ရိုက်ကွက်: " : "Shot size: ") + scene.shotSize + ". " + (my ? "အဆက်မပြတ် ကင်မရာလှုပ်ရှားမှုတစ်ခုသာ၊ မလိုအပ်သော cut မပါစေရ။" : "Keep one continuous camera move without sudden cuts."),
     "CHARACTER CONTINUITY:\n" + continuity + "\n" + (my ? "Reference များ:" : "References:") + "\n" + options.references,
     (my ? "LOCATION & LOOK:" : "LOCATION & LOOK:") + "\n" + scene.visualDescription + "\n" + options.background + "\n" + board.visualBible + "\n" + (my ? "အလင်း: " : "Lighting: ") + scene.lighting + ". " + (my ? "ခံစားချက်: " : "Mood: ") + scene.mood,
