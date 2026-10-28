@@ -173,6 +173,8 @@ describe("editor workflow", () => {
     const saved = JSON.parse(localStorage.getItem("mm-storyboard-saved-projects")!)[0];
     expect(saved.storyboard.scenes[0].title).toBe("Unsaved change");
     expect(await loadReferences(saved.id)).toEqual([ref]);
+    // Recent projects now live in the Project Library instead of a persistent sidebar.
+    fireEvent.click(screen.getByRole("button", { name: "Open library" }));
     fireEvent.click(screen.getByRole("button", { name: "Coffee" }));
     await waitFor(() => expect((screen.getAllByLabelText("Scene title")[0] as HTMLInputElement).value).toBe("Unsaved change"));
     expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).form.referenceNotes).toBe("");
