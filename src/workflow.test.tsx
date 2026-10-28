@@ -149,17 +149,19 @@ describe("editor workflow", () => {
   async function openEditor() {
     localStorage.setItem("mm-storyboard-current", JSON.stringify({ projectId: "editor-test", form, concepts: [concept], selectedConceptId: concept.id, storyboard: board(), history: [] }));
     render(<App />);
-    await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByLabelText("Scene title")).toHaveLength(1));
     await waitFor(() => expect((screen.getByText("New project", { exact: false }).closest("button") as HTMLButtonElement).disabled).toBe(false));
   }
   it("disables locked fields, approves a scene, and keeps feedback with the frame", async () => {
     await openEditor();
+    fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 2" }));
+    expect((screen.getByLabelText("Scene title") as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 1" }));
     const titles = screen.getAllByLabelText("Scene title") as HTMLInputElement[];
-    expect(titles[1].disabled).toBe(true);
     fireEvent.change(titles[0], { target: { value: "Better hook" } });
     fireEvent.change(screen.getByLabelText("Review status scene 1"), { target: { value: "approved" } });
     expect(titles[0].value).toBe("Better hook"); expect(titles[0].disabled).toBe(true);
-    expect(screen.getAllByRole("button", { name: /Locked · unlock/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /Locked · unlock/ })).toHaveLength(1);
   });
   it("saves an unsaved draft and its images before starting a clean topic", async () => {
     const ref = { name: "Draft reference", mimeType: "image/png", data: "aGVsbG8=", previewUrl: "data:image/png;base64,aGVsbG8=" };
@@ -214,8 +216,9 @@ describe("editor workflow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Regenerate selected prompts" }));
     await waitFor(() => expect((screen.getAllByLabelText("Scene title")[0] as HTMLInputElement).value).toBe("Repaired"));
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect((screen.getAllByLabelText("Scene title")[1] as HTMLInputElement).value).toBe("two");
-    expect((screen.getAllByLabelText("Scene title")[1] as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 2" }));
+    expect((screen.getByLabelText("Scene title") as HTMLInputElement).value).toBe("two");
+    expect((screen.getByLabelText("Scene title") as HTMLInputElement).disabled).toBe(true);
     expect(JSON.parse(localStorage.getItem("mm-storyboard-current")!).storyboard.scenes[0].id).toBe("one");
   });
   it("generates only missing prompts without rebuilding completed scenes", async () => {
@@ -231,11 +234,12 @@ describe("editor workflow", () => {
   it("adds a blank scene, moves and deletes it, and applies presets without replacing the topic", async () => {
     await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Add scene" }));
-    expect(screen.getAllByLabelText("Scene title")).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /Select storyboard scene/ })).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Select storyboard scene 3" }));
     fireEvent.click(screen.getByRole("button", { name: "Move scene 3 up" }));
-    expect((screen.getAllByLabelText("Scene title")[1] as HTMLInputElement).value).toBe("New scene");
+    expect((screen.getByLabelText("Scene title") as HTMLInputElement).value).toBe("New scene");
     fireEvent.click(screen.getByRole("button", { name: "Delete scene 2" }));
-    expect(screen.getAllByLabelText("Scene title")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /Select storyboard scene/ })).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: /Video brief/ }));
     fireEvent.click(screen.getByRole("button", { name: /Production settings/ }));
     fireEvent.change(screen.getByLabelText("Preset name"), { target: { value: "My preset" } });
