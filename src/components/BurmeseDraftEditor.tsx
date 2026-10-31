@@ -13,11 +13,18 @@ export default function BurmeseDraftEditor({ referencesLocked = false, board, fo
   const [sceneId, setSceneId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<"story" | "visual" | "sound" | "prompts">("story");
   const [referenceId, setReferenceId] = useState<string | null>(null);
+  const [lineDraft, setLineDraft] = useState("");
   const activeScene = board.scenes.find(s => s.id === sceneId) || board.scenes[0];
   const activeReference = board.referencePlan?.find(r => r.id === referenceId) || board.referencePlan?.[0];
   const english = translatedBoard(board, form);
   const ready = fullPromptsReady(board, form);
   const updateScene = (id: string, patch: Partial<Scene>) => onChange({ ...board, scenes: board.scenes.map(scene => scene.id === id ? { ...scene, ...patch } : scene) });
+  const addContinuityRule = () => {
+    const rule = lineDraft.trim();
+    if (!rule) return;
+    onChange({ ...board, continuityRules: [...board.continuityRules, rule] });
+    setLineDraft("");
+  };
   const copy = async () => { if (!english) return; try { await navigator.clipboard.writeText(completePromptText(english, form)); setMessage("English prompts copied."); } catch { setMessage("Copy မရပါ။ TXT download ကိုသုံးပါ။"); } };
   const downloadBilingual = () => {
     if (!english) return;
@@ -31,8 +38,8 @@ export default function BurmeseDraftEditor({ referencesLocked = false, board, fo
     catch { setMessage("ZIP download မအောင်မြင်ပါ။ ပြန်ကြိုးစားပါ။"); }
   };
   return <section className="storyboard-section">
-    <h2>၁။ မြန်မာမူကြမ်း စစ်ပြီးပြင်ပါ</h2>
-    <p>ဇာတ်ကောင်၊ နေရာ၊ လှုပ်ရှားမှုနှင့် camera ကို ပြင်ပြီးမှ English ပြောင်းပါ။ Edit လုပ်ရုံနဲ့ API မခေါ်ပါ။</p>
+    <h2>၂။ မြန်မာမူကြမ်း စစ်ပြီးပြင်ပါ</h2>
+    <p>Character / Background နဲ့ scene အသေးစိတ်ကို ပြင်ပြီး၊ prompt အပြည့်အစုံကို အတည်ပြုပါ။ အဆင်ပြေမှ အောက်ပါ Translate & export အဆင့်က English ပြောင်းပါ။ ဒီအဆင့်မှာ စာသားပြင်ရုံနဲ့ API မခေါ်ပါ။</p>
     <div className="workflow-toolbar"><button className="primary-button" disabled={busy} onClick={onSave}>Save project</button><button className="secondary-button" disabled={busy || referencesLocked} onClick={onRetryReferences}>ပျောက်နေသော reference မူကြမ်းများ ဖြည့်ရန်</button></div>
     <nav className="v2-tabs" aria-label="Draft editor workspace">
       {([["scenes","Scenes"],["assets","Reference library"],["project","Project bible"],["export","Translate & export"]] as const).map(([id,label]) =>
@@ -40,7 +47,7 @@ export default function BurmeseDraftEditor({ referencesLocked = false, board, fo
     </nav>
     {workspace === "project" && <fieldset className="scene-fieldset" disabled={busy}>
       {([['projectTitle', 'Project နာမည်'], ['logline', 'ဇာတ်လမ်းအကျဉ်း'], ['visualBible', 'ပုံစံနှင့်အရောင်'], ['globalNegativePrompt', 'တစ်ခုလုံးတွင် မပါစေလိုသည့်အရာများ']] as const).map(([key, label]) => <label className="field" key={key}>{label}<textarea className="input" value={board[key]} onChange={e => onChange({ ...board, [key]: e.target.value })} /></label>)}
-      <label className="field">ဆက်စပ်မှုစည်းမျဉ်းများ (တစ်ကြောင်းတစ်ခု)<textarea className="input" value={board.continuityRules.join("\n")} onChange={e => onChange({ ...board, continuityRules: e.target.value.split("\n") })} /></label>
+      <div className="field"><span className="field-label">ဆက်စပ်မှုစည်းမျဉ်းများ</span><span className="field-hint">Character နဲ့ နေရာအတွက် မပြောင်းစေချင်တဲ့ အချက်တစ်ခုစီ ထည့်ပါ။</span>{board.continuityRules.map((rule, index) => <div className="continuity-rule-row" key={`${index}-${rule.slice(0,24)}`}><textarea className="input" aria-label={`Continuity rule ${index + 1}`} rows={2} value={rule} onChange={e => onChange({ ...board, continuityRules: board.continuityRules.map((item, itemIndex) => itemIndex === index ? e.target.value : item) })} /><button type="button" className="secondary-button" aria-label={`Remove continuity rule ${index + 1}`} onClick={() => onChange({ ...board, continuityRules: board.continuityRules.filter((_, itemIndex) => itemIndex !== index) })}>ဖျက်မယ်</button></div>)}<div className="continuity-rule-add"><input className="input" aria-label="New continuity rule" value={lineDraft} onChange={e => setLineDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addContinuityRule(); } }} placeholder="ဥပမာ — Leo က အပြာရောင်အင်္ကျီကို အမြဲဝတ်ထားရန်" /><button type="button" className="secondary-button" onClick={addContinuityRule} disabled={!lineDraft.trim()}>အချက်ထည့်မယ်</button></div></div>
     </fieldset>}
     {workspace === "assets" && <div className="v2-assets-workspace">
       <h3>Character / Background / Prop မူကြမ်းများ</h3>{referencesLocked && <p>Reference ပြင်ရန် အပေါ်က Character / Background အဆင့်ကို ပြန်သွားပြီး အတည်ပြုပါ။</p>}
@@ -83,7 +90,7 @@ export default function BurmeseDraftEditor({ referencesLocked = false, board, fo
       </fieldset>
     </article>)}</div>}
     {workspace === "export" && <div className="v2-export-workspace">
-    <h2>၂။ စိတ်ကြိုက်ဖြစ်မှ English ပြောင်းပါ</h2>
+    <h2>၃။ စိတ်ကြိုက်ဖြစ်မှ English ပြောင်းပါ</h2>
     {!ready && <p role="alert">ပြင်ထားသော prompt အပြည့်အစုံကို ပြန်စစ်ပြီး အတည်ပြုပါ။ စာသားအလွတ် မဖြစ်ရပါ။</p>}
     <p role="status">{english ? "English prompt အသင့်ဖြစ်ပါပြီ။" : board.englishJson ? "မူကြမ်းပြင်ထားပါတယ်။ English ပြန်ပြောင်းရန်လိုသည်။" : "English မပြောင်းရသေးပါ။"}</p>
     <button className="primary-button" disabled={busy || Boolean(english) || !ready} onClick={onTranslate}>{busy ? "လုပ်ဆောင်နေပါတယ်…" : "English prompt ပြောင်းမယ်"}</button>

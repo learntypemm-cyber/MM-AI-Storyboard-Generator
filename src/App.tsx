@@ -195,6 +195,9 @@ function App() {
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>(() => readLocal(STORAGE.saved, []));
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [libraryFocusReturn, setLibraryFocusReturn] = useState<HTMLButtonElement | null>(null);
+  const settingsCloseRef = useRef<HTMLButtonElement>(null);
+  const libraryCloseRef = useRef<HTMLButtonElement>(null);
   const [testingGemini, setTestingGemini] = useState(false);
   const [geminiTestResult, setGeminiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -211,6 +214,25 @@ function App() {
   const inspectorScene = storyboard?.scenes.find((scene) => scene.id === inspectorSceneId) || storyboard?.scenes[0] || null;
   const navigateStudio = (next: "brief" | "concepts" | "storyboard" | "shots") => { setStep(next); setMobileNavOpen(false); };
 
+  useEffect(() => {
+    if (!settingsOpen) return;
+    settingsCloseRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { setSettingsOpen(false); window.setTimeout(() => settingsCloseRef.current?.focus(), 0); } };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [settingsOpen]);
+  useEffect(() => {
+    if (!libraryOpen) return;
+    libraryCloseRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { setLibraryOpen(false); window.setTimeout(() => libraryFocusReturn?.focus(), 0); } };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [libraryOpen]);
+  useEffect(() => {
+    if (settingsOpen || libraryOpen) return;
+    libraryFocusReturn?.focus();
+    setLibraryFocusReturn(null);
+  }, [settingsOpen, libraryOpen, libraryFocusReturn]);
   useEffect(() => {
     if (!settingsOpen) return;
     setModelDraft(geminiModel);
@@ -796,21 +818,21 @@ function App() {
         <div className="studio-nav-label">WORKSPACE</div>
         <nav className="studio-primary-nav" aria-label="Production stages">
           <button className={step === "brief" ? "studio-nav-item is-active" : "studio-nav-item"} onClick={() => navigateStudio("brief")}><FileText size={17} /> <span>Brief overview</span></button>
-          <button className={step === "concepts" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!screenplay && !concepts.length} onClick={() => navigateStudio("concepts")}><Lightbulb size={17} /> <span>Script & concepts</span></button>
-          <button className={step === "storyboard" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} onClick={() => navigateStudio("storyboard")}><Clapperboard size={17} /> <span>Storyboard</span></button>
-          <button className={step === "shots" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} onClick={() => navigateStudio("shots")}><Film size={17} /> <span>Flow shots</span></button>
+          <button aria-label="Script and concepts" className={step === "concepts" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!screenplay && !concepts.length} title={!screenplay && !concepts.length ? "ဇာတ်ညွှန်း ၃ မျိုးထုတ်ပြီးမှ ဖွင့်နိုင်ပါမယ်" : undefined} onClick={() => navigateStudio("concepts")}><Lightbulb size={17} /> <span>Script & concepts</span></button>
+          <button aria-label="Storyboard" className={step === "storyboard" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} title={!storyboard ? "ဇာတ်ညွှန်းနဲ့ reference အတည်ပြုပြီးမှ ဖွင့်နိုင်ပါမယ်" : undefined} onClick={() => navigateStudio("storyboard")}><Clapperboard size={17} /> <span>Storyboard</span></button>
+          <button aria-label="Flow shots" className={step === "shots" ? "studio-nav-item is-active" : "studio-nav-item"} disabled={!storyboard} title={!storyboard ? "Scene prompts အတည်ပြုပြီးမှ ဖွင့်နိုင်ပါမယ်" : undefined} onClick={() => navigateStudio("shots")}><Film size={17} /> <span>Flow shots</span></button>
         </nav>
         <div className="studio-nav-label">PRODUCTION TOOLS</div>
         <div className="studio-primary-nav">
-          <button className="studio-nav-item" onClick={() => { setAssetStudioOpen(true); setMobileNavOpen(false); }}><Wand2 size={17} /> <span>Asset studio</span></button>
-          <button className="studio-nav-item" disabled={!storyboard} onClick={() => { if (storyboard) exportPromptPack(); setMobileNavOpen(false); }}><Download size={17} /> <span>Export prompts</span></button>
-          <button className="studio-nav-item" onClick={() => { setLibraryOpen(true); setMobileNavOpen(false); }}><FolderOpen size={17} /> <span>Project library</span></button>
+          <button aria-label="Asset studio" className="studio-nav-item" onClick={() => { setAssetStudioOpen(true); setMobileNavOpen(false); }}><Wand2 size={17} /> <span>Asset studio</span></button>
+          <button aria-label="Export prompts" className="studio-nav-item" disabled={!storyboard} title={!storyboard ? "Storyboard တည်ဆောက်ပြီးမှ export လုပ်နိုင်ပါမယ်" : undefined} onClick={() => { if (storyboard) exportPromptPack(); setMobileNavOpen(false); }}><Download size={17} /> <span>Export prompts</span></button>
+          <button aria-label="Project library" className="studio-nav-item" onClick={() => { setLibraryFocusReturn(document.activeElement instanceof HTMLButtonElement ? document.activeElement : null); setLibraryOpen(true); setMobileNavOpen(false); }}><FolderOpen size={17} /> <span>Project library</span></button>
         </div>
-        <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={() => setLibraryOpen(true)} aria-label="Open library"><ChevronRight size={14} /></button></div>
+          <div className="sidebar-label saved-label"><span>YOUR LIBRARY</span><button onClick={(event) => { setLibraryFocusReturn(event.currentTarget); setLibraryOpen(true); }} aria-label="Open library"><ChevronRight size={14} /></button></div>
         <div className="saved-list">
           {savedProjects.slice(0, 4).map((project) => <button className="saved-item" key={project.id} disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)} title={project.title}><FolderOpen size={15} /><span>{project.title}</span></button>)}
           {!savedProjects.length && <div className="empty-library">Your saved projects will appear here.</div>}
-          {savedProjects.length > 4 && <button className="view-all" onClick={() => setLibraryOpen(true)}>View all projects</button>}
+          {savedProjects.length > 4 && <button className="view-all" onClick={(event) => { setLibraryFocusReturn(event.currentTarget); setLibraryOpen(true); }}>View all projects</button>}
         </div>
         <div className="sidebar-bottom">
           <div className={apiKey ? "api-status connected" : "api-status"}><span className="status-dot" /><span>{apiKey ? "Gemini connected" : "API key required"}</span></div>
@@ -830,7 +852,7 @@ function App() {
               <div className="topbar-more-menu">
                 <button className="quiet-button" disabled={Boolean(busy) || !hydrated} onClick={() => void exportZip()}><Download size={15} /> Backup ZIP</button>
                 <label className="quiet-button archive-upload"><Upload size={15} /> Import ZIP<input type="file" accept=".zip" disabled={Boolean(busy) || !hydrated} onChange={(event) => { void importZip(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
-                <button className="secondary-button" onClick={() => setLibraryOpen(true)}><FolderOpen size={15} /> My projects</button>
+                <button className="secondary-button" onClick={(event) => { setLibraryFocusReturn(event.currentTarget); setLibraryOpen(true); }}><FolderOpen size={15} /> My projects</button>
                 <button className="settings-button" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}><Settings size={15} /> Settings</button>
                 {showAdvanced && <button className="secondary-button" disabled={Boolean(busy) || !hydrated} onClick={() => setAssetStudioOpen(true)}><Wand2 size={15} /> Asset Studio</button>}
               </div>
@@ -844,7 +866,7 @@ function App() {
             <div>
               <div className="eyebrow"><span className="eyebrow-mark"><Sparkles size={12} /></span> AI VIDEO WORKFLOW <span className="eyebrow-dot">•</span> GOOGLE FLOW READY</div>
               <h1>Turn ideas into <span className="gradient-text">storyboards.</span></h1>
-              <p className="page-description">ခေါင်းစဉ်မှ မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပါ။ ဇာတ်ညွှန်းနှင့် Character / Background ကို အတည်ပြုပြီးမှ Scene prompts ထုတ်ပါ။</p>
+              <p className="page-description">အလုပ်စဉ် — ခေါင်းစဉ်ထည့် → ဇာတ်ညွှန်း ၃ မျိုးထဲကရွေးပြီး ပြင် → Character / Background prompt စစ် → Scene prompt အတည်ပြု → English Flow prompt ထုတ်ပါ။ Video နဲ့ reference ပုံတွေကို Google Flow မှာ ကိုယ်တိုင်ထုတ်ပါ။</p>
             </div>
             <div className="welcome-stat"><div className="welcome-stat-icon"><Zap size={19} /></div><div><strong>One brief</strong><span>Complete video plan</span></div></div>
           </section>
@@ -852,9 +874,9 @@ function App() {
           <nav className="stepper" aria-label="Video production workflow">
             {[
               { id: "brief", number: "01", label: "Video brief", icon: FileText },
-              { id: "concepts", number: "02", label: "Screenplay / refs", icon: Lightbulb },
-              { id: "storyboard", number: "03", label: "Scene prompts", icon: Clapperboard },
-              { id: "shots", number: "04", label: "Flow prompts", icon: Film },
+              { id: "concepts", number: "02", label: "Script & references", icon: Lightbulb },
+              { id: "storyboard", number: "03", label: "Scene review", icon: Clapperboard },
+              { id: "shots", number: "04", label: "Google Flow prompts", icon: Film },
             ].map((item, index) => {
               const Icon = item.icon;
               const active = step === item.id;
@@ -868,7 +890,7 @@ function App() {
                 disabled={!canVisit} aria-current={active ? "step" : undefined}
                 onClick={() => setStep(item.id as "brief" | "concepts" | "storyboard" | "shots")}>
                 <span className="step-num">{complete && !active ? <Check size={14} /> : <Icon size={14} />}</span>
-                <span className="step-copy"><span>{item.number}</span><strong>{item.label}</strong></span>
+                <span className="step-copy"><span>{item.number}</span><strong>{item.label}</strong>{item.id !== "brief" && <small>{item.id === "concepts" ? "Script → refs" : item.id === "storyboard" ? "Review scenes" : "Copy into Flow"}</small>}</span>
                 {index < 3 && <span className="step-connector" aria-hidden="true" />}
               </button>;
             })}
@@ -924,8 +946,8 @@ function App() {
                 </div>
               </div>}
               <div className="brief-footer">
-                <div className="footer-info"><span className="secure-icon"><KeyRound size={14} /></span><span>{apiKey ? "Gemini API is configured" : "Set up a Gemini API key to start"} <button className="inline-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>{apiKey ? "Manage key" : "Set up API key"}</button></span></div>
-                <button className="primary-button generate-button" onClick={() => void generateScreenplays()} disabled={Boolean(busy) || !hydrated}><Sparkles size={17} />{busy === "screenplays" ? "ဇာတ်ညွှန်းရေးနေပါတယ်…" : "မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပေး"}</button>
+                <div className="footer-info"><span className="secure-icon"><KeyRound size={14} /></span><span>{apiKey ? "Gemini API is configured" : "ဇာတ်ညွှန်းရေးရန် Gemini API key လိုအပ်သည်"} <button className="inline-link" onClick={() => { setApiKeyDraft(apiKey); setSettingsOpen(true); }}>{apiKey ? "Manage key" : "API key ထည့်မယ်"}</button></span></div>
+                <button className="primary-button generate-button" onClick={() => void generateScreenplays()} disabled={Boolean(busy) || !hydrated || !apiKey.trim()} title={!apiKey.trim() ? "Settings မှာ Gemini API key အရင်ထည့်ပါ" : undefined}><Sparkles size={17} />{busy === "screenplays" ? "ဇာတ်ညွှန်းရေးနေပါတယ်…" : !apiKey.trim() ? "API key ထည့်ပြီး ဇာတ်ညွှန်းရေးမယ်" : "မြန်မာဇာတ်ညွှန်း ၃ မျိုးရေးပေး"}</button>
               </div>
             </div>
           </section>}
@@ -933,7 +955,7 @@ function App() {
           {step === "brief" && <details className="panel existing-screenplay-panel">
             <summary className="section-heading existing-screenplay-summary">
               <div className="section-icon purple"><FileText size={18} /></div>
-              <div><h2>Screenplay ရေးပြီးသားရှိလား?</h2><p>ရှိပြီးသားစာသားကို အသုံးပြုချင်ရင် ဒီနေရာကိုဖွင့်ပါ။</p></div>
+              <div><h2>Screenplay ရေးပြီးသားရှိလား?</h2><p>ရှိပြီးသားစာသားကို အသုံးပြုချင်ရင် ဒီနေရာကိုဖွင့်ပါ။ ခေါင်းစဉ်ကနေစရင် အပေါ်က ဇာတ်ညွှန်း ၃ မျိုးထုတ်ပြီးမှ ဒီအဆင့်ကို ဆက်သွားပါ။</p></div>
               <div className="panel-kicker">OPTIONAL · EXPAND</div>
             </summary>
             <div className="form-content">
@@ -1138,8 +1160,8 @@ function App() {
       {assetStudioOpen && <AssetStudio protectedAssetIds={Array.from(new Set([storyboard, ...history.map((item) => item.storyboard), ...savedProjects.flatMap((project) => [project.storyboard, ...(project.history || []).map((item) => item.storyboard)])].flatMap((board) => board?.scenes.flatMap((scene) => scene.assetIds || []) || [])))} projectId={projectId} onAssetsChanged={refreshAssets} open={assetStudioOpen} onClose={() => setAssetStudioOpen(false)} apiKey={apiKey} projectTitle={storyboard?.projectTitle || selectedConcept?.title || form.topic} topic={form.topic} visualStyle={form.visualStyle} aspectRatio={form.aspectRatio} projectReferences={form.referenceImages} storyboard={storyboard} model={geminiModel} />}
 
       {settingsOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
-        <section className="modal-card settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-          <div className="modal-top"><div className="modal-icon"><KeyRound size={20} /></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={18} /></button></div>
+        <section className="modal-card settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1}>
+          <div className="modal-top"><div className="modal-icon"><KeyRound size={20} /></div><button ref={settingsCloseRef} className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={18} /></button></div>
           <h2 id="settings-title">Connect Gemini</h2><p className="modal-description">Your API key writes screenplay choices, polishes your edits, prepares approved scenes and translates prompts only when you request each step.</p>
           <Field label="Gemini API key" hint="Key ထည့်တာနဲ့ ဒီ browser ထဲ အလိုအလျောက်သိမ်းပါတယ်။ Website address သို့မဟုတ် browser ပြောင်းရင် ပြန်ထည့်ရန်လိုပါတယ်။"><input className="input api-key-input" type="password" value={apiKeyDraft} onChange={(event) => { setApiKeyDraft(event.target.value); setGeminiTestResult(null); setModelChecks([]); setModelCheckProgress(0); persistApiKey(event.target.value); }} placeholder="Paste your Gemini API key" autoComplete="off" /></Field>
           <Field label="Gemini API model" hint="Choose a text model listed by Google for your key. Quota and generation access depend on your account."><select className="input" value={modelOptions.some((item) => item.id === modelDraft) ? modelDraft : ""} disabled={!modelOptions.length || loadingModels} onChange={(event) => { setModelDraft(event.target.value); setGeminiTestResult(null); }}><option value="" disabled>{loadingModels ? "Loading models…" : "Add a key to load models"}</option>{modelOptions.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.id}</option>)}</select></Field>
@@ -1164,8 +1186,8 @@ function App() {
       </div>}
 
       {libraryOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLibraryOpen(false); }}>
-        <section className="modal-card library-modal" role="dialog" aria-modal="true" aria-labelledby="library-title">
-          <div className="modal-top"><div className="modal-icon"><FolderOpen size={20} /></div><button className="icon-button" onClick={() => setLibraryOpen(false)} aria-label="Close library"><X size={18} /></button></div>
+        <section className="modal-card library-modal" role="dialog" aria-modal="true" aria-labelledby="library-title" tabIndex={-1}>
+          <div className="modal-top"><div className="modal-icon"><FolderOpen size={20} /></div><button ref={libraryCloseRef} className="icon-button" onClick={() => setLibraryOpen(false)} aria-label="Close library"><X size={18} /></button></div>
           <h2 id="library-title">Your project library</h2><p className="modal-description">Saved projects, reference images and assets stay in this browser. Use Backup ZIP to move a complete project to another browser.</p>
           {!savedProjects.length ? <div className="empty-library-modal"><FolderOpen size={28} /><strong>No saved projects yet</strong><span>Save your screenplay, reference preparation or storyboard at any step.</span></div> : <div className="library-projects">{savedProjects.map((project) => <div className="library-project" key={project.id}><div className="library-project-icon"><Clapperboard size={18} /></div><button className="library-project-main" disabled={Boolean(busy) || !hydrated} onClick={() => loadProject(project)}><strong>{project.title}</strong><span>{project.storyboard ? project.storyboard.scenes.length + " scenes" : project.screenplay ? project.screenplay.choices.length + " screenplays" : project.concepts.length + " concepts"} · {new Date(project.savedAt).toLocaleString()}</span></button><button className="icon-button danger-icon" onClick={() => setSavedProjects((current) => current.filter((item) => item.id !== project.id))} title="Delete saved project" aria-label="Delete saved project"><Trash2 size={16} /></button></div>)}</div>}
           <div className="modal-actions"><button className="quiet-button" onClick={() => setLibraryOpen(false)}>Close</button><button className="primary-button" onClick={() => { newProject(); setLibraryOpen(false); }}><Plus size={16} /> New project</button></div>
